@@ -39,12 +39,13 @@ El proyecto es una aplicación Next.js existente con App Router. Se reestructura
 **Rationale:** El usuario especificó shadcn/ui. Se usarán componentes neutros (`Card`, `Button`, `Input`, `Label`, `Form`, `Dialog`, `Table`, `Alert`, `Toast`, `Badge`, `Select`, `DropdownMenu`, `Sheet`, `Separator`, `Avatar`, `Tabs`) más `lucide-react` para iconografía.
 
 ### 5. Booking grid data model
-**Rationale:** Representar canchas y horarios como configuración estática, y las reservas como un array de objetos `{ id, courtId, time, customerName, phone }`. La grilla se deriva cruzando configuración con reservas.
+**Rationale:** Representar canchas y horarios como configuración estática, y las reservas como un array de objetos `{ id, courtId, date, time, customerName, phone }`, donde `date` es una cadena ISO (`YYYY-MM-DD`). La grilla se deriva cruzando configuración con las reservas del día seleccionado.
 
-### 6. Mock data location
+### 6. Daily navigation
+**Rationale:** El calendario es una vista diaria. Se usa un estado local `selectedDate` (default `new Date()`) con controles para avanzar/retroceder un día y un input tipo `date` para saltar a una fecha puntual. Las reservas se filtran por `selectedDate` al renderizar y al guardar.
+
+### 7. Mock data location
 **Rationale:** Centralizar datos mock en `lib/data.ts` o `lib/mocks/` para facilitar la transición futura a una API real.
-
-## Risks / Trade-offs
 
 - **[Risk]** localStorage solo funciona en el cliente; podría causar hidratación inconsistente si se lee durante el renderizado inicial.
   → **Mitigation:** Usar `useEffect` para leer/escribir localStorage y mostrar estados de carga o skeletons mientras tanto.

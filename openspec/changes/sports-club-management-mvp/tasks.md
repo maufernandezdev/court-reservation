@@ -25,6 +25,11 @@
 - [x] 4.4 Open a shadcn `Dialog` pre-filled with the selected court and time when a free cell is clicked; verify the dialog fields match the clicked slot
 - [x] 4.5 Implement the reservation form with fields for customer name, phone/DNI, court and time, and save the new reservation to local state on submit; verify the grid updates immediately and the dialog closes
 - [x] 4.6 Prevent opening the create dialog on already occupied cells (or show a clear disabled/occupied indicator), and verify clicking an occupied cell does not create a duplicate reservation
+- [x] 4.7 Add daily navigation controls (previous day, next day, date picker) and display the selected date; verify the grid filters reservations by the selected date
+- [x] 4.8 Update the reservation data model to include `date` and ensure new reservations are saved for the selected date only
+- [x] 4.9 Open the reservation dialog on occupied cells showing editable details, and allow saving edits
+- [x] 4.10 Add a delete reservation action with a confirmation step before removing the reservation
+- [x] 4.11 Prevent editing a reservation into an already occupied slot on the same date
 
 ## 5. Secondary Views
 

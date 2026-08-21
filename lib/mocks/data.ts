@@ -7,6 +7,7 @@ export type Court = {
 export type Reservation = {
   id: string;
   courtId: string;
+  date: string; // YYYY-MM-DD
   time: string;
   customerName: string;
   phone: string;
@@ -76,6 +77,7 @@ export const INITIAL_RESERVATIONS: Reservation[] = [
   {
     id: "r1",
     courtId: "c1",
+    date: "2026-08-20",
     time: "09:00",
     customerName: "Fernández / Casimiro",
     phone: "3415123456",
@@ -83,6 +85,7 @@ export const INITIAL_RESERVATIONS: Reservation[] = [
   {
     id: "r2",
     courtId: "c2",
+    date: "2026-08-20",
     time: "10:00",
     customerName: "Torneo",
     phone: "",
@@ -90,6 +93,7 @@ export const INITIAL_RESERVATIONS: Reservation[] = [
   {
     id: "r3",
     courtId: "c3",
+    date: "2026-08-20",
     time: "11:00",
     customerName: "Martínez",
     phone: "3415987654",
@@ -97,9 +101,26 @@ export const INITIAL_RESERVATIONS: Reservation[] = [
   {
     id: "r4",
     courtId: "c1",
+    date: "2026-08-20",
     time: "14:00",
     customerName: "Gómez / López",
     phone: "3415567890",
+  },
+  {
+    id: "r5",
+    courtId: "c2",
+    date: "2026-08-21",
+    time: "09:00",
+    customerName: "Pérez / Díaz",
+    phone: "3415001122",
+  },
+  {
+    id: "r6",
+    courtId: "c3",
+    date: "2026-08-21",
+    time: "16:00",
+    customerName: "Escuela de fútbol",
+    phone: "",
   },
 ];
 

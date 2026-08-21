@@ -82,7 +82,3 @@ npm run dev    # Inicia el servidor de desarrollo
 npm run build  # Genera la build de producción
 npm run start  # Inicia la app en producción
 ```
-# court-reservation
-# court-reservation
-# court-reservation
-# court-reservation
