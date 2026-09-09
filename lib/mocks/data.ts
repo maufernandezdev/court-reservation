@@ -40,8 +40,9 @@ export type Transaction = {
 export type SubscriptionPlan = {
   id: string;
   name: string;
-  price: string;
-  period: string;
+  courts: string;
+  monthlyPrice: number;
+  annualPrice: number;
   description: string;
   features: string[];
   active?: boolean;
@@ -216,46 +217,55 @@ export const TRANSACTIONS: Transaction[] = [
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
-    id: "free",
-    name: "Prueba Gratis",
-    price: "$0",
-    period: "30 días",
-    description: "Ideal para probar el sistema sin compromiso.",
+    id: "inicial",
+    name: "Plan Inicial",
+    courts: "1 a 3 canchas",
+    monthlyPrice: 15000,
+    annualPrice: 162000,
+    description: "Ideal para clubes chicos que están empezando.",
     features: [
-      "1 cancha",
-      "1 usuario operador",
-      "Reservas básicas",
+      "Hasta 3 canchas",
+      "2 usuarios operadores",
+      "Gestión de reservas",
+      "Gestión de socios",
+      "Control de caja",
       "Soporte por email",
     ],
   },
   {
-    id: "basic",
-    name: "Plan Básico",
-    price: "$29.900",
-    period: "mes",
-    description: "Para clubes pequeños que están empezando.",
+    id: "club",
+    name: "Plan Club",
+    courts: "4 a 6 canchas",
+    monthlyPrice: 25000,
+    annualPrice: 270000,
+    description: "Para clubes en crecimiento con más actividad.",
     features: [
-      "Hasta 4 canchas",
-      "2 usuarios operadores",
+      "Hasta 6 canchas",
+      "5 usuarios operadores",
+      "Gestión de reservas",
       "Gestión de socios",
       "Control de caja",
+      "Kiosco con códigos de barras",
       "Reportes por WhatsApp",
     ],
     active: true,
   },
   {
-    id: "pro",
-    name: "Plan Pro",
-    price: "Desde $74.900",
-    period: "mes",
-    description: "Para clubes con alto volumen de reservas.",
+    id: "gran-club",
+    name: "Plan Gran Club",
+    courts: "7 o más canchas",
+    monthlyPrice: 35000,
+    annualPrice: 378000,
+    description: "Para clubes grandes con alto volumen de reservas.",
     features: [
       "Canchas ilimitadas",
       "Usuarios ilimitados",
+      "Gestión de reservas",
+      "Gestión de socios",
+      "Control de caja",
       "Kiosco con códigos de barras",
       "Reportes avanzados",
       "Soporte prioritario",
-      "API para integraciones",
     ],
   },
 ];
