@@ -21,9 +21,11 @@ import {
   LogOut,
   Menu,
   Club,
+  LandPlot,
 } from "lucide-react";
 
 const navItems = [
+  { href: "/dashboard/canchas", label: "Canchas", icon: LandPlot },
   { href: "/dashboard/reservas", label: "Reservas", icon: CalendarDays },
   { href: "/dashboard/socios", label: "Socios", icon: Users },
   { href: "/dashboard/productos", label: "Productos", icon: Package },
@@ -80,7 +82,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const email = user?.email ?? "";
+  const initials = email.slice(0, 2).toUpperCase() || "??";
 
   return (
     <AuthGuard>
@@ -110,10 +114,10 @@ export default function DashboardLayout({
           <SidebarContent />
           <div className="mt-auto flex items-center gap-3 pt-4">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs">OP</AvatarFallback>
+              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex flex-1 flex-col">
-              <span className="text-sm font-medium">Operador</span>
+              <span className="text-sm font-medium">{email || "Usuario"}</span>
               <span className="text-xs text-muted-foreground">Admin</span>
             </div>
             <Button variant="ghost" size="icon" onClick={logout} title="Cerrar sesión">

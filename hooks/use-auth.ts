@@ -1,37 +1,44 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-const AUTH_KEY = "club-session";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(AUTH_KEY) : null;
-    setIsAuthenticated(stored === "authenticated");
-    setIsLoading(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (username: string, password: string): boolean => {
-    if (username === "test" && password === "123") {
-      localStorage.setItem(AUTH_KEY, "authenticated");
-      setIsAuthenticated(true);
-      return true;
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { success: false, error: error.message };
     }
-    return false;
+    return { success: true };
   };
 
-  const logout = () => {
-    localStorage.removeItem(AUTH_KEY);
-    setIsAuthenticated(false);
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
-  return { isAuthenticated, isLoading, login, logout };
-}
-
-export function isAuthenticatedClient(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(AUTH_KEY) === "authenticated";
+  return { user, isAuthenticated: !!user, isLoading, login, logout };
 }
