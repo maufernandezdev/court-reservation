@@ -27,7 +27,7 @@
 
 ## 5. Grilla de reservas: canchas reales + filtro por tipo
 
-- [ ] 5.1 Refactor de `app/dashboard/reservas/page.tsx` para que las columnas de la grilla vengan de `useCourts()` (reemplazando las canchas mock), con estado de carga (spinner), y verificar que la grilla renderiza las canchas reales del usuario de prueba
-- [ ] 5.2 Agregar estado vacío en `/dashboard/reservas` cuando el usuario no tiene canchas (mensaje + botón que navega a `/dashboard/canchas`), y verificar que se muestra con un usuario sin canchas
-- [ ] 5.3 Agregar el filtro por tipo (Select con Todas/Fútbol/Tenis/Pádel) que filtra las columnas de la grilla, y verificar que al elegir "Pádel" solo quedan columnas de canchas de pádel y con "Todas" vuelven todas
-- [ ] 5.4 Correr `pnpm build` y verificar que compila sin errores
+- [x] 5.1 Refactor de `app/dashboard/reservas/page.tsx` para que las columnas de la grilla vengan de `useCourts()` (reemplazando las canchas mock), con estado de carga (spinner), y verificar que la grilla renderiza las canchas reales del usuario de prueba
+- [x] 5.2 Agregar estado vacío en `/dashboard/reservas` cuando el usuario no tiene canchas (mensaje + botón que navega a `/dashboard/canchas`), y verificar que se muestra con un usuario sin canchas
+- [x] 5.3 Agregar el filtro por tipo (Select con Todas/Fútbol/Tenis/Pádel) que filtra las columnas de la grilla, y verificar que al elegir "Pádel" solo quedan columnas de canchas de pádel y con "Todas" vuelven todas
+- [x] 5.4 Correr `pnpm build` y verificar que compila sin errores

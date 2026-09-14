@@ -40,7 +40,7 @@ function SidebarContent() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex items-center gap-3 px-2 py-4">
+      <Link href="/dashboard" className="flex items-center gap-3 rounded-md px-2 py-4 transition-colors hover:bg-accent">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Club className="h-5 w-5" />
         </div>
@@ -48,7 +48,7 @@ function SidebarContent() {
           <span className="text-lg font-semibold leading-tight">{CLUB_NAME}</span>
           <span className="text-xs text-muted-foreground">Panel de administración</span>
         </div>
-      </div>
+      </Link>
 
       <Separator />
 
@@ -90,12 +90,12 @@ export default function DashboardLayout({
     <AuthGuard>
       <div className="min-h-screen bg-muted/20">
         <header className="flex items-center justify-between border-b bg-card px-4 py-3 lg:hidden">
-        <div className="flex items-center gap-3">
+        <Link href="/dashboard" className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Club className="h-4 w-4" />
           </div>
           <span className="font-semibold">{CLUB_NAME}</span>
-        </div>
+        </Link>
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon">

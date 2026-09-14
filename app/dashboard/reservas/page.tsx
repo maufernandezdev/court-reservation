@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import AuthGuard from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,18 +38,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TIME_SLOTS } from "@/lib/mocks/data";
 import {
-  COURTS,
-  TIME_SLOTS,
-  INITIAL_RESERVATIONS,
-  type Reservation,
-} from "@/lib/mocks/data";
+  useCourts,
+  COURT_TYPE_LABELS,
+  type CourtType,
+} from "@/hooks/use-courts";
+import { useReservations, type Reservation } from "@/hooks/use-reservations";
+import { CourtTypeFilter } from "@/components/court-type-filter";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, CalendarDays, Trash2 } from "lucide-react";
-
-const STORAGE_KEY = "club-reservations";
-const STORAGE_VERSION_KEY = "club-reservations-version";
-const CURRENT_STORAGE_VERSION = 2;
+import Link from "next/link";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  LandPlot,
+  Trash2,
+} from "lucide-react";
 
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -79,9 +84,10 @@ function formatDisplayDate(date: Date): string {
 }
 
 export default function ReservationsPage() {
-  const [reservations, setReservations] =
-    useState<Reservation[]>(INITIAL_RESERVATIONS);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const { courts, isLoading: isLoadingCourts } = useCourts();
+  const [courtTypeFilter, setCourtTypeFilter] = useState<
+    CourtType | "all"
+  >("all");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -105,41 +111,27 @@ export default function ReservationsPage() {
     [selectedDate]
   );
 
-  useEffect(() => {
-    const storedVersion = localStorage.getItem(STORAGE_VERSION_KEY);
-    const stored = localStorage.getItem(STORAGE_KEY);
+  const {
+    reservations,
+    isLoading: isLoadingReservations,
+    createReservation,
+    updateReservation,
+    deleteReservation,
+  } = useReservations(selectedDateKey);
 
-    if (storedVersion !== String(CURRENT_STORAGE_VERSION)) {
-      localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_STORAGE_VERSION));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_RESERVATIONS));
-      setReservations(INITIAL_RESERVATIONS);
-      setIsLoaded(true);
-      return;
-    }
-
-    if (stored) {
-      try {
-        setReservations(JSON.parse(stored));
-      } catch {
-        setReservations(INITIAL_RESERVATIONS);
-      }
-    }
-    setIsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reservations));
-    }
-  }, [reservations, isLoaded]);
-
-  const reservationsForDate = useMemo(
-    () => reservations.filter((r) => r.date === selectedDateKey),
-    [reservations, selectedDateKey]
+  const visibleCourts = useMemo(
+    () =>
+      courtTypeFilter === "all"
+        ? courts
+        : courts.filter((court) => court.type === courtTypeFilter),
+    [courts, courtTypeFilter]
   );
 
+  // Las reservas ya vienen filtradas por fecha desde el hook (RLS por usuario).
+  const reservationsForDate = reservations;
+
   const findReservation = (courtId: string, time: string) =>
-    reservationsForDate.find((r) => r.courtId === courtId && r.time === time);
+    reservationsForDate.find((r) => r.court_id === courtId && r.time === time);
 
   const resetForm = () => {
     setEditingReservationId(null);
@@ -162,10 +154,10 @@ export default function ReservationsPage() {
   const openEditDialog = (reservation: Reservation) => {
     resetForm();
     setEditingReservationId(reservation.id);
-    setSelectedCourtId(reservation.courtId);
+    setSelectedCourtId(reservation.court_id);
     setSelectedTime(reservation.time);
     setSelectedDateKeyValue(reservation.date);
-    setCustomerName(reservation.customerName);
+    setCustomerName(reservation.customer_name);
     setPhone(reservation.phone);
     setDialogOpen(true);
   };
@@ -187,14 +179,14 @@ export default function ReservationsPage() {
   ): boolean => {
     return reservations.some(
       (r) =>
-        r.courtId === courtId &&
+        r.court_id === courtId &&
         r.time === time &&
         r.date === date &&
         r.id !== excludeId
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
 
@@ -214,35 +206,25 @@ export default function ReservationsPage() {
         editingReservationId ?? undefined
       )
     ) {
-      setFormError("Ese horario ya está reservado en la fecha seleccionada.");
+      setFormError("Esa cancha ya está reservada en ese horario.");
       return;
     }
 
-    if (editingReservationId) {
-      setReservations((prev) =>
-        prev.map((r) =>
-          r.id === editingReservationId
-            ? {
-                ...r,
-                courtId: selectedCourtId,
-                time: selectedTime,
-                date: targetDateKey,
-                customerName: customerName.trim(),
-                phone: phone.trim(),
-              }
-            : r
-        )
-      );
-    } else {
-      const newReservation: Reservation = {
-        id: `r-${Date.now()}`,
-        courtId: selectedCourtId,
-        date: targetDateKey,
-        time: selectedTime,
-        customerName: customerName.trim(),
-        phone: phone.trim(),
-      };
-      setReservations((prev) => [...prev, newReservation]);
+    const input = {
+      court_id: selectedCourtId,
+      date: targetDateKey,
+      time: selectedTime,
+      customer_name: customerName,
+      phone,
+    };
+
+    const result = editingReservationId
+      ? await updateReservation(editingReservationId, input)
+      : await createReservation(input);
+
+    if (!result.success) {
+      setFormError(result.error ?? "No se pudo guardar la reserva.");
+      return;
     }
 
     setDialogOpen(false);
@@ -254,11 +236,9 @@ export default function ReservationsPage() {
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deletingReservationId) return;
-    setReservations((prev) =>
-      prev.filter((r) => r.id !== deletingReservationId)
-    );
+    await deleteReservation(deletingReservationId);
     setDeleteDialogOpen(false);
     setDeletingReservationId(null);
     if (dialogOpen) {
@@ -278,11 +258,34 @@ export default function ReservationsPage() {
     ? "Editar Reserva"
     : "Nueva Reserva";
 
-  if (!isLoaded) {
+  if (isLoadingCourts || isLoadingReservations) {
     return (
       <AuthGuard>
         <div className="flex h-96 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </AuthGuard>
+    );
+  }
+
+  if (courts.length === 0) {
+    return (
+      <AuthGuard>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 rounded-lg border border-dashed text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <LandPlot className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">
+              Todavía no tenés canchas
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Creá tu primera cancha para empezar a cargar reservas.
+            </p>
+          </div>
+          <Button asChild>
+            <Link href="/dashboard/canchas">Crear tu primera cancha</Link>
+          </Button>
         </div>
       </AuthGuard>
     );
@@ -331,6 +334,8 @@ export default function ReservationsPage() {
               onChange={handleDateInputChange}
               className="w-auto"
             />
+
+            <CourtTypeFilter value={courtTypeFilter} onChange={setCourtTypeFilter} />
           </div>
         </div>
 
@@ -339,11 +344,11 @@ export default function ReservationsPage() {
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="w-20 border-r">Hora</TableHead>
-                {COURTS.map((court) => (
+                {visibleCourts.map((court) => (
                   <TableHead key={court.id} className="min-w-[140px] text-center">
                     <div className="font-semibold">{court.name}</div>
                     <div className="text-xs font-normal text-muted-foreground">
-                      {court.sport}
+                      {COURT_TYPE_LABELS[court.type]}
                     </div>
                   </TableHead>
                 ))}
@@ -353,7 +358,7 @@ export default function ReservationsPage() {
               {TIME_SLOTS.map((time) => (
                 <TableRow key={time}>
                   <TableCell className="border-r font-medium">{time}</TableCell>
-                  {COURTS.map((court) => {
+                  {visibleCourts.map((court) => {
                     const reservation = findReservation(court.id, time);
                     return (
                       <TableCell
@@ -369,7 +374,7 @@ export default function ReservationsPage() {
                         {reservation ? (
                           <div className="flex h-full flex-col items-center justify-center">
                             <span className="text-sm font-semibold text-primary">
-                              {reservation.customerName}
+                              {reservation.customer_name}
                             </span>
                             {reservation.phone && (
                               <span className="text-xs text-muted-foreground">
@@ -420,7 +425,7 @@ export default function ReservationsPage() {
                         <SelectValue placeholder="Cancha" />
                       </SelectTrigger>
                       <SelectContent>
-                        {COURTS.map((court) => (
+                        {courts.map((court) => (
                           <SelectItem key={court.id} value={court.id}>
                             {court.name}
                           </SelectItem>

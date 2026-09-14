@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export const COURT_TYPES = ["futbol", "tenis", "padel"] as const;
@@ -26,23 +26,23 @@ export function useCourts() {
   const [error, setError] = useState("");
   const supabase = createClient();
 
+  const loadCourts = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("courts")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      setError("No se pudieron cargar las canchas.");
+    } else {
+      setCourts((data ?? []) as Court[]);
+    }
+    setIsLoading(false);
+  }, [supabase]);
+
   useEffect(() => {
-    const loadCourts = async () => {
-      const { data, error } = await supabase
-        .from("courts")
-        .select("*")
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        setError("No se pudieron cargar las canchas.");
-      } else {
-        setCourts((data ?? []) as Court[]);
-      }
-      setIsLoading(false);
-    };
-
     loadCourts();
-  }, []);
+  }, [loadCourts]);
 
   const createCourt = async (
     name: string,
@@ -70,5 +70,5 @@ export function useCourts() {
     return { success: true };
   };
 
-  return { courts, isLoading, error, createCourt };
+  return { courts, isLoading, error, refetch: loadCourts, createCourt };
 }

@@ -24,3 +24,10 @@ Lugar de notas del proyecto: decisiones, pendientes y configuraciones que no se 
 - Nada del trabajo de auth/registro está commiteado todavía (register, supabase lib, proxy, cambios en login/dashboard/AGENTS.md).
 - **Migraciones de Supabase sin CLI:** la tabla `courts` (y las que se agreguen) vive como SQL versionado en `supabase/migrations/`, pero se aplica a mano copiándola en el SQL Editor del dashboard. Cuando haya varias migraciones, evaluar adoptar Supabase CLI (`supabase db push`).
 - Usuarios unconfirmed huérfanos (emails con typo): no se limpian automáticamente. Se puede borrar a mano desde Authentication → Users en el dashboard, o armar una Edge Function con `service_role` que los purgue.
+
+## Semántica de reservas y ocupación
+
+- **`reservations.time`:** franja de **inicio** en formato `"HH:00"`, en bloques fijos de 1 hora alineados a la grilla (`TIME_SLOTS` en `lib/mocks/data.ts`: 09:00 a 22:00). No hay duración variable: una reserva siempre ocupa exactamente el bloque `[time, time + 1h)`. El constraint único `(court_id, date, time)` garantiza un solo titular por cancha/fecha/franja a nivel base de datos (doble reserva imposible aunque la UI falle).
+- **"En curso" (home `/dashboard`):** el bloque de 1h que contiene la hora local del navegador para la fecha de hoy, calculado como `hora actual` truncada a hora completa. Si son las 18:35, la franja en curso es "18:00" (reserva 18:00–19:00). Fuera de la grilla (antes de las 09:00 o después de las 22:59) no hay franja en curso y toda cancha se muestra como disponible.
+- **Fechas:** se manejan como strings `YYYY-MM-DD` (hora local del navegador), no timestamps. Aceptable para un club en un único país; si se opera en varias zonas horarias habría que revisarlo.
+- **RLS:** cada usuario solo ve/toca sus propias reservas (`user_id = auth.uid()`). Además, el trigger `reservations_check_court_owner` rechaza insert/update que apunte a una cancha que no sea del mismo usuario (la policy de RLS sola no lo impedía, solo validaba `user_id`).
