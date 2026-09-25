@@ -39,11 +39,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TIME_SLOTS } from "@/lib/mocks/data";
-import {
-  useCourts,
-  COURT_TYPE_LABELS,
-  type CourtType,
-} from "@/hooks/use-courts";
+import { useCourts } from "@/hooks/use-courts";
+import { COURT_TYPE_LABELS, type CourtType } from "@/lib/courts";
 import { useReservations, type Reservation } from "@/hooks/use-reservations";
 import { CourtTypeFilter } from "@/components/court-type-filter";
 import { cn } from "@/lib/utils";
@@ -294,7 +291,7 @@ export default function ReservationsPage() {
   return (
     <AuthGuard>
       <div className="space-y-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-4 border-b bg-background px-4 py-4 sm:flex-row sm:items-center sm:justify-between lg:-mx-8 lg:px-8">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Reservas</h1>
             <p className="text-muted-foreground">

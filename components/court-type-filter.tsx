@@ -11,7 +11,7 @@ import {
   COURT_TYPES,
   COURT_TYPE_LABELS,
   type CourtType,
-} from "@/hooks/use-courts";
+} from "@/lib/courts";
 
 export type CourtTypeFilterValue = CourtType | "all";
 

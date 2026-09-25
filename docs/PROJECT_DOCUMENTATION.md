@@ -19,6 +19,11 @@ Lugar de notas del proyecto: decisiones, pendientes y configuraciones que no se 
 - **No se puede subir** ese límite; el servicio por defecto es solo para pruebas.
 - Workarounds para desarrollo: esperar la hora, desactivar "Confirm email" en Authentication → Sign In / Providers → Email, usar Supabase CLI local (Inbucket captura los mails sin límite), o configurar SMTP propio (con SMTP custom el límite pasa a 30/hora y es configurable en Authentication → Rate Limits).
 
+## Decisiones y semántica
+
+- **Soft delete de canchas (migración `0003_court_soft_delete.sql`, aplicada 2026-09-24):** la baja de una cancha es lógica: se marca `active = false` y la fila (con sus reservas) queda en la base. Todas las queries del cliente filtran `.eq("active", true)`, así que la cancha desaparece de la UI. La migración también agregó la policy RLS `courts_update_own` (update sobre filas propias), que usan tanto la edición como la baja lógica. No hay policy de DELETE a propósito: la baja física no es un flujo soportado.
+- `/dashboard/canchas` es Server Component: lee con el client de servidor y muta vía Server Actions (`app/dashboard/canchas/actions.ts`), que validan con Zod, chequean sesión y hacen `revalidatePath`. Las páginas de reservas y home siguen en el cliente con `useCourts()`/`useReservations()`.
+
 ## Pendientes
 
 - Nada del trabajo de auth/registro está commiteado todavía (register, supabase lib, proxy, cambios en login/dashboard/AGENTS.md).

@@ -110,7 +110,7 @@ export default function DashboardLayout({
       </header>
 
       <div className="flex">
-        <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r bg-card p-4 lg:flex">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card p-4 lg:flex">
           <SidebarContent />
           <div className="mt-auto flex items-center gap-3 pt-4">
             <Avatar className="h-8 w-8">
@@ -126,7 +126,7 @@ export default function DashboardLayout({
           </div>
         </aside>
 
-        <main className="flex-1 p-4 lg:p-8">
+        <main className="min-w-0 flex-1 p-4 lg:p-8">
           <div className="mb-4 flex items-center justify-end lg:hidden">
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut className="mr-2 h-4 w-4" />

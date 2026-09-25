@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CourtTypeFilter } from "@/components/court-type-filter";
-import { useCourts, COURT_TYPE_LABELS } from "@/hooks/use-courts";
+import { useCourts } from "@/hooks/use-courts";
+import { COURT_TYPE_LABELS } from "@/lib/courts";
 import { useReservations } from "@/hooks/use-reservations";
 import type { CourtTypeFilterValue } from "@/components/court-type-filter";
 import { LandPlot, RefreshCw, Users } from "lucide-react";
