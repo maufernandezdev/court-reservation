@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 (base visual) y 2 (shell del panel) terminadas. Siguiente: fase 3 (login, registro y verificación). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 a 3 terminadas (base visual, shell, acceso). Siguiente: fase 4 (Hoy). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -27,10 +27,11 @@
 
 ## 3. Acceso: login, registro y verificación
 
-- [ ] 3.1 Releer artboards Main y Registro; crear `components/auth/auth-layout.tsx` (panel de marca con `CourtLines` + slot del formulario, reducido en celular) y `components/auth/password-input.tsx` (toggle con `aria-label` dinámico), y verificar que el formulario entra sin scroll a 390 × 844
-- [ ] 3.2 Rehacer `app/login/page.tsx` con `AuthLayout`, migrado a RHF + Zod (mensajes en español), alerta de error con `role="alert"` y botón "Ingresando…", y verificar login correcto, login con contraseña mala y redirección a `/dashboard`
-- [ ] 3.3 Rehacer `app/register/page.tsx` con `AuthLayout` conservando schema, campos y flujo actual, errores por campo, y verificar que un registro nuevo llega a la verificación
-- [ ] 3.4 Rehacer `app/verification-account/page.tsx` con la misma identidad conservando reenvío y límites, y verificar el flujo de reenvío (respetando el límite de 2 emails/hora del SMTP por defecto)
+- [x] 3.1 Releer artboards Main y Registro; crear `components/auth/auth-layout.tsx` (panel de marca con `CourtLines` + slot del formulario, reducido en celular) y `components/auth/password-input.tsx` (toggle con `aria-label` dinámico), y verificar que el formulario entra sin scroll a 390 × 844
+- [x] 3.2 Rehacer `app/login/page.tsx` con `AuthLayout`, migrado a RHF + Zod (mensajes en español), alerta de error con `role="alert"` y botón "Ingresando…", y verificar login correcto, login con contraseña mala y redirección a `/dashboard`
+- [x] 3.3 Rehacer `app/register/page.tsx` con `AuthLayout` conservando schema, campos y flujo actual, errores por campo, y verificar que un registro nuevo llega a la verificación
+- [x] 3.4 Rehacer `app/verification-account/page.tsx` con la misma identidad conservando reenvío y límites, y verificar el flujo de reenvío (respetando el límite de 2 emails/hora del SMTP por defecto)
+  - Verificado 2026-10-06 con Playwright (1440 y 390 px): errores Zod en español, toggle de contraseña con aria-label dinámico, alerta "El email o la contraseña no coinciden…" (role=alert) conservando el email, login correcto → `/dashboard`, registro con errores por campo y botón visible sin scroll a 390 × 844, verificación sin `?code` → estado de error. **No se ejercitó el reenvío real** para no gastar el cupo de 2 emails/hora del SMTP por defecto (la lógica de `signUp`/`resend` quedó idéntica).
 
 ## 4. Hoy (inicio)
 

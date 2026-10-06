@@ -3,118 +3,138 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { ArrowRight, CircleAlert } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Club, Eye, EyeOff } from "lucide-react";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { AuthHeading, AuthLayout } from "@/components/auth/auth-layout";
+import { PasswordInput } from "@/components/auth/password-input";
 
-function PasswordInput({ value, onChange, id }: { value: string; onChange: (value: string) => void; id?: string }) {
-  const [show, setShow] = useState(false);
+const loginSchema = z.object({
+  email: z.string().trim().email("Ingresá un email válido"),
+  password: z.string().min(1, "Ingresá tu contraseña"),
+});
 
-  return (
-    <div className="relative">
-      <Input
-        id={id}
-        type={show ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="•••"
-        required
-      />
-      <button
-        type="button"
-        onClick={() => setShow((prev) => !prev)}
-        aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-        className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
-      >
-        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </button>
-    </div>
-  );
+type LoginValues = z.infer<typeof loginSchema>;
+
+/** Traduce los errores de Supabase Auth más comunes. */
+function loginErrorMessage(message?: string): string {
+  if (!message) return "No se pudo iniciar sesión.";
+  if (/invalid login credentials/i.test(message)) {
+    return "El email o la contraseña no coinciden. Revisalos e intentá de nuevo.";
+  }
+  if (/email not confirmed/i.test(message)) {
+    return "Todavía no confirmaste tu email. Revisá tu bandeja de entrada.";
+  }
+  return message;
 }
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const form = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+  const isSubmitting = form.formState.isSubmitting;
+
+  const handleSubmit = async (values: LoginValues) => {
     setError("");
-    setIsSubmitting(true);
-
-    const { success, error } = await login(email, password);
+    const { success, error } = await login(values.email, values.password);
     if (success) {
       router.push("/dashboard");
     } else {
-      setError(error ?? "No se pudo iniciar sesión.");
-      setIsSubmitting(false);
+      setError(loginErrorMessage(error));
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Club className="h-6 w-6" />
+    <AuthLayout>
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(handleSubmit)}
+          className="flex flex-col gap-6"
+          noValidate
+        >
+          <AuthHeading
+            title="Ingresá a tu club"
+            description="Usá el email con el que te registraste."
+          />
+
+          {error && (
+            <Alert variant="destructive">
+              <CircleAlert />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex flex-col gap-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      placeholder="vos@tuclub.com"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contraseña</FormLabel>
+                  <FormControl>
+                    <PasswordInput autoComplete="current-password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
-          <CardTitle className="text-2xl">Club Deportivo Central</CardTitle>
-          <CardDescription>Ingresá tus credenciales para continuar</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="usuario@club.com"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <PasswordInput
-                id="password"
-                value={password}
-                onChange={setPassword}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Ingresando..." : "Iniciar Sesión"}
-            </Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            ¿No tenés cuenta?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Registrate
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+
+          <Button type="submit" size="lg" disabled={isSubmitting}>
+            {isSubmitting ? "Ingresando…" : "Ingresar"}
+            {!isSubmitting && <ArrowRight className="text-ball" />}
+          </Button>
+
+          <div className="flex flex-col gap-1.5 border-t pt-5 text-[15px] text-muted-foreground">
+            <span>
+              ¿Todavía no tenés cuenta?{" "}
+              <Link
+                href="/register"
+                className="font-semibold text-foreground underline-offset-4 hover:underline"
+              >
+                Registrate
+              </Link>
+            </span>
+            <span>¿Te invitaron a un club? Ingresá con el email de la invitación.</span>
+          </div>
+        </form>
+      </Form>
+    </AuthLayout>
   );
 }
