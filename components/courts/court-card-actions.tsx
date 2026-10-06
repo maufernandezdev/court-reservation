@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,15 +9,13 @@ import {
   courtSchema,
   type Court,
   type CourtInput,
-  COURT_TYPES,
-  COURT_TYPE_LABELS,
 } from "@/lib/courts";
 import {
   updateCourtAction,
   deactivateCourtAction,
 } from "@/app/dashboard/canchas/actions";
+import { CourtFormFields } from "@/components/courts/court-form-fields";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -44,20 +42,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+
+function toFormValues(court: Court): CourtInput {
+  return {
+    name: court.name,
+    type: court.type,
+    price_per_hour: court.price_per_hour,
+    slot_duration: court.slot_duration,
+    open_time: court.open_time,
+    close_time: court.close_time,
+    deposit_enabled: court.deposit_enabled,
+    deposit_type: court.deposit_type,
+    deposit_value: court.deposit_value,
+  };
+}
 
 export function CourtCardActions({ court }: { court: Court }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -67,12 +67,12 @@ export function CourtCardActions({ court }: { court: Court }) {
 
   const form = useForm<CourtInput>({
     resolver: zodResolver(courtSchema),
-    defaultValues: { name: court.name, type: court.type },
+    defaultValues: toFormValues(court),
   });
 
   const openEditDialog = () => {
     setFormError("");
-    form.reset({ name: court.name, type: court.type });
+    form.reset(toFormValues(court));
     setEditDialogOpen(true);
   };
 
@@ -128,11 +128,11 @@ export function CourtCardActions({ court }: { court: Court }) {
       </DropdownMenu>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar cancha</DialogTitle>
             <DialogDescription>
-              Modificá el nombre o el tipo de la cancha.
+              Modificá el precio, los horarios o la seña de la cancha.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -145,48 +145,7 @@ export function CourtCardActions({ court }: { court: Court }) {
                   <AlertDescription>{formError}</AlertDescription>
                 </Alert>
               )}
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Cancha 1" autoFocus {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Controller
-                control={form.control}
-                name="type"
-                render={({ field, fieldState }) => (
-                  <FormItem>
-                    <FormLabel>Tipo</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccioná un tipo" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {COURT_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {COURT_TYPE_LABELS[type]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {fieldState.error && (
-                      <FormMessage>{fieldState.error.message}</FormMessage>
-                    )}
-                  </FormItem>
-                )}
-              />
+              <CourtFormFields form={form} />
               <DialogFooter>
                 <Button
                   type="button"

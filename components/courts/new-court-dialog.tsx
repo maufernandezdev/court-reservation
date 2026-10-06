@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { courtSchema, type CourtInput, COURT_TYPES, COURT_TYPE_LABELS } from "@/lib/courts";
+import { courtSchema, type CourtInput } from "@/lib/courts";
 import { createCourtAction } from "@/app/dashboard/canchas/actions";
+import { CourtFormFields } from "@/components/courts/court-form-fields";
+import { COURT_FORM_DEFAULTS } from "@/components/courts/court-form-defaults";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -19,19 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function NewCourtDialog({ triggerLabel }: { triggerLabel: string }) {
@@ -41,12 +30,12 @@ export function NewCourtDialog({ triggerLabel }: { triggerLabel: string }) {
 
   const form = useForm<CourtInput>({
     resolver: zodResolver(courtSchema),
-    defaultValues: { name: "", type: undefined },
+    defaultValues: COURT_FORM_DEFAULTS,
   });
 
   const openDialog = () => {
     setFormError("");
-    form.reset();
+    form.reset(COURT_FORM_DEFAULTS);
     setIsDialogOpen(true);
   };
 
@@ -58,7 +47,7 @@ export function NewCourtDialog({ triggerLabel }: { triggerLabel: string }) {
 
     if (success) {
       setIsDialogOpen(false);
-      form.reset();
+      form.reset(COURT_FORM_DEFAULTS);
       toast.success(`La cancha "${values.name.trim()}" se creó correctamente`);
     } else {
       setFormError(error ?? "No se pudo crear la cancha.");
@@ -72,11 +61,11 @@ export function NewCourtDialog({ triggerLabel }: { triggerLabel: string }) {
         <Plus className="mr-2 h-4 w-4" />
         {triggerLabel}
       </Button>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva cancha</DialogTitle>
           <DialogDescription>
-            Agregá una cancha a tu club. Podés crear todas las que necesites.
+            Agregá una cancha con su precio, horarios y configuración de seña.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -89,52 +78,7 @@ export function NewCourtDialog({ triggerLabel }: { triggerLabel: string }) {
                 <AlertDescription>{formError}</AlertDescription>
               </Alert>
             )}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Cancha 1"
-                      autoFocus
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Controller
-              control={form.control}
-              name="type"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormLabel>Tipo</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccioná un tipo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {COURT_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {COURT_TYPE_LABELS[type]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {fieldState.error && (
-                    <FormMessage>{fieldState.error.message}</FormMessage>
-                  )}
-                </FormItem>
-              )}
-            />
+            <CourtFormFields form={form} />
             <DialogFooter>
               <Button
                 type="button"

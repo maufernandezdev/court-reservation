@@ -3,33 +3,8 @@
 import { useMemo, useState } from "react";
 import AuthGuard from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -38,19 +13,38 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TIME_SLOTS } from "@/lib/mocks/data";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { useCourts } from "@/hooks/use-courts";
+import { useReservations } from "@/hooks/use-reservations";
+import { useMembership } from "@/hooks/use-membership";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { COURT_TYPE_LABELS, type CourtType } from "@/lib/courts";
-import { useReservations, type Reservation } from "@/hooks/use-reservations";
+import {
+  getCourtSlots,
+  minutesToTime,
+  reservationCoversSlot,
+  timeToMinutes,
+} from "@/lib/availability";
+import {
+  PAYMENT_STATUS_LABELS,
+  type Reservation,
+} from "@/lib/reservations";
 import { CourtTypeFilter } from "@/components/court-type-filter";
+import { ReservationDialog } from "@/components/reservations/reservation-dialog";
+import { AvailabilitySearchDialog } from "@/components/reservations/availability-search-dialog";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
+  CalendarSearch,
   LandPlot,
-  Trash2,
 } from "lucide-react";
 
 function formatDateKey(date: Date): string {
@@ -80,28 +74,39 @@ function formatDisplayDate(date: Date): string {
   });
 }
 
+/** Grilla base de 30 min entre el menor apertura y el mayor cierre de las canchas visibles. */
+function buildGridTimes(
+  courts: { open_time: string; close_time: string }[]
+): string[] {
+  if (courts.length === 0) return [];
+  const start = Math.min(...courts.map((c) => timeToMinutes(c.open_time)));
+  const end = Math.max(...courts.map((c) => timeToMinutes(c.close_time)));
+  const times: string[] = [];
+  for (let t = start; t < end; t += 30) {
+    times.push(minutesToTime(t));
+  }
+  return times;
+}
+
 export default function ReservationsPage() {
   const { courts, isLoading: isLoadingCourts } = useCourts();
-  const [courtTypeFilter, setCourtTypeFilter] = useState<
-    CourtType | "all"
-  >("all");
+  const { membership, isLoading: isLoadingMembership } = useMembership();
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+
+  const [courtTypeFilter, setCourtTypeFilter] = useState<CourtType | "all">(
+    "all"
+  );
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingReservationId, setEditingReservationId] = useState<
-    string | null
-  >(null);
-  const [selectedCourtId, setSelectedCourtId] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
-  const [selectedDateKeyValue, setSelectedDateKeyValue] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [formError, setFormError] = useState("");
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+  const [editingReservation, setEditingReservation] =
+    useState<Reservation | null>(null);
+  const [initialCourtId, setInitialCourtId] = useState("");
+  const [initialTime, setInitialTime] = useState("");
 
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingReservationId, setDeletingReservationId] = useState<
-    string | null
-  >(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileCourtId, setMobileCourtId] = useState("");
 
   const selectedDateKey = useMemo(
     () => formatDateKey(selectedDate),
@@ -111,10 +116,14 @@ export default function ReservationsPage() {
   const {
     reservations,
     isLoading: isLoadingReservations,
-    createReservation,
-    updateReservation,
-    deleteReservation,
+    upsertLocal,
+    refetch,
   } = useReservations(selectedDateKey);
+
+  const activeReservations = useMemo(
+    () => reservations.filter((r) => r.status === "active"),
+    [reservations]
+  );
 
   const visibleCourts = useMemo(
     () =>
@@ -124,124 +133,51 @@ export default function ReservationsPage() {
     [courts, courtTypeFilter]
   );
 
-  // Las reservas ya vienen filtradas por fecha desde el hook (RLS por usuario).
-  const reservationsForDate = reservations;
-
   const findReservation = (courtId: string, time: string) =>
-    reservationsForDate.find((r) => r.court_id === courtId && r.time === time);
+    activeReservations.find(
+      (r) => r.court_id === courtId && reservationCoversSlot(r, time)
+    );
 
-  const resetForm = () => {
-    setEditingReservationId(null);
-    setSelectedCourtId("");
-    setSelectedTime("");
-    setSelectedDateKeyValue("");
-    setCustomerName("");
-    setPhone("");
-    setFormError("");
-  };
+  const openCreateDialog = (courtId: string, time: string, date?: string) => {
+    const court = courts.find((c) => c.id === courtId);
+    let slotTime = time;
 
-  const openCreateDialog = (courtId: string, time: string) => {
-    resetForm();
-    setSelectedCourtId(courtId);
-    setSelectedTime(time);
-    setSelectedDateKeyValue(selectedDateKey);
+    if (court) {
+      const slots = getCourtSlots(court);
+      if (!slots.includes(time)) {
+        // Celda fuera de la grilla de la cancha: usa la primera franja disponible desde ahí.
+        slotTime =
+          slots.find((s) => s >= time) ?? slots[slots.length - 1] ?? time;
+      }
+    }
+
+    setDialogMode("create");
+    setEditingReservation(null);
+    setInitialCourtId(courtId);
+    setInitialTime(slotTime);
+    if (date && date !== selectedDateKey) {
+      setSelectedDate(parseDateKey(date));
+    }
     setDialogOpen(true);
   };
 
   const openEditDialog = (reservation: Reservation) => {
-    resetForm();
-    setEditingReservationId(reservation.id);
-    setSelectedCourtId(reservation.court_id);
-    setSelectedTime(reservation.time);
-    setSelectedDateKeyValue(reservation.date);
-    setCustomerName(reservation.customer_name);
-    setPhone(reservation.phone);
+    setDialogMode("edit");
+    setEditingReservation(reservation);
+    setInitialCourtId(reservation.court_id);
+    setInitialTime(reservation.time);
     setDialogOpen(true);
   };
 
   const handleCellClick = (courtId: string, time: string) => {
     const existing = findReservation(courtId, time);
     if (existing) {
-      openEditDialog(existing);
+      if (existing.time === time) {
+        openEditDialog(existing);
+      }
       return;
     }
     openCreateDialog(courtId, time);
-  };
-
-  const isSlotOccupied = (
-    courtId: string,
-    time: string,
-    date: string,
-    excludeId?: string
-  ): boolean => {
-    return reservations.some(
-      (r) =>
-        r.court_id === courtId &&
-        r.time === time &&
-        r.date === date &&
-        r.id !== excludeId
-    );
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError("");
-
-    if (!customerName.trim() || !selectedCourtId || !selectedTime || !selectedDateKeyValue) {
-      setFormError("Completá todos los campos obligatorios.");
-      return;
-    }
-
-    const targetDate = parseDateKey(selectedDateKeyValue);
-    const targetDateKey = formatDateKey(targetDate);
-
-    if (
-      isSlotOccupied(
-        selectedCourtId,
-        selectedTime,
-        targetDateKey,
-        editingReservationId ?? undefined
-      )
-    ) {
-      setFormError("Esa cancha ya está reservada en ese horario.");
-      return;
-    }
-
-    const input = {
-      court_id: selectedCourtId,
-      date: targetDateKey,
-      time: selectedTime,
-      customer_name: customerName,
-      phone,
-    };
-
-    const result = editingReservationId
-      ? await updateReservation(editingReservationId, input)
-      : await createReservation(input);
-
-    if (!result.success) {
-      setFormError(result.error ?? "No se pudo guardar la reserva.");
-      return;
-    }
-
-    setDialogOpen(false);
-    resetForm();
-  };
-
-  const handleDeleteClick = (reservationId: string) => {
-    setDeletingReservationId(reservationId);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!deletingReservationId) return;
-    await deleteReservation(deletingReservationId);
-    setDeleteDialogOpen(false);
-    setDeletingReservationId(null);
-    if (dialogOpen) {
-      setDialogOpen(false);
-      resetForm();
-    }
   };
 
   const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,11 +187,30 @@ export default function ReservationsPage() {
     }
   };
 
-  const dialogTitle = editingReservationId
-    ? "Editar Reserva"
-    : "Nueva Reserva";
+  const gridTimes = useMemo(
+    () => buildGridTimes(visibleCourts),
+    [visibleCourts]
+  );
 
-  if (isLoadingCourts || isLoadingReservations) {
+  const handleReservationSaved = (reservation: Reservation) => {
+    upsertLocal(reservation);
+    setEditingReservation((prev) => (prev?.id === reservation.id ? reservation : prev));
+  };
+
+  const effectiveMobileCourtId =
+    mobileCourtId &&
+    visibleCourts.some((c) => c.id === mobileCourtId)
+      ? mobileCourtId
+      : (visibleCourts[0]?.id ?? "");
+
+  const mobileCourt = visibleCourts.find(
+    (c) => c.id === effectiveMobileCourtId
+  );
+
+  const isLoading =
+    isLoadingCourts || isLoadingReservations || isLoadingMembership;
+
+  if (isLoading) {
     return (
       <AuthGuard>
         <div className="flex h-96 items-center justify-center">
@@ -295,11 +250,17 @@ export default function ReservationsPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Reservas</h1>
             <p className="text-muted-foreground">
-              Vista diaria. Hacé clic en una celda para crear o editar una reserva.
+              Vista diaria. Tocá una franja libre para reservar o una ocupada
+              para ver el detalle.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setSearchOpen(true)}>
+              <CalendarSearch className="mr-2 h-4 w-4" />
+              Buscar disponibilidad
+            </Button>
+
             <Button
               variant="outline"
               size="icon"
@@ -332,213 +293,230 @@ export default function ReservationsPage() {
               className="w-auto"
             />
 
-            <CourtTypeFilter value={courtTypeFilter} onChange={setCourtTypeFilter} />
+            <CourtTypeFilter
+              value={courtTypeFilter}
+              onChange={setCourtTypeFilter}
+            />
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="w-20 border-r">Hora</TableHead>
-                {visibleCourts.map((court) => (
-                  <TableHead key={court.id} className="min-w-[140px] text-center">
-                    <div className="font-semibold">{court.name}</div>
-                    <div className="text-xs font-normal text-muted-foreground">
-                      {COURT_TYPE_LABELS[court.type]}
-                    </div>
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {TIME_SLOTS.map((time) => (
-                <TableRow key={time}>
-                  <TableCell className="border-r font-medium">{time}</TableCell>
-                  {visibleCourts.map((court) => {
-                    const reservation = findReservation(court.id, time);
-                    return (
-                      <TableCell
-                        key={`${court.id}-${time}`}
-                        className={cn(
-                          "h-16 cursor-pointer p-2 text-center transition-colors",
-                          reservation
-                            ? "bg-primary/10 text-primary-foreground hover:bg-primary/20"
-                            : "hover:bg-accent"
-                        )}
-                        onClick={() => handleCellClick(court.id, time)}
-                      >
-                        {reservation ? (
-                          <div className="flex h-full flex-col items-center justify-center">
-                            <span className="text-sm font-semibold text-primary">
-                              {reservation.customer_name}
+        {visibleCourts.length === 0 ? (
+          <p className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
+            No hay canchas del tipo seleccionado.
+          </p>
+        ) : isDesktop ? (
+          /* ---------------- Vista desktop: grilla canchas × horarios ---------------- */
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-20 border-r">Hora</TableHead>
+                  {visibleCourts.map((court) => (
+                    <TableHead
+                      key={court.id}
+                      className="min-w-[140px] text-center"
+                    >
+                      <div className="font-semibold">{court.name}</div>
+                      <div className="text-xs font-normal text-muted-foreground">
+                        {COURT_TYPE_LABELS[court.type]} ·{" "}
+                        {court.slot_duration} min
+                      </div>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {gridTimes.map((time) => (
+                  <TableRow key={time}>
+                    <TableCell className="border-r font-medium">
+                      {time}
+                    </TableCell>
+                    {visibleCourts.map((court) => {
+                      const reservation = findReservation(court.id, time);
+                      const isStart =
+                        reservation && reservation.time === time;
+                      const inGrid = getCourtSlots(court).includes(time);
+
+                      if (reservation && !isStart) {
+                        // Continuación de un turno más largo que la grilla.
+                        return (
+                          <TableCell
+                            key={`${court.id}-${time}`}
+                            className="h-10 bg-primary/5 p-2"
+                          />
+                        );
+                      }
+
+                      return (
+                        <TableCell
+                          key={`${court.id}-${time}`}
+                          className={cn(
+                            "h-16 p-2 text-center transition-colors",
+                            reservation
+                              ? "cursor-pointer bg-primary/10 hover:bg-primary/20"
+                              : inGrid
+                                ? "cursor-pointer hover:bg-accent"
+                                : "bg-muted/20"
+                          )}
+                          onClick={() =>
+                            reservation || inGrid
+                              ? handleCellClick(court.id, time)
+                              : undefined
+                          }
+                        >
+                          {reservation ? (
+                            <div className="flex h-full flex-col items-center justify-center">
+                              <span className="text-sm font-semibold text-primary">
+                                {reservation.customer_name}
+                              </span>
+                              <Badge
+                                variant={
+                                  reservation.payment_status === "pagada"
+                                    ? "default"
+                                    : reservation.payment_status === "senada"
+                                      ? "secondary"
+                                      : "outline"
+                                }
+                                className="mt-0.5"
+                              >
+                                {PAYMENT_STATUS_LABELS[
+                                  reservation.payment_status
+                                ]}
+                              </Badge>
+                            </div>
+                          ) : inGrid ? (
+                            <span className="text-xs text-muted-foreground">
+                              Libre
                             </span>
-                            {reservation.phone && (
-                              <span className="text-xs text-muted-foreground">
-                                {reservation.phone}
+                          ) : null}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          /* ---------------- Vista mobile: cancha seleccionada + lista de franjas ---------------- */
+          <Tabs
+            value={effectiveMobileCourtId}
+            onValueChange={setMobileCourtId}
+            className="space-y-4"
+          >
+            <TabsList className="flex w-full justify-start overflow-x-auto">
+              {visibleCourts.map((court) => (
+                <TabsTrigger
+                  key={court.id}
+                  value={court.id}
+                  className="shrink-0"
+                >
+                  {court.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {visibleCourts.map((court) => (
+              <TabsContent key={court.id} value={court.id} className="m-0">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>
+                      {COURT_TYPE_LABELS[court.type]} · {court.open_time} a{" "}
+                      {court.close_time}
+                    </span>
+                    <span>{court.slot_duration} min por turno</span>
+                  </div>
+                  <ul className="divide-y rounded-lg border bg-card">
+                    {getCourtSlots(court).map((time) => {
+                      const reservation = activeReservations.find(
+                        (r) =>
+                          r.court_id === court.id &&
+                          reservationCoversSlot(r, time)
+                      );
+                      const isStart =
+                        reservation && reservation.time === time;
+
+                      if (reservation && !isStart) return null;
+
+                      return (
+                        <li key={time}>
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors",
+                              reservation
+                                ? "bg-primary/10"
+                                : "hover:bg-accent"
+                            )}
+                            onClick={() =>
+                              reservation
+                                ? openEditDialog(reservation)
+                                : openCreateDialog(court.id, time)
+                            }
+                          >
+                            <span className="font-medium">{time}</span>
+                            {reservation ? (
+                              <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                                <span className="truncate text-sm font-semibold text-primary">
+                                  {reservation.customer_name}
+                                </span>
+                                <Badge
+                                  variant={
+                                    reservation.payment_status === "pagada"
+                                      ? "default"
+                                      : reservation.payment_status === "senada"
+                                        ? "secondary"
+                                        : "outline"
+                                  }
+                                >
+                                  {
+                                    PAYMENT_STATUS_LABELS[
+                                      reservation.payment_status
+                                    ]
+                                  }
+                                </Badge>
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                Libre
                               </span>
                             )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Libre</span>
-                        )}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <form onSubmit={handleSubmit}>
-              <DialogHeader>
-                <DialogTitle>{dialogTitle}</DialogTitle>
-                <DialogDescription>
-                  {editingReservationId
-                    ? "Modificá los datos de la reserva."
-                    : `Reserva para el ${formatDisplayDate(selectedDate)}.`}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid gap-4 py-4">
-                {formError && (
-                  <div className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">
-                    {formError}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="court">Cancha</Label>
-                    <Select
-                      value={selectedCourtId}
-                      onValueChange={setSelectedCourtId}
-                      required
-                    >
-                      <SelectTrigger id="court">
-                        <SelectValue placeholder="Cancha" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {courts.map((court) => (
-                          <SelectItem key={court.id} value={court.id}>
-                            {court.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="time">Horario</Label>
-                    <Select
-                      value={selectedTime}
-                      onValueChange={setSelectedTime}
-                      required
-                    >
-                      <SelectTrigger id="time">
-                        <SelectValue placeholder="Horario" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TIME_SLOTS.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="date">Fecha</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={selectedDateKeyValue}
-                    onChange={(e) => setSelectedDateKeyValue(e.target.value)}
-                    required
-                  />
-                </div>
+        {membership && (
+          <ReservationDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            mode={dialogMode}
+            reservation={editingReservation}
+            initialCourtId={initialCourtId}
+            initialTime={initialTime}
+            initialDate={selectedDateKey}
+            courts={courts}
+            activeReservations={activeReservations}
+            membership={membership}
+            onSaved={handleReservationSaved}
+            onCancelled={handleReservationSaved}
+          />
+        )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nombre del socio / equipo</Label>
-                  <Input
-                    id="name"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Ej. Fernández / Casimiro"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono / DNI</Label>
-                  <Input
-                    id="phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="3415123456"
-                  />
-                </div>
-              </div>
-
-              <DialogFooter className="gap-2 sm:justify-between">
-                <div>
-                  {editingReservationId && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => handleDeleteClick(editingReservationId)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Eliminar
-                    </Button>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setDialogOpen(false);
-                      resetForm();
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit">Guardar Reserva</Button>
-                </div>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>¿Eliminar reserva?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta acción no se puede deshacer. ¿Estás seguro de que querés eliminar la reserva?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDeletingReservationId(null)}>
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmDelete}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Eliminar
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <AvailabilitySearchDialog
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          courts={courts}
+          activeReservations={activeReservations}
+          defaultDate={selectedDateKey}
+          onSelect={(courtId, time, date) => openCreateDialog(courtId, time, date)}
+        />
       </div>
     </AuthGuard>
   );

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { normalizeTime } from "@/lib/availability";
 import type { Court } from "@/lib/courts";
 
 export function useCourts() {
@@ -20,7 +21,13 @@ export function useCourts() {
     if (error) {
       setError("No se pudieron cargar las canchas.");
     } else {
-      setCourts((data ?? []) as Court[]);
+      setCourts(
+        (data ?? []).map((court) => ({
+          ...(court as Court),
+          open_time: normalizeTime(court.open_time as string),
+          close_time: normalizeTime(court.close_time as string),
+        }))
+      );
     }
     setIsLoading(false);
   }, [supabase]);
