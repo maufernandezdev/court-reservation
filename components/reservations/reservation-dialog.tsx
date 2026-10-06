@@ -27,6 +27,8 @@ type ReservationDialogProps = {
   membership: Membership;
   onSaved: (reservation: Reservation) => void;
   onCancelled: (reservation: Reservation) => void;
+  /** En edición, muestra también cobros/cancelación (false cuando el detalle ya está en el panel lateral). */
+  showDetail?: boolean;
 };
 
 /**
@@ -46,10 +48,12 @@ export function ReservationDialog({
   membership,
   onSaved,
   onCancelled,
+  showDetail = true,
 }: ReservationDialogProps) {
+  const withDetail = mode === "edit" && showDetail;
   const detail = useReservationDetail({
-    open: open && mode === "edit",
-    reservation: mode === "edit" ? reservation : null,
+    open: open && withDetail,
+    reservation: withDetail ? reservation : null,
     courts,
     membership,
     onSaved,
@@ -65,9 +69,9 @@ export function ReservationDialog({
             {mode === "edit" ? "Editar reserva" : "Nueva reserva"}
           </DialogTitle>
           <DialogDescription>
-            {mode === "edit"
-              ? "Modificá los datos, registrá cobros o cancelá la reserva."
-              : "Completá los datos del turno."}
+            {!withDetail
+              ? "Completá los datos del turno."
+              : "Modificá los datos, registrá cobros o cancelá el turno."}
           </DialogDescription>
         </DialogHeader>
 
@@ -84,12 +88,13 @@ export function ReservationDialog({
           onClose={() => onOpenChange(false)}
         />
 
-        {mode === "edit" && reservation && (
+        {withDetail && reservation && (
           <div className="border-t pt-4">
             <ReservationDetailPanel
               reservation={reservation}
               membership={membership}
               detail={detail}
+              showHeader={false}
             />
           </div>
         )}

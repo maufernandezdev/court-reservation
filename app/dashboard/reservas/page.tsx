@@ -1,62 +1,56 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  LandPlot,
+  Plus,
+  Search,
+} from "lucide-react";
 import AuthGuard from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/shell/page-header";
 import { useCourts } from "@/hooks/use-courts";
 import { useReservations } from "@/hooks/use-reservations";
 import { useMembership } from "@/hooks/use-membership";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { COURT_TYPE_LABELS, type CourtType } from "@/lib/courts";
+import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
+import { useReservationDetail } from "@/hooks/use-reservation-detail";
+import { COURT_TYPE_LABELS, type Court, type CourtType } from "@/lib/courts";
 import {
   getCourtSlots,
-  minutesToTime,
   reservationCoversSlot,
   timeToMinutes,
 } from "@/lib/availability";
+import type { Reservation } from "@/lib/reservations";
+import type { Membership } from "@/lib/roles";
 import {
-  PAYMENT_STATUS_LABELS,
-  type Reservation,
-} from "@/lib/reservations";
+  RESERVATION_TONES,
+  RESERVATION_TONE_LABELS,
+  toneClasses,
+  toneFor,
+} from "@/lib/reservation-tone";
 import { CourtTypeFilter } from "@/components/court-type-filter";
 import { ReservationDialog } from "@/components/reservations/reservation-dialog";
+import { ReservationDetailPanel } from "@/components/reservations/reservation-detail-panel";
+import { ScheduleGrid } from "@/components/reservations/schedule-grid";
 import { AvailabilitySearchDialog } from "@/components/reservations/availability-search-dialog";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
-import {
-  ChevronLeft,
-  ChevronRight,
-  CalendarDays,
-  CalendarSearch,
-  LandPlot,
-} from "lucide-react";
-import { PageHeader } from "@/components/shell/page-header";
 
-function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function parseDateKey(dateKey: string): Date {
-  const [year, month, day] = dateKey.split("-").map(Number);
+function parseDateKey(key: string): Date {
+  const [year, month, day] = key.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
@@ -66,60 +60,104 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
-function formatDisplayDate(date: Date): string {
-  return date.toLocaleDateString("es-AR", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+/** Leyenda de estados (sin "fijo", que todavía no existe). */
+function StatusLegend() {
+  return (
+    <ul
+      className="flex flex-wrap items-center gap-4 text-[13px] text-muted-foreground"
+      aria-label="Estados del turno"
+    >
+      {RESERVATION_TONES.filter((t) => t !== "fixed").map((tone) => (
+        <li key={tone} className="flex items-center gap-1.5">
+          <span aria-hidden="true" className={cn("size-3.5 rounded", toneClasses(tone))} />
+          {RESERVATION_TONE_LABELS[tone]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Panel lateral de escritorio con el detalle del turno seleccionado. */
+function ReservationSidePanel({
+  reservation,
+  courts,
+  membership,
+  onSaved,
+  onCancelled,
+  onEdit,
+  onClose,
+}: {
+  reservation: Reservation;
+  courts: Court[];
+  membership: Membership;
+  onSaved: (r: Reservation) => void;
+  onCancelled: (r: Reservation) => void;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const detail = useReservationDetail({
+    open: true,
+    reservation,
+    courts,
+    membership,
+    onSaved,
+    onCancelled,
+    onClosed: onClose,
   });
+
+  return (
+    <aside
+      aria-label="Detalle del turno"
+      className="sticky top-6 max-h-[calc(100vh-3rem)] w-[360px] shrink-0 self-start overflow-y-auto rounded-2xl border bg-card p-5"
+    >
+      <ReservationDetailPanel
+        reservation={reservation}
+        membership={membership}
+        detail={detail}
+        onEdit={onEdit}
+        onClose={onClose}
+      />
+    </aside>
+  );
 }
 
-/** Grilla base de 30 min entre el menor apertura y el mayor cierre de las canchas visibles. */
-function buildGridTimes(
-  courts: { open_time: string; close_time: string }[]
-): string[] {
-  if (courts.length === 0) return [];
-  const start = Math.min(...courts.map((c) => timeToMinutes(c.open_time)));
-  const end = Math.max(...courts.map((c) => timeToMinutes(c.close_time)));
-  const times: string[] = [];
-  for (let t = start; t < end; t += 30) {
-    times.push(minutesToTime(t));
-  }
-  return times;
-}
+function ReservationsPageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const now = useNow();
+  const todayKey = dateKey(now);
 
-export default function ReservationsPage() {
   const { courts, isLoading: isLoadingCourts } = useCourts();
   const { membership, isLoading: isLoadingMembership } = useMembership();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
-  const [courtTypeFilter, setCourtTypeFilter] = useState<CourtType | "all">(
-    "all"
-  );
+  const [courtTypeFilter, setCourtTypeFilter] = useState<CourtType | "all">("all");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
-  const [editingReservation, setEditingReservation] =
-    useState<Reservation | null>(null);
+  const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [initialCourtId, setInitialCourtId] = useState("");
   const [initialTime, setInitialTime] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileCourtId, setMobileCourtId] = useState("");
 
-  const selectedDateKey = useMemo(
-    () => formatDateKey(selectedDate),
-    [selectedDate]
-  );
+  const selectedDateKey = useMemo(() => dateKey(selectedDate), [selectedDate]);
+  const isToday = selectedDateKey === todayKey;
 
-  const {
-    reservations,
-    isLoading: isLoadingReservations,
-    upsertLocal,
-    refetch,
-  } = useReservations(selectedDateKey);
+  // "Buscar" de la barra inferior navega con ?buscar=1: abre el buscador y limpia la URL.
+  useEffect(() => {
+    if (searchParams.get("buscar") === "1") {
+      setSearchOpen(true);
+      router.replace(pathname);
+    }
+  }, [searchParams, router, pathname]);
+
+  const { reservations, isLoading: isLoadingReservations, upsertLocal } =
+    useReservations(selectedDateKey);
 
   const activeReservations = useMemo(
     () => reservations.filter((r) => r.status === "active"),
@@ -134,10 +172,9 @@ export default function ReservationsPage() {
     [courts, courtTypeFilter]
   );
 
-  const findReservation = (courtId: string, time: string) =>
-    activeReservations.find(
-      (r) => r.court_id === courtId && reservationCoversSlot(r, time)
-    );
+  const selectedReservation = selectedId
+    ? (reservations.find((r) => r.id === selectedId) ?? null)
+    : null;
 
   const openCreateDialog = (courtId: string, time: string, date?: string) => {
     const court = courts.find((c) => c.id === courtId);
@@ -147,8 +184,7 @@ export default function ReservationsPage() {
       const slots = getCourtSlots(court);
       if (!slots.includes(time)) {
         // Celda fuera de la grilla de la cancha: usa la primera franja disponible desde ahí.
-        slotTime =
-          slots.find((s) => s >= time) ?? slots[slots.length - 1] ?? time;
+        slotTime = slots.find((s) => s >= time) ?? slots[slots.length - 1] ?? time;
       }
     }
 
@@ -170,352 +206,278 @@ export default function ReservationsPage() {
     setDialogOpen(true);
   };
 
-  const handleCellClick = (courtId: string, time: string) => {
-    const existing = findReservation(courtId, time);
-    if (existing) {
-      if (existing.time === time) {
-        openEditDialog(existing);
-      }
-      return;
-    }
-    openCreateDialog(courtId, time);
+  /** "Nuevo turno": primera cancha visible, primera franja desde ahora (o desde la apertura). */
+  const openNewFromHeader = () => {
+    const court = visibleCourts[0];
+    if (!court) return;
+    const slots = getCourtSlots(court);
+    const nowMin = minutesOfDay(now);
+    const time =
+      (isToday ? slots.find((s) => timeToMinutes(s) >= nowMin) : undefined) ??
+      slots[0] ??
+      court.open_time;
+    openCreateDialog(court.id, time);
   };
-
-  const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (value) {
-      setSelectedDate(parseDateKey(value));
-    }
-  };
-
-  const gridTimes = useMemo(
-    () => buildGridTimes(visibleCourts),
-    [visibleCourts]
-  );
 
   const handleReservationSaved = (reservation: Reservation) => {
     upsertLocal(reservation);
     setEditingReservation((prev) => (prev?.id === reservation.id ? reservation : prev));
   };
 
+  const handleCancelled = (reservation: Reservation) => {
+    upsertLocal(reservation);
+    setSelectedId(null);
+  };
+
   const effectiveMobileCourtId =
-    mobileCourtId &&
-    visibleCourts.some((c) => c.id === mobileCourtId)
+    mobileCourtId && visibleCourts.some((c) => c.id === mobileCourtId)
       ? mobileCourtId
       : (visibleCourts[0]?.id ?? "");
 
-  const mobileCourt = visibleCourts.find(
-    (c) => c.id === effectiveMobileCourtId
-  );
-
-  const isLoading =
-    isLoadingCourts || isLoadingReservations || isLoadingMembership;
+  const isLoading = isLoadingCourts || isLoadingReservations || isLoadingMembership;
 
   if (isLoading) {
     return (
-      <AuthGuard>
-        <div className="flex h-96 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      </AuthGuard>
+      <div className="flex h-96 items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
     );
   }
 
   if (courts.length === 0) {
     return (
-      <AuthGuard>
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 rounded-lg border border-dashed text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <LandPlot className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">
-              Todavía no tenés canchas
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Creá tu primera cancha para empezar a cargar reservas.
-            </p>
-          </div>
-          <Button asChild>
-            <Link href="/dashboard/canchas">Crear tu primera cancha</Link>
-          </Button>
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed bg-card text-center">
+        <span className="flex size-12 items-center justify-center rounded-xl bg-muted">
+          <LandPlot className="size-6 text-muted-foreground" />
+        </span>
+        <div>
+          <h2 className="text-lg font-semibold">Todavía no tenés canchas</h2>
+          <p className="text-sm text-muted-foreground">
+            Creá tu primera cancha para empezar a cargar reservas.
+          </p>
         </div>
-      </AuthGuard>
+        <Button asChild>
+          <Link href="/dashboard/canchas">Crear tu primera cancha</Link>
+        </Button>
+      </div>
     );
   }
 
+  const rawDateLabel = selectedDate.toLocaleDateString("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  const dateLabel = rawDateLabel.charAt(0).toUpperCase() + rawDateLabel.slice(1);
+  const availableTypes = [...new Set(courts.map((c) => c.type))];
+
   return (
-    <AuthGuard>
-      <div className="space-y-4">
-        <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-4 border-b bg-background px-4 py-4 sm:flex-row sm:items-center sm:justify-between lg:-mx-8 lg:px-8">
-          <PageHeader
-            title="Planilla"
-            description="Tocá una franja libre para reservar o un turno para ver el detalle."
-          />
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => setSearchOpen(true)}>
-              <CalendarSearch className="mr-2 h-4 w-4" />
-              Buscar disponibilidad
-            </Button>
-
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setSelectedDate((d) => addDays(d, -1))}
-              title="Día anterior"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium capitalize">
-                {formatDisplayDate(selectedDate)}
-              </span>
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Planilla"
+        actions={
+          <>
+            <div className="flex items-center gap-1 rounded-xl border bg-card p-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setSelectedDate((d) => addDays(d, -1))}
+                aria-label="Día anterior"
+              >
+                <ChevronLeft />
+              </Button>
+              <label className="relative flex cursor-pointer items-center gap-2 px-2 text-[15px] font-semibold whitespace-nowrap">
+                <CalendarDays className="size-4 text-muted-foreground" />
+                {dateLabel}
+                <Input
+                  type="date"
+                  value={selectedDateKey}
+                  onChange={(e) =>
+                    e.target.value && setSelectedDate(parseDateKey(e.target.value))
+                  }
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  aria-label="Elegir fecha"
+                  className="absolute inset-0 h-full cursor-pointer opacity-0"
+                />
+              </label>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setSelectedDate((d) => addDays(d, 1))}
+                aria-label="Día siguiente"
+              >
+                <ChevronRight />
+              </Button>
             </div>
-
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setSelectedDate((d) => addDays(d, 1))}
-              title="Día siguiente"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-
-            <Input
-              type="date"
-              value={selectedDateKey}
-              onChange={handleDateInputChange}
-              className="w-auto"
-            />
-
+            {isToday ? (
+              <span className="rounded-md bg-ink px-2 py-1 font-mono text-xs font-semibold text-ball">
+                HOY
+              </span>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setSelectedDate(new Date())}>
+                Volver a hoy
+              </Button>
+            )}
             <CourtTypeFilter
               value={courtTypeFilter}
               onChange={setCourtTypeFilter}
+              available={availableTypes}
             />
+            <Button variant="outline" onClick={() => setSearchOpen(true)}>
+              <Search />
+              ¿Hay cancha?
+            </Button>
+            <Button onClick={openNewFromHeader}>
+              <Plus className="text-ball" strokeWidth={2.4} />
+              Nuevo turno
+            </Button>
+          </>
+        }
+      />
+
+      {visibleCourts.length === 0 ? (
+        <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+          No hay canchas del tipo seleccionado.
+        </p>
+      ) : isDesktop ? (
+        /* ---------------- Escritorio: grilla + panel de detalle ---------------- */
+        <>
+          <StatusLegend />
+          <div className="flex items-start gap-5">
+            <div className="min-w-0 flex-1">
+              <ScheduleGrid
+                courts={visibleCourts}
+                reservations={activeReservations.filter((r) =>
+                  visibleCourts.some((c) => c.id === r.court_id)
+                )}
+                nowMinutes={isToday ? minutesOfDay(now) : null}
+                selectedId={selectedReservation?.id ?? null}
+                onSelect={(r) => setSelectedId(r.id)}
+                onCreate={openCreateDialog}
+              />
+            </div>
+            {membership && selectedReservation && (
+              <ReservationSidePanel
+                key={selectedReservation.id}
+                reservation={selectedReservation}
+                courts={courts}
+                membership={membership}
+                onSaved={handleReservationSaved}
+                onCancelled={handleCancelled}
+                onEdit={() => openEditDialog(selectedReservation)}
+                onClose={() => setSelectedId(null)}
+              />
+            )}
           </div>
-        </div>
+        </>
+      ) : (
+        /* ---------------- Celular: cancha seleccionada + lista de franjas ---------------- */
+        <Tabs
+          value={effectiveMobileCourtId}
+          onValueChange={setMobileCourtId}
+          className="space-y-4"
+        >
+          <TabsList className="flex w-full justify-start overflow-x-auto">
+            {visibleCourts.map((court) => (
+              <TabsTrigger key={court.id} value={court.id} className="shrink-0">
+                {court.name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        {visibleCourts.length === 0 ? (
-          <p className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-            No hay canchas del tipo seleccionado.
-          </p>
-        ) : isDesktop ? (
-          /* ---------------- Vista desktop: grilla canchas × horarios ---------------- */
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="w-20 border-r">Hora</TableHead>
-                  {visibleCourts.map((court) => (
-                    <TableHead
-                      key={court.id}
-                      className="min-w-[140px] text-center"
-                    >
-                      <div className="font-semibold">{court.name}</div>
-                      <div className="text-xs font-normal text-muted-foreground">
-                        {COURT_TYPE_LABELS[court.type]} ·{" "}
-                        {court.slot_duration} min
-                      </div>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {gridTimes.map((time) => (
-                  <TableRow key={time}>
-                    <TableCell className="border-r font-medium">
-                      {time}
-                    </TableCell>
-                    {visibleCourts.map((court) => {
-                      const reservation = findReservation(court.id, time);
-                      const isStart =
-                        reservation && reservation.time === time;
-                      const inGrid = getCourtSlots(court).includes(time);
+          {visibleCourts.map((court) => (
+            <TabsContent key={court.id} value={court.id} className="m-0">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>
+                    {COURT_TYPE_LABELS[court.type]} · {court.open_time} a {court.close_time}
+                  </span>
+                  <span>{court.slot_duration} min por turno</span>
+                </div>
+                <ul className="divide-y rounded-xl border bg-card">
+                  {getCourtSlots(court).map((time) => {
+                    const reservation = activeReservations.find(
+                      (r) => r.court_id === court.id && reservationCoversSlot(r, time)
+                    );
+                    const isStart = reservation && reservation.time === time;
+                    if (reservation && !isStart) return null;
+                    const tone = reservation ? toneFor(reservation) : null;
 
-                      if (reservation && !isStart) {
-                        // Continuación de un turno más largo que la grilla.
-                        return (
-                          <TableCell
-                            key={`${court.id}-${time}`}
-                            className="h-10 bg-primary/5 p-2"
-                          />
-                        );
-                      }
-
-                      return (
-                        <TableCell
-                          key={`${court.id}-${time}`}
-                          className={cn(
-                            "h-16 p-2 text-center transition-colors",
-                            reservation
-                              ? "cursor-pointer bg-primary/10 hover:bg-primary/20"
-                              : inGrid
-                                ? "cursor-pointer hover:bg-accent"
-                                : "bg-muted/20"
-                          )}
+                    return (
+                      <li key={time}>
+                        <button
+                          type="button"
+                          className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-accent"
                           onClick={() =>
-                            reservation || inGrid
-                              ? handleCellClick(court.id, time)
-                              : undefined
+                            reservation
+                              ? openEditDialog(reservation)
+                              : openCreateDialog(court.id, time)
                           }
                         >
-                          {reservation ? (
-                            <div className="flex h-full flex-col items-center justify-center">
-                              <span className="text-sm font-semibold text-primary">
+                          <span className="font-mono font-medium">{time}</span>
+                          {reservation && tone ? (
+                            <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                              <span className="truncate text-sm font-semibold">
                                 {reservation.customer_name}
                               </span>
-                              <Badge
-                                variant={
-                                  reservation.payment_status === "pagada"
-                                    ? "default"
-                                    : reservation.payment_status === "senada"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                                className="mt-0.5"
-                              >
-                                {PAYMENT_STATUS_LABELS[
-                                  reservation.payment_status
-                                ]}
-                              </Badge>
-                            </div>
-                          ) : inGrid ? (
-                            <span className="text-xs text-muted-foreground">
-                              Libre
+                              <Badge variant={tone}>{RESERVATION_TONE_LABELS[tone]}</Badge>
                             </span>
-                          ) : null}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          /* ---------------- Vista mobile: cancha seleccionada + lista de franjas ---------------- */
-          <Tabs
-            value={effectiveMobileCourtId}
-            onValueChange={setMobileCourtId}
-            className="space-y-4"
-          >
-            <TabsList className="flex w-full justify-start overflow-x-auto">
-              {visibleCourts.map((court) => (
-                <TabsTrigger
-                  key={court.id}
-                  value={court.id}
-                  className="shrink-0"
-                >
-                  {court.name}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Libre</span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
 
-            {visibleCourts.map((court) => (
-              <TabsContent key={court.id} value={court.id} className="m-0">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>
-                      {COURT_TYPE_LABELS[court.type]} · {court.open_time} a{" "}
-                      {court.close_time}
-                    </span>
-                    <span>{court.slot_duration} min por turno</span>
-                  </div>
-                  <ul className="divide-y rounded-lg border bg-card">
-                    {getCourtSlots(court).map((time) => {
-                      const reservation = activeReservations.find(
-                        (r) =>
-                          r.court_id === court.id &&
-                          reservationCoversSlot(r, time)
-                      );
-                      const isStart =
-                        reservation && reservation.time === time;
-
-                      if (reservation && !isStart) return null;
-
-                      return (
-                        <li key={time}>
-                          <button
-                            type="button"
-                            className={cn(
-                              "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors",
-                              reservation
-                                ? "bg-primary/10"
-                                : "hover:bg-accent"
-                            )}
-                            onClick={() =>
-                              reservation
-                                ? openEditDialog(reservation)
-                                : openCreateDialog(court.id, time)
-                            }
-                          >
-                            <span className="font-medium">{time}</span>
-                            {reservation ? (
-                              <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
-                                <span className="truncate text-sm font-semibold text-primary">
-                                  {reservation.customer_name}
-                                </span>
-                                <Badge
-                                  variant={
-                                    reservation.payment_status === "pagada"
-                                      ? "default"
-                                      : reservation.payment_status === "senada"
-                                        ? "secondary"
-                                        : "outline"
-                                  }
-                                >
-                                  {
-                                    PAYMENT_STATUS_LABELS[
-                                      reservation.payment_status
-                                    ]
-                                  }
-                                </Badge>
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                Libre
-                              </span>
-                            )}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              </TabsContent>
-            ))}
-          </Tabs>
-        )}
-
-        {membership && (
-          <ReservationDialog
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-            mode={dialogMode}
-            reservation={editingReservation}
-            initialCourtId={initialCourtId}
-            initialTime={initialTime}
-            initialDate={selectedDateKey}
-            courts={courts}
-            activeReservations={activeReservations}
-            membership={membership}
-            onSaved={handleReservationSaved}
-            onCancelled={handleReservationSaved}
-          />
-        )}
-
-        <AvailabilitySearchDialog
-          open={searchOpen}
-          onOpenChange={setSearchOpen}
+      {membership && (
+        <ReservationDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          mode={dialogMode}
+          reservation={editingReservation}
+          initialCourtId={initialCourtId}
+          initialTime={initialTime}
+          initialDate={selectedDateKey}
           courts={courts}
           activeReservations={activeReservations}
-          defaultDate={selectedDateKey}
-          onSelect={(courtId, time, date) => openCreateDialog(courtId, time, date)}
+          membership={membership}
+          onSaved={handleReservationSaved}
+          onCancelled={handleCancelled}
+          showDetail={!isDesktop}
         />
-      </div>
+      )}
+
+      <AvailabilitySearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        courts={courts}
+        activeReservations={activeReservations}
+        defaultDate={selectedDateKey}
+        onSelect={(courtId, time, date) => openCreateDialog(courtId, time, date)}
+      />
+    </div>
+  );
+}
+
+export default function ReservationsPage() {
+  return (
+    <AuthGuard>
+      <Suspense
+        fallback={
+          <div className="flex h-96 items-center justify-center">
+            <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        }
+      >
+        <ReservationsPageContent />
+      </Suspense>
     </AuthGuard>
   );
 }

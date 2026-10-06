@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 a 5 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo). Siguiente: fase 6 (planilla de escritorio). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 a 6 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total). Siguiente: fase 7 (planilla en celular y buscador). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -51,10 +51,12 @@
 
 ## 6. Planilla: escritorio
 
-- [ ] 6.1 Releer artboard Planilla; crear `hooks/use-now.ts` y la grilla CSS de `components/reservations/schedule-grid.tsx` (columnas por cancha, filas de 30 min, bloques por duración con `toneClasses`, franjas libres/fuera de horario, `aria-label` completos, línea de "ahora" solo para hoy), y verificar que un turno de 90 min se ve como un bloque y que tocar una franja libre abre el alta precargada
-- [ ] 6.2 Rehacer el encabezado de `app/dashboard/reservas/page.tsx` (navegación de día, "HOY", filtro por deporte con `toggle-group`, "¿Hay cancha?", "Nuevo turno", leyenda de estados) y verificar que cambiar de día y de filtro actualiza la grilla
-- [ ] 6.3 Mostrar `ReservationDetailPanel` como `<aside>` lateral en escritorio con el turno seleccionado resaltado (selector de estado de pago, cobrar, editar, cancelar con resultado de la política, historial), y verificar que todas las acciones de 5.1 funcionan desde el panel
-- [ ] 6.4 Abrir el buscador cuando la URL trae `?buscar=1` y verificar desde la barra inferior del celular
+- [x] 6.1 Releer artboard Planilla; crear `hooks/use-now.ts` y la grilla CSS de `components/reservations/schedule-grid.tsx` (columnas por cancha, filas de 30 min, bloques por duración con `toneClasses`, franjas libres/fuera de horario, `aria-label` completos, línea de "ahora" solo para hoy), y verificar que un turno de 90 min se ve como un bloque y que tocar una franja libre abre el alta precargada
+- [x] 6.2 Rehacer el encabezado de `app/dashboard/reservas/page.tsx` (navegación de día, "HOY", filtro por deporte con `toggle-group`, "¿Hay cancha?", "Nuevo turno", leyenda de estados) y verificar que cambiar de día y de filtro actualiza la grilla
+- [x] 6.3 Mostrar `ReservationDetailPanel` como `<aside>` lateral en escritorio con el turno seleccionado resaltado (selector de estado de pago, cobrar, editar, cancelar con resultado de la política, historial), y verificar que todas las acciones de 5.1 funcionan desde el panel
+- [x] 6.4 Abrir el buscador cuando la URL trae `?buscar=1` y verificar desde la barra inferior del celular
+  - Verificado 2026-10-06 (Playwright + base): grilla CSS con bloques por duración (pádel 90 min = 3 filas), línea de ahora solo en hoy, franja libre → alta precargada (Cancha 3 · 10:00), navegación de días + "Volver a hoy", panel lateral con seña / saldo / editar (diálogo sin detalle) / cancelación en término (saldo a favor $24.000) y tardía (deuda $12.000) mostrando el resultado en $ antes de confirmar. "Buscar" de la barra inferior abre el buscador y limpia `?buscar=1`.
+  - Decisiones: el selector Pendiente/Señada/Pagada del canvas se implementó como acciones de cobro (método + "Cobrar saldo/total" + "Cobrar solo la seña"), porque el estado de pago lo derivan los cobros registrados; los turnos cancelados no se dibujan en la grilla para no tapar la franja que liberan. Arreglo colateral: `AlertDialogAction` ignoraba `className` con colores (asChild) → ahora usa `variant="destructive"` (planilla, canchas, equipo).
 - [x] 6.5 (Agregada 2026-10-06, a pedido del usuario) Arreglar "Cobrar total": `registerPaymentAction` cobra solo el saldo (precio − cobrado no liberado) y el botón dice "Cobrar saldo $X" cuando ya hay cobros; verificar que seña + total suman exactamente el valor del turno
   - Verificado 2026-10-06: seña $7.200 + total $16.800 = $24.000; la cancelación en término libera $24.000 a saldo a favor.
 
