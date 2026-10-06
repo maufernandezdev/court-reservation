@@ -144,57 +144,65 @@ export function ScheduleGrid({
                 />
               )}
 
-              {freeSlots.map((time) => (
-                <button
-                  key={`free-${court.id}-${time}`}
-                  type="button"
-                  onClick={() => onCreate(court.id, time)}
-                  aria-label={`${court.name}, ${time}, libre. Reservar`}
-                  className="group z-[1] m-0.5 flex items-start justify-start rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-line"
-                  style={{
-                    gridColumn: col,
-                    gridRow: `${rowOf(timeToMinutes(time))} / span ${court.slot_duration / 30}`,
-                  }}
-                >
-                  <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                    <Plus className="size-3.5" />
-                    {time}
-                  </span>
-                </button>
-              ))}
-
-              {mine.map((r) => {
-                const tone = toneFor(r);
-                const startMin = timeToMinutes(r.time);
-                const endTime = minutesToTime(startMin + r.duration_minutes);
-                const selected = r.id === selectedId;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => onSelect(r)}
-                    aria-pressed={selected}
-                    aria-label={`${r.customer_name}, ${r.time} a ${endTime}, ${RESERVATION_TONE_LABELS[tone]}`}
-                    className={cn(
-                      "z-10 m-0.5 flex min-w-0 flex-col items-start gap-0.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
-                      toneClasses(tone),
-                      selected &&
-                        "shadow-[0_6px_16px_rgb(16_20_24/0.18)] outline-3 outline-offset-2 outline-line"
-                    )}
-                    style={{
-                      gridColumn: col,
-                      gridRow: `${rowOf(startMin)} / span ${Math.max(1, Math.round(r.duration_minutes / 30))}`,
-                    }}
-                  >
-                    <span className="w-full truncate text-sm leading-tight font-semibold">
-                      {r.customer_name}
-                    </span>
-                    <span className="font-mono text-xs leading-tight opacity-85">
-                      {r.time} – {endTime}
-                    </span>
-                  </button>
-                );
-              })}
+              {/* Libres y turnos intercalados por horario: así el orden de tabulación sigue el día. */}
+              {[
+                ...freeSlots.map((time) => ({ kind: "free" as const, start: timeToMinutes(time), time })),
+                ...mine.map((r) => ({ kind: "reservation" as const, start: timeToMinutes(r.time), r })),
+              ]
+                .sort((a, b) => a.start - b.start)
+                .map((item) => {
+                  if (item.kind === "free") {
+                    const time = item.time;
+                    return (
+                      <button
+                        key={`free-${court.id}-${time}`}
+                        type="button"
+                        onClick={() => onCreate(court.id, time)}
+                        aria-label={`${court.name}, ${time}, libre. Reservar`}
+                        className="group z-[1] m-0.5 flex items-start justify-start rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-line"
+                        style={{
+                          gridColumn: col,
+                          gridRow: `${rowOf(item.start)} / span ${court.slot_duration / 30}`,
+                        }}
+                      >
+                        <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                          <Plus className="size-3.5" />
+                          {time}
+                        </span>
+                      </button>
+                    );
+                  }
+                  const r = item.r;
+                  const tone = toneFor(r);
+                  const endTime = minutesToTime(item.start + r.duration_minutes);
+                  const selected = r.id === selectedId;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => onSelect(r)}
+                      aria-pressed={selected}
+                      aria-label={`${r.customer_name}, ${r.time} a ${endTime}, ${RESERVATION_TONE_LABELS[tone]}`}
+                      className={cn(
+                        "z-10 m-0.5 flex min-w-0 flex-col items-start gap-0.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
+                        toneClasses(tone),
+                        selected &&
+                          "shadow-[0_6px_16px_rgb(16_20_24/0.18)] outline-3 outline-offset-2 outline-line"
+                      )}
+                      style={{
+                        gridColumn: col,
+                        gridRow: `${rowOf(item.start)} / span ${Math.max(1, Math.round(r.duration_minutes / 30))}`,
+                      }}
+                    >
+                      <span className="w-full truncate text-sm leading-tight font-semibold">
+                        {r.customer_name}
+                      </span>
+                      <span className="font-mono text-xs leading-tight opacity-85">
+                        {r.time} – {endTime}
+                      </span>
+                    </button>
+                  );
+                })}
             </div>
           );
         })}

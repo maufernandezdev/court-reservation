@@ -340,7 +340,7 @@ function ReservationsPageContent() {
               >
                 <ChevronLeft />
               </Button>
-              <label className="relative flex cursor-pointer items-center gap-2 px-2 text-[15px] font-semibold whitespace-nowrap">
+              <label className="relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-[15px] font-semibold whitespace-nowrap focus-within:outline-2 focus-within:outline-line">
                 <CalendarDays className="size-4 text-muted-foreground" />
                 {dateLabel}
                 <Input

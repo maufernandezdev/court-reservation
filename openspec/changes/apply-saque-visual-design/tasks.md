@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 a 9 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total, planilla en celular + buscador, Canchas/Equipo/Políticas, Actividad). Siguiente: fase 10 (cierre: recorrida completa, documentación y pendientes). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** **las 10 fases terminadas** (38/38 tareas), cada una con su commit en la rama `feat/saque-visual-design`. Falta: que el usuario pruebe, merge a `main` y archivar el cambio (`/opsx:archive`). Club de prueba en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`) y scripts en `scripts/dev/`. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -83,6 +83,9 @@
 
 ## 10. Cierre
 
-- [ ] 10.1 Recorrida completa a 1440 px y 390 px de todas las rutas comparando contra el canvas, con teclado (foco visible, orden de tabulación) y contraste de estados; anotar diferencias aceptadas acá
-- [ ] 10.2 Actualizar `docs/PROJECT_DOCUMENTATION.md` (identidad visual, dónde están tokens/marca/tonos, rótulos nuevos de navegación, fuera de alcance pendiente) y verificar que el estado de este archivo refleja lo hecho
-- [ ] 10.3 Registrar como cambios OpenSpec separados (sin implementar) los pendientes de diseño: alta del club, turnos fijos, superficie de cancha, "cancela el club", devolución de seña, alerta de fijos, portal público, y verificar que aparecen en `openspec list`
+- [x] 10.1 Recorrida completa a 1440 px y 390 px de todas las rutas comparando contra el canvas, con teclado (foco visible, orden de tabulación) y contraste de estados; anotar diferencias aceptadas acá
+  - Recorrida 2026-10-06: 12 rutas a 1440 px (admin) + 3 (operador) y 10 rutas a 390 px sin desborde horizontal ni errores de consola de la app (los 429 vistos son el rate limit de Supabase Auth por los logins automáticos). Contraste de todos los pares de la paleta ≥ 5,3:1. Teclado: foco visible en todo el recorrido de la planilla. Arreglos: el selector de fecha (input invisible) no mostraba foco → `focus-within` en su label; la grilla tabulaba libres y turnos por separado → ahora intercalados por horario.
+  - Diferencias aceptadas con el canvas: sin "Fijo / clase" en la leyenda (turnos fijos fuera de alcance), sin "último acceso" en Equipo (Supabase no lo expone a la app), sin "¿Quién cancela?" en la cancelación, sin "Copiar" de huecos por cancha individual, Canchas edita en diálogo en vez de panel lateral.
+- [x] 10.2 Actualizar `docs/PROJECT_DOCUMENTATION.md` (identidad visual, dónde están tokens/marca/tonos, rótulos nuevos de navegación, fuera de alcance pendiente) y verificar que el estado de este archivo refleja lo hecho
+- [x] 10.3 Registrar como cambios OpenSpec separados (sin implementar) los pendientes de diseño: alta del club, turnos fijos, superficie de cancha, "cancela el club", devolución de seña, alerta de fijos, portal público, y verificar que aparecen en `openspec list`
+  - Registrados 2026-10-06 (solo `proposal.md`): `add-club-onboarding` (incluye selector multi-club), `add-fixed-reservations` (incluye alerta de fijos), `add-court-surface`, `add-cancellation-options` ("cancela el club" + devolución de seña), `add-public-booking-portal`. Aparecen en `openspec list`. Modo oscuro sin cambio registrado.
