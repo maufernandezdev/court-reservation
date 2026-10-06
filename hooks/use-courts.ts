@@ -21,6 +21,7 @@ export function useCourts() {
     if (error) {
       setError("No se pudieron cargar las canchas.");
     } else {
+      setError("");
       setCourts(
         (data ?? []).map((court) => ({
           ...(court as Court),

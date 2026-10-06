@@ -21,6 +21,7 @@ export function useReservations(date: string) {
     if (error) {
       setError("No se pudieron cargar las reservas.");
     } else {
+      setError("");
       setReservations((data ?? []) as Reservation[]);
     }
     setIsLoading(false);

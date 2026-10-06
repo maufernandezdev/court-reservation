@@ -110,3 +110,31 @@ export function findFreeSlots(
 
   return free.sort((a, b) => a.time.localeCompare(b.time));
 }
+
+export type AvailabilityMessageSlot = {
+  /** "19:00" o "19:00 – 21:00" */
+  time: string;
+  /** Nombre de la cancha (y lo que haga falta, ej. "Cancha 3 · Polvo") */
+  label: string;
+};
+
+/**
+ * Texto listo para pegar en WhatsApp con turnos libres (Hoy y buscador).
+ * `dayLabel`: "hoy", "mañana", "el jueves 8"…; `detail`: ej. "tenis, 60 min".
+ */
+export function buildAvailabilityMessage({
+  dayLabel,
+  detail,
+  slots,
+}: {
+  dayLabel: string;
+  detail?: string;
+  slots: AvailabilityMessageSlot[];
+}): string {
+  if (slots.length === 0) {
+    return `Para ${dayLabel} no nos quedan canchas libres desde ese horario.`;
+  }
+  const header = `¡Hola! Para ${dayLabel} tenemos libre${detail ? ` (${detail})` : ""}:`;
+  const lines = slots.map((slot) => `• ${slot.time} – ${slot.label}`);
+  return [header, ...lines, "¿Te reservo alguno?"].join("\n");
+}

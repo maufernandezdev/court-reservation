@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 a 3 terminadas (base visual, shell, acceso). Siguiente: fase 4 (Hoy). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 a 4 terminadas (base visual, shell, acceso, Hoy). Siguiente: fase 5 (refactor del diálogo de reservas, sin cambios visuales). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -35,10 +35,12 @@
 
 ## 4. Hoy (inicio)
 
-- [ ] 4.1 Crear `lib/daily-overview.ts` (`computeDaySummary`, `courtStatusNow`, `upcomingReservations`, `freeGaps`) y verificar con un caso armado a mano (3 turnos, uno pagado $24.000, uno señado $7.200) que cobrado = $31.200 y por cobrar = saldo correcto
-- [ ] 4.2 Crear `hooks/use-day-payments.ts` (pagos no liberados de las reservas del día) y verificar que devuelve los cobros registrados desde la planilla
-- [ ] 4.3 Agregar `buildAvailabilityMessage` a `lib/availability.ts` y verificar que arma el texto con saludo, lista y "¿Te reservo alguno?"
-- [ ] 4.4 Releer artboard Hoy y rehacer `app/dashboard/page.tsx`: resumen (ocultar montos para profesor), "Ahora en cancha" con tonos y filtro por deporte, próximos turnos con "Cobrar $X" que abre el detalle, huecos libres + "Copiar para WhatsApp" con toast; estado vacío sin canchas. Verificar contra datos reales a 1440 px y 390 px
+- [x] 4.1 Crear `lib/daily-overview.ts` (`computeDaySummary`, `courtStatusNow`, `upcomingReservations`, `freeGaps`) y verificar con un caso armado a mano (3 turnos, uno pagado $24.000, uno señado $7.200) que cobrado = $31.200 y por cobrar = saldo correcto
+- [x] 4.2 Crear `hooks/use-day-payments.ts` (pagos no liberados de las reservas del día) y verificar que devuelve los cobros registrados desde la planilla
+- [x] 4.3 Agregar `buildAvailabilityMessage` a `lib/availability.ts` y verificar que arma el texto con saludo, lista y "¿Te reservo alguno?"
+- [x] 4.4 Releer artboard Hoy y rehacer `app/dashboard/page.tsx`: resumen (ocultar montos para profesor), "Ahora en cancha" con tonos y filtro por deporte, próximos turnos con "Cobrar $X" que abre el detalle, huecos libres + "Copiar para WhatsApp" con toast; estado vacío sin canchas. Verificar contra datos reales a 1440 px y 390 px
+  - Verificado 2026-10-06 con reloj simulado a las 18:40 (Playwright): resumen con datos sembrados (17 turnos, cobrado $229.600, por cobrar $242.400), Ahora en cancha con tonos, "Cobrar $16.800" abre el diálogo de la reserva, copia al portapapeles + toast "Copiado". En celular la tabla de próximos turnos pasa a filas apiladas.
+  - Arreglos colaterales: `* { border-color }` y `body` de `globals.css` estaban fuera de `@layer base` y pisaban todas las utilidades de color de borde (ej. `border-ink`); `useReservations`/`useCourts` no limpiaban el error tras una carga exitosa.
 
 ## 5. Planilla: refactor previo (sin cambios visuales)
 

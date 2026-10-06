@@ -101,14 +101,17 @@
   --radius-2xl: calc(var(--radius) + 6px);
 }
 
-* {
-  border-color: hsl(var(--border));
-}
+/* En @layer base para que las utilidades (border-ink, border-input…) puedan pisarlo. */
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
 
-body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: var(--font-sans);
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+  }
 }
 
 /* Rayado de turno cancelado (estado "cancelada"). */
