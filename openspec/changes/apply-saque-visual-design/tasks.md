@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 a 4 terminadas (base visual, shell, acceso, Hoy). Siguiente: fase 5 (refactor del diálogo de reservas, sin cambios visuales). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 a 5 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo). Siguiente: fase 6 (planilla de escritorio). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -44,8 +44,10 @@
 
 ## 5. Planilla: refactor previo (sin cambios visuales)
 
-- [ ] 5.1 Extraer de `components/reservations/reservation-dialog.tsx` el hook `useReservationDetail` (carga de pagos, auditoría, settings, saldo; acciones de cobro y cancelación) sin cambiar la UI, y verificar manualmente: crear turno, registrar seña, registrar total, cancelar en término, cancelar tardía, profesor bloqueado dentro de la ventana
-- [ ] 5.2 Separar el alta/edición en `ReservationFormDialog` y el detalle en `ReservationDetailPanel` (todavía dentro del diálogo actual), y repetir la verificación de 5.1
+- [x] 5.1 Extraer de `components/reservations/reservation-dialog.tsx` el hook `useReservationDetail` (carga de pagos, auditoría, settings, saldo; acciones de cobro y cancelación) sin cambiar la UI, y verificar manualmente: crear turno, registrar seña, registrar total, cancelar en término, cancelar tardía, profesor bloqueado dentro de la ventana
+- [x] 5.2 Separar el alta/edición en `ReservationFormDialog` y el detalle en `ReservationDetailPanel` (todavía dentro del diálogo actual), y repetir la verificación de 5.1
+  - Hecho junto con 5.1: `hooks/use-reservation-detail.ts` (lógica), `components/reservations/reservation-form.tsx` (alta/edición) y `reservation-detail-panel.tsx` (cobros, cancelación, historial); `ReservationDialog` conserva sus props. Verificado 2026-10-06 con Playwright + lectura de la base: crear, seña, total, cancelación en término (todo a saldo a favor), cancelación tardía sin cobros (deuda $12.000) y profesor bloqueado dentro de la ventana (rol cambiado temporalmente y restaurado). Arreglo colateral: el formulario arrancaba vacío al montarse dentro del diálogo; ahora se inicializa con los valores al montar.
+  - **Bug preexistente detectado (no visual):** "Cobrar total" registra el precio completo aunque ya haya seña cobrada (turno de $24.000 con seña de $7.200 queda con $31.200 cobrados). Pendiente de decisión del usuario.
 
 ## 6. Planilla: escritorio
 
