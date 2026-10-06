@@ -3,15 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionContext } from "@/lib/auth";
 import { normalizeTime } from "@/lib/availability";
 import { COURT_TYPE_LABELS, type Court, type CourtType } from "@/lib/courts";
-import { formatMoney } from "@/lib/pricing";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { formatMoney, getSlotPrice } from "@/lib/pricing";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NewCourtDialog } from "@/components/courts/new-court-dialog";
 import { CourtCardActions } from "@/components/courts/court-card-actions";
@@ -62,64 +54,73 @@ export default async function CanchasPage() {
       )}
 
       {courts.length === 0 ? (
-        <Card className="flex min-h-[30vh] flex-col items-center justify-center text-center">
-          <CardHeader>
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <LandPlot className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <CardTitle>Todavía no tenés canchas</CardTitle>
-            <CardDescription>
-              Creá tu primera cancha para empezar a gestionar las reservas de
-              tu club.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <NewCourtDialog triggerLabel="Crear tu primera cancha" />
-          </CardContent>
-        </Card>
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed bg-card p-8 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-muted">
+            <LandPlot className="size-6 text-muted-foreground" />
+          </span>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold">Todavía no tenés canchas</h2>
+            <p className="text-muted-foreground">
+              Creá tu primera cancha para empezar a gestionar las reservas de tu club.
+            </p>
+          </div>
+          <NewCourtDialog triggerLabel="Crear tu primera cancha" />
+        </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(280px,100%),1fr))] gap-3.5">
           {courts.map((court) => (
-            <Card key={court.id} className="transition-shadow hover:shadow-md">
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-lg">{court.name}</CardTitle>
-                  <div className="flex items-center gap-1">
-                    <Badge variant="secondary">
-                      {COURT_TYPE_LABELS[court.type as CourtType]}
-                    </Badge>
-                    <CourtCardActions court={court} />
-                  </div>
+            <article
+              key={court.id}
+              aria-labelledby={`court-${court.id}`}
+              className="flex flex-col gap-4 rounded-2xl border bg-card p-[18px]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-mono text-xs text-muted-foreground uppercase">
+                    {COURT_TYPE_LABELS[court.type as CourtType]} · {court.slot_duration} min
+                  </span>
+                  <h2
+                    id={`court-${court.id}`}
+                    className="truncate font-display text-[22px] font-extrabold tracking-[-0.02em] font-stretch-[115%]"
+                  >
+                    {court.name}
+                  </h2>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Precio por hora</span>
-                  <span className="font-medium">
+                <CourtCardActions court={court} />
+              </div>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
+                <div>
+                  <dt className="text-[13px] text-muted-foreground">Precio por hora</dt>
+                  <dd className="mt-0.5 font-mono font-semibold">
                     {court.price_per_hour > 0
                       ? formatMoney(court.price_per_hour)
                       : "Sin configurar"}
-                  </span>
+                  </dd>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Turnos</span>
-                  <span className="font-medium">
-                    {court.slot_duration} min · {court.open_time} a{" "}
-                    {court.close_time}
-                  </span>
+                <div>
+                  <dt className="text-[13px] text-muted-foreground">Turno</dt>
+                  <dd className="mt-0.5 font-semibold">
+                    {court.slot_duration} min · {formatMoney(getSlotPrice(court, court.slot_duration))}
+                  </dd>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Seña</span>
-                  <span className="font-medium">
+                <div>
+                  <dt className="text-[13px] text-muted-foreground">Horario</dt>
+                  <dd className="mt-0.5 font-mono font-semibold">
+                    {court.open_time} – {court.close_time}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[13px] text-muted-foreground">Seña</dt>
+                  <dd className="mt-0.5 font-semibold">
                     {court.deposit_enabled
                       ? court.deposit_type === "percent"
-                        ? `${court.deposit_value}% del turno`
+                        ? `${court.deposit_value} %`
                         : formatMoney(court.deposit_value)
-                      : "No requiere"}
-                  </span>
+                      : "No pide"}
+                  </dd>
                 </div>
-              </CardContent>
-            </Card>
+              </dl>
+            </article>
           ))}
         </div>
       )}

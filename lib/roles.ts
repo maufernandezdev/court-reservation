@@ -27,3 +27,27 @@ const ROLE_RANK: Record<ClubRole, number> = {
 export function roleAtLeast(role: ClubRole, minimum: ClubRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[minimum];
 }
+
+/** Qué puede hacer cada rol: `true`, `false` o un texto corto cuando es con condiciones. */
+export type RoleCapability = {
+  label: string;
+  access: Record<ClubRole, boolean | string>;
+};
+
+/**
+ * Matriz de permisos que se muestra en Equipo. Tiene que reflejar lo que
+ * aplican las Server Actions (`requireRole`) y las reglas de cancelación.
+ */
+export const ROLE_CAPABILITIES: RoleCapability[] = [
+  { label: "Ver la planilla", access: { admin: true, operador: true, profesor: true } },
+  { label: "Crear y mover turnos", access: { admin: true, operador: true, profesor: true } },
+  {
+    label: "Cancelar en término",
+    access: { admin: true, operador: true, profesor: "Sin cobros" },
+  },
+  { label: "Cancelar fuera de término", access: { admin: true, operador: true, profesor: false } },
+  { label: "Registrar cobros y señas", access: { admin: true, operador: true, profesor: false } },
+  { label: "Ver caja y reportes", access: { admin: true, operador: false, profesor: false } },
+  { label: "Canchas, precios y políticas", access: { admin: true, operador: false, profesor: false } },
+  { label: "Invitar y cambiar roles", access: { admin: true, operador: false, profesor: false } },
+];

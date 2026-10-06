@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ShieldAlert, Trash2, UserPlus, Users } from "lucide-react";
+import { Check, ShieldAlert, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import AuthGuard from "@/components/auth-guard";
 import { useMembership } from "@/hooks/use-membership";
@@ -13,7 +13,13 @@ import {
   type MemberInviteInput,
   type MemberWithEmail,
 } from "@/lib/members";
-import { CLUB_ROLES, CLUB_ROLE_LABELS, type ClubRole } from "@/lib/roles";
+import {
+  CLUB_ROLES,
+  CLUB_ROLE_LABELS,
+  ROLE_CAPABILITIES,
+  type ClubRole,
+} from "@/lib/roles";
+import { cn } from "@/lib/utils";
 import {
   inviteMemberAction,
   removeMemberAction,
@@ -21,7 +27,6 @@ import {
 } from "@/app/dashboard/miembros/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
@@ -57,6 +62,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { PageHeader } from "@/components/shell/page-header";
+
+function initials(text: string): string {
+  const words = text.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "?").slice(0, 2)).toUpperCase();
+}
 
 export default function MiembrosPage() {
   const { membership, isLoading: isLoadingMembership } = useMembership();
@@ -175,75 +185,158 @@ export default function MiembrosPage() {
           }
         />
 
-        {members.length === 0 ? (
-          <Alert>
-            <Users className="h-4 w-4" />
-            <AlertDescription>
-              Todavía no hay miembros cargados.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <div className="space-y-2">
-            {members.map((member) => (
-              <div
-                key={member.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">
-                      {member.full_name || member.email}
-                    </span>
-                    <Badge
-                      variant={
-                        member.role === "admin" ? "default" : "secondary"
-                      }
+        <div className="flex flex-wrap items-start gap-6">
+          <section
+            aria-label="Personas del club"
+            className="min-w-0 flex-[999_1_520px] overflow-hidden rounded-2xl border bg-card"
+          >
+            {members.length === 0 ? (
+              <p className="flex items-center gap-2 p-5 text-muted-foreground">
+                <Users className="size-4" />
+                Todavía no hay miembros cargados.
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {members.map((member) => {
+                  const name = member.full_name || member.email;
+                  const isMe = member.user_id === membership?.user_id;
+                  return (
+                    <li
+                      key={member.id}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5"
                     >
-                      {CLUB_ROLE_LABELS[member.role]}
-                    </Badge>
-                    {member.user_id === membership?.user_id && (
-                      <Badge variant="outline">Vos</Badge>
-                    )}
-                  </div>
-                  {member.full_name && (
-                    <p className="truncate text-sm text-muted-foreground">
-                      {member.email}
-                    </p>
-                  )}
-                </div>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold",
+                          member.role === "profesor"
+                            ? "bg-line text-line-foreground"
+                            : "bg-ink text-primary-foreground"
+                        )}
+                      >
+                        {initials(name)}
+                      </span>
+                      <span className="flex min-w-0 flex-[1_1_200px] flex-col">
+                        <strong className="flex items-center gap-2 truncate text-[15px]">
+                          {name}
+                          {isMe && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">
+                              Vos
+                            </span>
+                          )}
+                        </strong>
+                        {member.full_name && (
+                          <span className="truncate text-[13px] text-muted-foreground">
+                            {member.email}
+                          </span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <Select
+                          value={member.role}
+                          onValueChange={(role) => handleRoleChange(member.id, role as ClubRole)}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-40"
+                            aria-label={`Rol de ${name}`}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "size-2 rounded-full",
+                                member.role === "admin"
+                                  ? "bg-ink"
+                                  : member.role === "profesor"
+                                    ? "bg-line"
+                                    : "bg-muted-foreground"
+                              )}
+                            />
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CLUB_ROLES.map((role) => (
+                              <SelectItem key={role} value={role}>
+                                {CLUB_ROLE_LABELS[role]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Quitar a ${name} del club`}
+                          disabled={isMe}
+                          onClick={() => setRemovingId(member.id)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
 
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={member.role}
-                    onValueChange={(role) =>
-                      handleRoleChange(member.id, role as ClubRole)
-                    }
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CLUB_ROLES.map((role) => (
-                        <SelectItem key={role} value={role}>
-                          {CLUB_ROLE_LABELS[role]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Eliminar del club"
-                    disabled={member.user_id === membership?.user_id}
-                    onClick={() => setRemovingId(member.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+          <section
+            aria-labelledby="permisos"
+            className="flex flex-[1_1_380px] flex-col gap-4 rounded-2xl border bg-card p-5"
+          >
+            <h2 id="permisos" className="text-lg font-bold">
+              Qué puede hacer cada rol
+            </h2>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="font-mono text-xs text-muted-foreground">
+                  <th scope="col" className="py-2 text-left font-medium">
+                    <span className="sr-only">Permiso</span>
+                  </th>
+                  {CLUB_ROLES.map((role) => (
+                    <th key={role} scope="col" className="w-[72px] px-1 py-2 font-medium uppercase">
+                      {role === "admin" ? "Admin" : role === "operador" ? "Oper." : "Profe"}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ROLE_CAPABILITIES.map((cap) => (
+                  <tr key={cap.label} className="border-t border-muted">
+                    <th scope="row" className="py-2.5 text-left font-medium">
+                      {cap.label}
+                    </th>
+                    {CLUB_ROLES.map((role) => {
+                      const value = cap.access[role];
+                      return (
+                        <td key={role} className="px-1 py-2 text-center">
+                          {value === true ? (
+                            <span className="inline-flex size-[26px] items-center justify-center rounded-full bg-ink text-ball">
+                              <Check className="size-3.5" strokeWidth={3} />
+                              <span className="sr-only">Sí</span>
+                            </span>
+                          ) : value === false ? (
+                            <span className="text-muted-foreground">
+                              <span aria-hidden="true">—</span>
+                              <span className="sr-only">No</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-full bg-line-soft px-1.5 py-0.5 text-[11px] font-bold text-line-soft-foreground">
+                              {value}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              Los profesores no pueden cancelar dentro de la ventana de penalidad
+              ni turnos que ya tienen cobros: se lo piden a un operador.
+            </p>
+          </section>
+        </div>
       </div>
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
@@ -344,7 +437,7 @@ export default function MiembrosPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar miembro?</AlertDialogTitle>
+            <AlertDialogTitle>¿Quitar a esta persona del club?</AlertDialogTitle>
             <AlertDialogDescription>
               La persona va a perder el acceso a la operación del club. Sus
               acciones anteriores quedan registradas en la auditoría.
@@ -356,7 +449,7 @@ export default function MiembrosPage() {
               onClick={handleRemove}
               variant="destructive"
             >
-              Eliminar
+              Quitar del club
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

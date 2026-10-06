@@ -13,6 +13,7 @@ import type {
 } from "@/lib/reservations";
 import type { Membership } from "@/lib/roles";
 import { formatMoney, getDepositAmount, getSlotPrice } from "@/lib/pricing";
+import { cancellationOutcome } from "@/lib/cancellation";
 import {
   applyCreditAction,
   cancelReservationAction,
@@ -168,17 +169,12 @@ export function useReservationDetail({
     membership.role === "profesor" && !isCancelled && totalPaid > 0;
 
   /** Montos de la cancelación según la política (para mostrarlos antes de confirmar). */
-  const penalty = (slotPrice * latePenaltyPercent) / 100;
-  const cancelOutcome = !wouldBeLate
-    ? { late: false, retained: 0, released: totalPaid, debt: 0 }
-    : totalPaid > 0
-      ? {
-          late: true,
-          retained: Math.min(totalPaid, penalty),
-          released: totalPaid - Math.min(totalPaid, penalty),
-          debt: 0,
-        }
-      : { late: true, retained: 0, released: 0, debt: penalty };
+  const cancelOutcome = cancellationOutcome({
+    late: wouldBeLate,
+    slotPrice,
+    paid: totalPaid,
+    penaltyPercent: latePenaltyPercent,
+  });
 
   const cancelConsequence = (): string => {
     if (!wouldBeLate) {
@@ -186,14 +182,11 @@ export function useReservationDetail({
         ? `Es una cancelación en término: los ${formatMoney(totalPaid)} cobrados se liberan como saldo a favor del cliente.`
         : "Es una cancelación en término: no se generan penalidades.";
     }
-    if (totalPaid > 0) {
-      return `Es una cancelación tardía: se retiene ${formatMoney(cancelOutcome.retained)} como penalidad${
-        cancelOutcome.released > 0
-          ? ` y se liberan ${formatMoney(cancelOutcome.released)} como saldo a favor`
-          : ""
-      }.`;
-    }
-    return `Es una cancelación tardía: se va a registrar una deuda de ${formatMoney(penalty)} (${latePenaltyPercent}% del valor del turno).`;
+    const parts: string[] = [];
+    if (cancelOutcome.retained > 0) parts.push(`se retienen ${formatMoney(cancelOutcome.retained)}`);
+    if (cancelOutcome.released > 0) parts.push(`se liberan ${formatMoney(cancelOutcome.released)} como saldo a favor`);
+    if (cancelOutcome.debt > 0) parts.push(`queda una deuda de ${formatMoney(cancelOutcome.debt)}`);
+    return `Es una cancelación tardía (penalidad del ${latePenaltyPercent}% = ${formatMoney(cancelOutcome.penalty)}): ${parts.join(", ") || "sin movimientos de dinero"}.`;
   };
 
   const registerPayment = async (kind: "seña" | "total") => {

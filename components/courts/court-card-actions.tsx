@@ -96,7 +96,7 @@ export function CourtCardActions({ court }: { court: Court }) {
 
     if (success) {
       setDeleteDialogOpen(false);
-      toast.success(`La cancha "${court.name}" se eliminó correctamente`);
+      toast.success(`La cancha "${court.name}" se dio de baja`);
     } else {
       setDeleteDialogOpen(false);
       toast.error(error ?? "No se pudo eliminar la cancha.");
@@ -107,9 +107,8 @@ export function CourtCardActions({ court }: { court: Court }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" title="Opciones">
-            <MoreVertical className="h-4 w-4" />
-            <span className="sr-only">Opciones de la cancha</span>
+          <Button variant="ghost" size="icon-sm" aria-label={`Opciones de ${court.name}`}>
+            <MoreVertical />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -122,7 +121,7 @@ export function CourtCardActions({ court }: { court: Court }) {
             onSelect={() => setDeleteDialogOpen(true)}
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            Eliminar
+            Dar de baja
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -169,7 +168,7 @@ export function CourtCardActions({ court }: { court: Court }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar cancha?</AlertDialogTitle>
+            <AlertDialogTitle>¿Dar de baja {court.name}?</AlertDialogTitle>
             <AlertDialogDescription>
               La cancha va a dejar de mostrarse en el panel, pero sus datos y
               sus reservas quedan guardados en la base de datos.
@@ -181,7 +180,7 @@ export function CourtCardActions({ court }: { court: Court }) {
               onClick={handleDelete}
               variant="destructive"
             >
-              Eliminar
+              Dar de baja
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

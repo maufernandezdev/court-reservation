@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 a 7 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total, planilla en celular + buscador). Siguiente: fase 8 (Canchas, Equipo y Políticas). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 a 8 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total, planilla en celular + buscador, Canchas/Equipo/Políticas). Siguiente: fase 9 (página de Actividad). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -69,9 +69,11 @@
 
 ## 8. Administración
 
-- [ ] 8.1 Releer artboard Canchas y rehacer `app/dashboard/canchas/page.tsx` + `components/courts/*` (tarjetas, formulario con segmentado de duración, switch de seña y resumen en vivo con `getSlotPrice`/`getDepositAmount`), y verificar crear, editar y dar de baja
-- [ ] 8.2 Agregar `ROLE_CAPABILITIES` en `lib/roles.ts`, releer artboard Equipo y rehacer `app/dashboard/miembros/page.tsx` (tabla de personas, chips de rol, menú de opciones, matriz de permisos), y verificar invitar, cambiar rol y quitar
-- [ ] 8.3 Releer artboard Políticas y rehacer `app/dashboard/configuracion/page.tsx` (línea de tiempo, opciones de anticipación y penalidad sobre el form RHF + Zod existente, ejemplo recalculado en vivo con una cancha real o valor de referencia rotulado), y verificar que guarda y que el ejemplo coincide con lo que hace la cancelación
+- [x] 8.1 Releer artboard Canchas y rehacer `app/dashboard/canchas/page.tsx` + `components/courts/*` (tarjetas, formulario con segmentado de duración, switch de seña y resumen en vivo con `getSlotPrice`/`getDepositAmount`), y verificar crear, editar y dar de baja
+- [x] 8.2 Agregar `ROLE_CAPABILITIES` en `lib/roles.ts`, releer artboard Equipo y rehacer `app/dashboard/miembros/page.tsx` (tabla de personas, chips de rol, menú de opciones, matriz de permisos), y verificar invitar, cambiar rol y quitar
+- [x] 8.3 Releer artboard Políticas y rehacer `app/dashboard/configuracion/page.tsx` (línea de tiempo, opciones de anticipación y penalidad sobre el form RHF + Zod existente, ejemplo recalculado en vivo con una cancha real o valor de referencia rotulado), y verificar que guarda y que el ejemplo coincide con lo que hace la cancelación
+  - Verificado 2026-10-06 (Playwright + base): Canchas → crear (pádel 90 min, 30%: resumen $36.000 · seña $10.800), editar (precio $30.000 → $45.000 · $13.500), dar de baja. Equipo → matriz desde `ROLE_CAPABILITIES` (corregida contra las Server Actions: el profesor sí crea/mueve cualquier turno y cancela en término solo sin cobros), cambio de rol y validación de invitación. Políticas → "Guardar" solo con cambios, ejemplo en vivo con Cancha 1 (50%: retiene $7.200 · debe $4.800; 25%: retiene $6.000 · $1.200 a favor), guarda y persiste tras recargar.
+  - Arreglo colateral: el detalle del turno no mostraba la deuda adicional de una cancelación tardía con seña (el servidor retiene la seña **y** registra la diferencia hasta la penalidad). Ahora `lib/cancellation.ts` replica el cálculo del servidor y lo usan el detalle y Políticas; verificado contra la base (seña $7.200 retenida + deuda $4.800). También: `Switch` con estilo de marca, textos "Dar de baja" en canchas.
 
 ## 9. Actividad (página nueva)
 
