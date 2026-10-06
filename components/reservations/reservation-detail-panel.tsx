@@ -144,7 +144,9 @@ export function ReservationDetailPanel({
               )}
               {reservation.payment_status !== "pagada" && (
                 <Button type="button" onClick={() => detail.registerPayment("total")}>
-                  Cobrar total ({formatMoney(slotPrice)})
+                  {totalPaid > 0
+                    ? `Cobrar saldo (${formatMoney(remaining)})`
+                    : `Cobrar total (${formatMoney(slotPrice)})`}
                 </Button>
               )}
             </div>

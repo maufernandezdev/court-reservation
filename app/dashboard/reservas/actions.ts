@@ -524,10 +524,16 @@ export async function registerPaymentAction(
       return { success: false, error: "Esta reserva ya está totalmente paga." };
     }
 
+    // "total" cobra solo el saldo: precio del turno menos lo ya cobrado
+    // (seña, pagos previos o saldo a favor aplicado, sin contar lo liberado).
     const amount =
       parsed.data.kind === "seña"
         ? getDepositAmount(court, reservation.duration_minutes)
-        : getSlotPrice(court, reservation.duration_minutes);
+        : Math.max(
+            0,
+            getSlotPrice(court, reservation.duration_minutes) -
+              paidAmount(existingPayments)
+          );
 
     if (parsed.data.kind === "seña" && amount <= 0) {
       return {
@@ -536,17 +542,20 @@ export async function registerPaymentAction(
       };
     }
 
-    const { error: paymentError } = await supabase.from("payments").insert({
-      owner_id: reservation.user_id,
-      reservation_id: reservationId,
-      kind: parsed.data.kind,
-      amount,
-      method: parsed.data.method,
-      created_by: user!.id,
-    });
+    // Si ya estaba todo cobrado (ej. saldo a favor que cubrió el turno), solo se marca como pagada.
+    if (amount > 0) {
+      const { error: paymentError } = await supabase.from("payments").insert({
+        owner_id: reservation.user_id,
+        reservation_id: reservationId,
+        kind: parsed.data.kind,
+        amount,
+        method: parsed.data.method,
+        created_by: user!.id,
+      });
 
-    if (paymentError) {
-      return { success: false, error: "No se pudo registrar el cobro." };
+      if (paymentError) {
+        return { success: false, error: "No se pudo registrar el cobro." };
+      }
     }
 
     const nextStatus = parsed.data.kind === "seña" ? "senada" : "pagada";

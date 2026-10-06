@@ -47,7 +47,7 @@
 - [x] 5.1 Extraer de `components/reservations/reservation-dialog.tsx` el hook `useReservationDetail` (carga de pagos, auditoría, settings, saldo; acciones de cobro y cancelación) sin cambiar la UI, y verificar manualmente: crear turno, registrar seña, registrar total, cancelar en término, cancelar tardía, profesor bloqueado dentro de la ventana
 - [x] 5.2 Separar el alta/edición en `ReservationFormDialog` y el detalle en `ReservationDetailPanel` (todavía dentro del diálogo actual), y repetir la verificación de 5.1
   - Hecho junto con 5.1: `hooks/use-reservation-detail.ts` (lógica), `components/reservations/reservation-form.tsx` (alta/edición) y `reservation-detail-panel.tsx` (cobros, cancelación, historial); `ReservationDialog` conserva sus props. Verificado 2026-10-06 con Playwright + lectura de la base: crear, seña, total, cancelación en término (todo a saldo a favor), cancelación tardía sin cobros (deuda $12.000) y profesor bloqueado dentro de la ventana (rol cambiado temporalmente y restaurado). Arreglo colateral: el formulario arrancaba vacío al montarse dentro del diálogo; ahora se inicializa con los valores al montar.
-  - **Bug preexistente detectado (no visual):** "Cobrar total" registra el precio completo aunque ya haya seña cobrada (turno de $24.000 con seña de $7.200 queda con $31.200 cobrados). Pendiente de decisión del usuario.
+  - **Bug preexistente detectado (no visual):** "Cobrar total" registraba el precio completo aunque ya hubiera seña cobrada. El usuario pidió arreglarlo ahora → tarea 6.5.
 
 ## 6. Planilla: escritorio
 
@@ -55,6 +55,8 @@
 - [ ] 6.2 Rehacer el encabezado de `app/dashboard/reservas/page.tsx` (navegación de día, "HOY", filtro por deporte con `toggle-group`, "¿Hay cancha?", "Nuevo turno", leyenda de estados) y verificar que cambiar de día y de filtro actualiza la grilla
 - [ ] 6.3 Mostrar `ReservationDetailPanel` como `<aside>` lateral en escritorio con el turno seleccionado resaltado (selector de estado de pago, cobrar, editar, cancelar con resultado de la política, historial), y verificar que todas las acciones de 5.1 funcionan desde el panel
 - [ ] 6.4 Abrir el buscador cuando la URL trae `?buscar=1` y verificar desde la barra inferior del celular
+- [x] 6.5 (Agregada 2026-10-06, a pedido del usuario) Arreglar "Cobrar total": `registerPaymentAction` cobra solo el saldo (precio − cobrado no liberado) y el botón dice "Cobrar saldo $X" cuando ya hay cobros; verificar que seña + total suman exactamente el valor del turno
+  - Verificado 2026-10-06: seña $7.200 + total $16.800 = $24.000; la cancelación en término libera $24.000 a saldo a favor.
 
 ## 7. Planilla: celular y buscador
 
