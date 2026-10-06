@@ -18,6 +18,14 @@ const badgeVariants = cva(
           "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
+        // Estados de turno (ver lib/reservation-tone.ts)
+        paid: "rounded-md bg-ink text-primary-foreground font-semibold",
+        deposit: "rounded-md bg-ball text-ball-foreground font-semibold",
+        pending:
+          "rounded-md border-[1.5px] border-dashed border-ink bg-card text-foreground font-semibold",
+        cancelled:
+          "rounded-md bg-hatch text-muted-foreground line-through font-semibold",
+        fixed: "rounded-md bg-line text-line-foreground font-semibold",
       },
     },
     defaultVariants: {

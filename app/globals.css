@@ -4,49 +4,53 @@
 
 @custom-variant dark (&:is(.dark *), &:has(.dark));
 
+/*
+ * Identidad visual "saque" (ver openspec/changes/apply-saque-visual-design/design.md §1).
+ * Valores HSL sin envolver: se consumen como hsl(var(--x)) en @theme.
+ *   piso  #F6F7F3 · tinta #101418 · pelota #D7F04A · línea #2C55D1
+ * `--accent` queda como gris de hover (semántica de shadcn); el amarillo de
+ * marca es `--ball`. Sin modo oscuro por ahora.
+ */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 0 0% 3.9%;
+  --background: 75 20% 96.1%;
+  --foreground: 210 20% 7.8%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 3.9%;
+  --card-foreground: 210 20% 7.8%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 3.9%;
-  --primary: 0 0% 9%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 96.1%;
-  --secondary-foreground: 0 0% 9%;
-  --muted: 0 0% 96.1%;
-  --muted-foreground: 0 0% 45.1%;
-  --accent: 0 0% 96.1%;
-  --accent-foreground: 0 0% 9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 89.8%;
-  --input: 0 0% 89.8%;
-  --ring: 0 0% 3.9%;
+  --popover-foreground: 210 20% 7.8%;
+  --primary: 210 20% 7.8%;
+  --primary-foreground: 75 20% 96.1%;
+  --secondary: 80 15% 92.2%;
+  --secondary-foreground: 210 20% 7.8%;
+  --muted: 80 15% 92.2%;
+  --muted-foreground: 105 4.3% 36.1%;
+  --accent: 80 15% 92.2%;
+  --accent-foreground: 210 20% 7.8%;
+  --destructive: 8.5 72.4% 44.1%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 82.5 12.1% 87.1%;
+  --input: 84 9.8% 80%;
+  --ring: 225.1 65.2% 49.6%;
   --radius: 0.625rem;
-}
 
-.dark {
-  --background: 0 0% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 0 0% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 0 0% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 0 0% 9%;
-  --secondary: 0 0% 14.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 14.9%;
-  --muted-foreground: 0 0% 63.9%;
-  --accent: 0 0% 14.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 14.9%;
-  --input: 0 0% 14.9%;
-  --ring: 0 0% 83.1%;
+  /* Marca */
+  --ink: 210 20% 7.8%;
+  --ball: 69 84.7% 61.6%;
+  --ball-foreground: 210 20% 7.8%;
+  --line: 225.1 65.2% 49.6%;
+  --line-foreground: 0 0% 100%;
+  --line-soft: 222.9 72.4% 94.3%;
+  --line-soft-foreground: 225 68.1% 36.9%;
+  --success: 150.3 59.5% 30%;
+  --success-soft: 145.7 33.3% 91.8%;
+  --danger-soft: 10.9 73.3% 94.1%;
+  --danger-soft-foreground: 7.9 75.3% 31.8%;
+
+  /* Menú lateral (fondo tinta) */
+  --sidebar: 210 20% 7.8%;
+  --sidebar-foreground: 75 20% 96.1%;
+  --sidebar-muted: 90 7.1% 72.5%;
+  --sidebar-label: 92.7 5.6% 61.4%;
 }
 
 @theme inline {
@@ -69,10 +73,32 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+
+  --color-ink: hsl(var(--ink));
+  --color-ball: hsl(var(--ball));
+  --color-ball-foreground: hsl(var(--ball-foreground));
+  --color-line: hsl(var(--line));
+  --color-line-foreground: hsl(var(--line-foreground));
+  --color-line-soft: hsl(var(--line-soft));
+  --color-line-soft-foreground: hsl(var(--line-soft-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-soft: hsl(var(--success-soft));
+  --color-danger-soft: hsl(var(--danger-soft));
+  --color-danger-soft-foreground: hsl(var(--danger-soft-foreground));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-muted: hsl(var(--sidebar-muted));
+  --color-sidebar-label: hsl(var(--sidebar-label));
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 6px);
 }
 
 * {
@@ -82,4 +108,14 @@
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+}
+
+/* Rayado de turno cancelado (estado "cancelada"). */
+@utility bg-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    hsl(var(--muted)) 0 6px,
+    hsl(var(--background)) 6px 12px
+  );
 }
