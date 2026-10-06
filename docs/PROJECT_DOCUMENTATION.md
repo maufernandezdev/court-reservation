@@ -19,6 +19,18 @@ Lugar de notas del proyecto: decisiones, pendientes y configuraciones que no se 
 - **No se puede subir** ese límite; el servicio por defecto es solo para pruebas.
 - Workarounds para desarrollo: esperar la hora, desactivar "Confirm email" en Authentication → Sign In / Providers → Email, usar Supabase CLI local (Inbucket captura los mails sin límite), o configurar SMTP propio (con SMTP custom el límite pasa a 30/hora y es configurable en Authentication → Rate Limits).
 
+### Configuración de auth del proyecto (relevada 2026-10-06 con `supabase config pull --dry-run` en una carpeta temporal)
+
+- **Confirmación de email: activada** (`auth.email.enable_confirmations = true`; `/auth/v1/settings` devuelve `mailer_autoconfirm: false`). El registro siempre pasa por "Revisá tu email".
+- **SMTP: el de Supabase por defecto** (no hay `[auth.email.smtp]` configurado). Además del límite de envíos por hora, en los proyectos actuales el SMTP por defecto **solo entrega a direcciones que sean miembros del equipo de la organización** en Supabase: un registro con otro email no recibe el link. Sirve para probar con tu propio mail, no con usuarios reales.
+- **Site URL:** `http://localhost:3000`. **Redirect URLs adicionales:** ninguna. El registro pide redirigir a `<origen>/verification-account`; en localhost funciona porque coincide con el host de la Site URL. Si Supabase rechaza la redirección, cae en la Site URL (`/`): desde 2026-10-06 la raíz reenvía `?code=` a `/verification-account`, y si no hay código va a `/dashboard`.
+- Reenvío: `max_frequency = 1m` entre emails al mismo destinatario.
+- **Para pasar a usuarios reales:**
+  1. Configurar un SMTP propio (Resend, Brevo, SendGrid, Amazon SES, etc.) en Authentication → Emails → SMTP Settings, con un dominio verificado (SPF/DKIM).
+  2. Ajustar el límite en Authentication → Rate Limits (con SMTP propio arranca en 30/h y es configurable).
+  3. Al desplegar: poner la URL de producción como Site URL y agregar `https://<dominio>/**` (y `http://localhost:3000/**` para desarrollo) en Redirect URLs.
+  4. Opcional: personalizar el template "Confirm signup" (en español, con la marca).
+
 ## Decisiones y semántica
 
 ### Roles, membresías y tenancy por club (migración `0004_memberships_and_rls.sql`, 2026-10)

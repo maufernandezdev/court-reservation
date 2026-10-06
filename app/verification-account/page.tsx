@@ -10,7 +10,7 @@ import { AuthHeading, AuthLayout } from "@/components/auth/auth-layout";
 
 type Status = "loading" | "success" | "error";
 
-const REDIRECT_PATH = "/";
+const REDIRECT_PATH = "/dashboard";
 const COUNTDOWN_SECONDS = 10;
 
 const TITLES: Record<Status, string> = {
