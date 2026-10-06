@@ -14,13 +14,12 @@ import {
 import AuthGuard from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { PageHeader } from "@/components/shell/page-header";
 import { useCourts } from "@/hooks/use-courts";
 import { useReservations } from "@/hooks/use-reservations";
@@ -28,24 +27,23 @@ import { useMembership } from "@/hooks/use-membership";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useReservationDetail } from "@/hooks/use-reservation-detail";
-import { COURT_TYPE_LABELS, type Court, type CourtType } from "@/lib/courts";
-import {
-  getCourtSlots,
-  reservationCoversSlot,
-  timeToMinutes,
-} from "@/lib/availability";
+import { type Court, type CourtType } from "@/lib/courts";
+import { getCourtSlots, timeToMinutes } from "@/lib/availability";
 import type { Reservation } from "@/lib/reservations";
 import type { Membership } from "@/lib/roles";
 import {
   RESERVATION_TONES,
   RESERVATION_TONE_LABELS,
   toneClasses,
-  toneFor,
 } from "@/lib/reservation-tone";
 import { CourtTypeFilter } from "@/components/court-type-filter";
 import { ReservationDialog } from "@/components/reservations/reservation-dialog";
 import { ReservationDetailPanel } from "@/components/reservations/reservation-detail-panel";
 import { ScheduleGrid } from "@/components/reservations/schedule-grid";
+import {
+  MobileSchedule,
+  NewReservationFab,
+} from "@/components/reservations/mobile-schedule";
 import { AvailabilitySearchDialog } from "@/components/reservations/availability-search-dialog";
 import { cn } from "@/lib/utils";
 
@@ -121,6 +119,58 @@ function ReservationSidePanel({
   );
 }
 
+/** Detalle del turno en celular: hoja desde abajo. */
+function ReservationBottomSheet({
+  reservation,
+  courts,
+  membership,
+  onSaved,
+  onCancelled,
+  onEdit,
+  onClose,
+}: {
+  reservation: Reservation | null;
+  courts: Court[];
+  membership: Membership;
+  onSaved: (r: Reservation) => void;
+  onCancelled: (r: Reservation) => void;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const detail = useReservationDetail({
+    open: !!reservation,
+    reservation,
+    courts,
+    membership,
+    onSaved,
+    onCancelled,
+    onClosed: onClose,
+  });
+
+  return (
+    <Sheet open={!!reservation} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="bottom"
+        className="max-h-[88dvh] gap-0 overflow-y-auto rounded-t-3xl px-4 pt-3 pb-8"
+      >
+        <div aria-hidden="true" className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-input" />
+        <SheetTitle className="sr-only">
+          {reservation ? `Turno de ${reservation.customer_name}` : "Turno"}
+        </SheetTitle>
+        <SheetDescription className="sr-only">Detalle, cobros y cancelación del turno</SheetDescription>
+        {reservation && (
+          <ReservationDetailPanel
+            reservation={reservation}
+            membership={membership}
+            detail={detail}
+            onEdit={onEdit}
+          />
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function ReservationsPageContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -143,7 +193,6 @@ function ReservationsPageContent() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const [mobileCourtId, setMobileCourtId] = useState("");
 
   const selectedDateKey = useMemo(() => dateKey(selectedDate), [selectedDate]);
   const isToday = selectedDateKey === todayKey;
@@ -229,11 +278,6 @@ function ReservationsPageContent() {
     setSelectedId(null);
   };
 
-  const effectiveMobileCourtId =
-    mobileCourtId && visibleCourts.some((c) => c.id === mobileCourtId)
-      ? mobileCourtId
-      : (visibleCourts[0]?.id ?? "");
-
   const isLoading = isLoadingCourts || isLoadingReservations || isLoadingMembership;
 
   if (isLoading) {
@@ -277,6 +321,16 @@ function ReservationsPageContent() {
         title="Planilla"
         actions={
           <>
+            <Button
+              variant="outline"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setSearchOpen(true)}
+              aria-label="¿Hay cancha? Buscar turno libre"
+            >
+              <Search />
+            </Button>
+            <div className="hidden lg:contents">
             <div className="flex items-center gap-1 rounded-xl border bg-card p-1">
               <Button
                 variant="ghost"
@@ -331,6 +385,7 @@ function ReservationsPageContent() {
               <Plus className="text-ball" strokeWidth={2.4} />
               Nuevo turno
             </Button>
+            </div>
           </>
         }
       />
@@ -371,69 +426,32 @@ function ReservationsPageContent() {
           </div>
         </>
       ) : (
-        /* ---------------- Celular: cancha seleccionada + lista de franjas ---------------- */
-        <Tabs
-          value={effectiveMobileCourtId}
-          onValueChange={setMobileCourtId}
-          className="space-y-4"
-        >
-          <TabsList className="flex w-full justify-start overflow-x-auto">
-            {visibleCourts.map((court) => (
-              <TabsTrigger key={court.id} value={court.id} className="shrink-0">
-                {court.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {visibleCourts.map((court) => (
-            <TabsContent key={court.id} value={court.id} className="m-0">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>
-                    {COURT_TYPE_LABELS[court.type]} · {court.open_time} a {court.close_time}
-                  </span>
-                  <span>{court.slot_duration} min por turno</span>
-                </div>
-                <ul className="divide-y rounded-xl border bg-card">
-                  {getCourtSlots(court).map((time) => {
-                    const reservation = activeReservations.find(
-                      (r) => r.court_id === court.id && reservationCoversSlot(r, time)
-                    );
-                    const isStart = reservation && reservation.time === time;
-                    if (reservation && !isStart) return null;
-                    const tone = reservation ? toneFor(reservation) : null;
-
-                    return (
-                      <li key={time}>
-                        <button
-                          type="button"
-                          className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-accent"
-                          onClick={() =>
-                            reservation
-                              ? openEditDialog(reservation)
-                              : openCreateDialog(court.id, time)
-                          }
-                        >
-                          <span className="font-mono font-medium">{time}</span>
-                          {reservation && tone ? (
-                            <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
-                              <span className="truncate text-sm font-semibold">
-                                {reservation.customer_name}
-                              </span>
-                              <Badge variant={tone}>{RESERVATION_TONE_LABELS[tone]}</Badge>
-                            </span>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">Libre</span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
+        /* ---------------- Celular: una cancha por vez + hoja de detalle ---------------- */
+        <>
+          <MobileSchedule
+            key={courtTypeFilter}
+            courts={visibleCourts}
+            reservations={activeReservations}
+            selectedDateKey={selectedDateKey}
+            todayKey={todayKey}
+            nowMinutes={isToday ? minutesOfDay(now) : null}
+            onSelectDate={(key) => setSelectedDate(parseDateKey(key))}
+            onSelect={(r) => setSelectedId(r.id)}
+            onCreate={openCreateDialog}
+          />
+          <NewReservationFab onClick={openNewFromHeader} />
+          {membership && (
+            <ReservationBottomSheet
+              reservation={selectedReservation}
+              courts={courts}
+              membership={membership}
+              onSaved={handleReservationSaved}
+              onCancelled={handleCancelled}
+              onEdit={() => selectedReservation && openEditDialog(selectedReservation)}
+              onClose={() => setSelectedId(null)}
+            />
+          )}
+        </>
       )}
 
       {membership && (
@@ -450,7 +468,7 @@ function ReservationsPageContent() {
           membership={membership}
           onSaved={handleReservationSaved}
           onCancelled={handleCancelled}
-          showDetail={!isDesktop}
+          showDetail={false}
         />
       )}
 

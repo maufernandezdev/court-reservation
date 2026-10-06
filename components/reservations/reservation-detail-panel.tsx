@@ -13,7 +13,7 @@ import { formatMoney } from "@/lib/pricing";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { COURT_TYPE_LABELS } from "@/lib/courts";
 import type { ReservationDetail } from "@/hooks/use-reservation-detail";
-import { RESERVATION_TONE_LABELS, toneFor } from "@/lib/reservation-tone";
+import { RESERVATION_TONE_LABELS, toneClasses, toneFor } from "@/lib/reservation-tone";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -357,7 +357,8 @@ export function CancelConfirmDialog({
   reservation: Reservation;
   detail: ReservationDetail;
 }) {
-  const { cancelOutcome, wouldBeLate } = detail;
+  const { cancelOutcome, wouldBeLate, court } = detail;
+  const tone = toneFor(reservation);
   return (
     <AlertDialog
       open={detail.cancelConfirmOpen}
@@ -365,9 +366,22 @@ export function CancelConfirmDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Cancelar el turno de {reservation.customer_name}</AlertDialogTitle>
+          <AlertDialogTitle className="font-display text-2xl font-extrabold tracking-[-0.02em] font-stretch-[120%]">
+            Cancelar turno
+          </AlertDialogTitle>
           <AlertDialogDescription>{detail.cancelConsequence()}</AlertDialogDescription>
         </AlertDialogHeader>
+
+        <div className={cn("flex items-center gap-3 rounded-xl p-3.5", toneClasses(tone), "no-underline")}>
+          <strong className="font-mono text-xl">{reservation.time}</strong>
+          <span className="flex min-w-0 flex-col">
+            <strong className="truncate text-base">{reservation.customer_name}</strong>
+            <span className="text-[13px] opacity-85">
+              {court?.name} · {formatDate(reservation.date)} · {reservation.duration_minutes} min ·{" "}
+              {RESERVATION_TONE_LABELS[tone]}
+            </span>
+          </span>
+        </div>
 
         <div
           className={cn(

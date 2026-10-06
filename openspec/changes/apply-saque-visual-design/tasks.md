@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 a 6 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total). Siguiente: fase 7 (planilla en celular y buscador). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 a 7 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total, planilla en celular + buscador). Siguiente: fase 8 (Canchas, Equipo y Políticas). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -62,9 +62,10 @@
 
 ## 7. Planilla: celular y buscador
 
-- [ ] 7.1 Releer artboard MobilePlanilla; rehacer la vista < lg: tira de días, selector de cancha, lista desde cerca de la hora actual con "Ver desde las HH:MM", huecos pasados como "Sin uso", línea de ahora y botón flotante "Nuevo turno", y verificar a 390 px
-- [ ] 7.2 Mostrar el detalle en `Sheet side="bottom"` en celular; releer artboard MobileCancelar y rediseñar el paso de cancelación (resumen del turno, resultado de la política en $ y motivo), y verificar cancelación en término y tardía desde el celular
-- [ ] 7.3 Releer artboard MobileBuscar y rediseñar `availability-search-dialog.tsx` como "¿Hay cancha?" (día, deporte, desde; resultados con "Reservar"; vista previa del texto; "Copiar disponibilidad"), pantalla completa en celular, y verificar el caso sin resultados y la copia al portapapeles
+- [x] 7.1 Releer artboard MobilePlanilla; rehacer la vista < lg: tira de días, selector de cancha, lista desde cerca de la hora actual con "Ver desde las HH:MM", huecos pasados como "Sin uso", línea de ahora y botón flotante "Nuevo turno", y verificar a 390 px
+- [x] 7.2 Mostrar el detalle en `Sheet side="bottom"` en celular; releer artboard MobileCancelar y rediseñar el paso de cancelación (resumen del turno, resultado de la política en $ y motivo), y verificar cancelación en término y tardía desde el celular
+- [x] 7.3 Releer artboard MobileBuscar y rediseñar `availability-search-dialog.tsx` como "¿Hay cancha?" (día, deporte, desde; resultados con "Reservar"; vista previa del texto; "Copiar disponibilidad"), pantalla completa en celular, y verificar el caso sin resultados y la copia al portapapeles
+  - Verificado 2026-10-06 a 390 px (Playwright + base): tira de días, chips de cancha, lista desde una hora antes de ahora con "Ver desde las 08:00", huecos pasados "Sin uso", línea de ahora, botón flotante; hoja inferior con el detalle; cancelación en término (sin movimientos) y tardía (deuda $12.000) desde el celular; buscador con día/deporte/desde (pádel desde 21:00 → 1 lugar), vista previa y copia para WhatsApp, "Reservar" abre el alta precargada. Arreglos: el último hueco quedaba tapado por el botón flotante (espacio inferior); el buscador contaba como ocupados los turnos cancelados de otros días (ahora filtra `status=active`). Fuera de alcance del canvas MobileCancelar: "¿Quién cancela?" (cambio posterior).
 
 ## 8. Administración
 
