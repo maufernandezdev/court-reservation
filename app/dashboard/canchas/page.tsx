@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NewCourtDialog } from "@/components/courts/new-court-dialog";
 import { CourtCardActions } from "@/components/courts/court-card-actions";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default async function CanchasPage() {
   const { membership } = await getSessionContext();
@@ -46,15 +47,11 @@ export default async function CanchasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-bold">Canchas</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestioná las canchas, precios, horarios y señas de tu club
-          </p>
-        </div>
-        <NewCourtDialog triggerLabel="Nueva cancha" />
-      </div>
+      <PageHeader
+        title="Canchas"
+        description="Precio, duración del turno, horario y seña de cada cancha."
+        actions={<NewCourtDialog triggerLabel="Nueva cancha" />}
+      />
 
       {error && (
         <Alert variant="destructive">

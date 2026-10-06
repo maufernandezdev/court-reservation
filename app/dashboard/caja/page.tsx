@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { TRANSACTIONS } from "@/lib/mocks/data";
 import { DollarSign, TrendingUp, Receipt } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function CashPage() {
   const [date, setDate] = useState("2026-08-20");
@@ -44,22 +45,22 @@ export default function CashPage() {
   return (
     <AuthGuard>
       <div className="space-y-4">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Caja</h1>
-            <p className="text-muted-foreground">Resumen diario de ingresos.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="date">Fecha</Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-auto"
-            />
-          </div>
-        </div>
+        <PageHeader
+          title="Caja"
+          description="Resumen diario de ingresos."
+          actions={
+            <div className="flex items-center gap-2">
+              <Label htmlFor="date">Fecha</Label>
+              <Input
+                id="date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-auto"
+              />
+            </div>
+          }
+        />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card>

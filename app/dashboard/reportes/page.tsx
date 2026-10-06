@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PRODUCTS, TRANSACTIONS, COURTS, INITIAL_RESERVATIONS } from "@/lib/mocks/data";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { BarChart3, AlertTriangle, DollarSign, CalendarDays } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function ReportsPage() {
   const totalIncome = TRANSACTIONS.reduce((sum, t) => sum + t.amount, 0);
@@ -27,12 +28,10 @@ export default function ReportsPage() {
   return (
     <AuthGuard>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reportes</h1>
-          <p className="text-muted-foreground">
-            Resúmenes rápidos para compartir y alertas del club.
-          </p>
-        </div>
+        <PageHeader
+          title="Reportes"
+          description="Resúmenes rápidos para compartir y alertas del club."
+        />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card>

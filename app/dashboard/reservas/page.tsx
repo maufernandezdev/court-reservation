@@ -46,6 +46,7 @@ import {
   CalendarSearch,
   LandPlot,
 } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -247,13 +248,10 @@ export default function ReservationsPage() {
     <AuthGuard>
       <div className="space-y-4">
         <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-4 border-b bg-background px-4 py-4 sm:flex-row sm:items-center sm:justify-between lg:-mx-8 lg:px-8">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Reservas</h1>
-            <p className="text-muted-foreground">
-              Vista diaria. Tocá una franja libre para reservar o una ocupada
-              para ver el detalle.
-            </p>
-          </div>
+          <PageHeader
+            title="Planilla"
+            description="Tocá una franja libre para reservar o un turno para ver el detalle."
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setSearchOpen(true)}>

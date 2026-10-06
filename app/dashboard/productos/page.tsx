@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { PRODUCTS } from "@/lib/mocks/data";
 import { ScanBarcode } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function ProductsPage() {
   const [barcode, setBarcode] = useState("");
@@ -22,12 +23,10 @@ export default function ProductsPage() {
   return (
     <AuthGuard>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Productos / Kiosco</h1>
-          <p className="text-muted-foreground">
-            Stock de productos y simulador de lectura de código de barras.
-          </p>
-        </div>
+        <PageHeader
+          title="Productos"
+          description="Stock del kiosco y simulador de lectura de código de barras."
+        />
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative max-w-sm flex-1">

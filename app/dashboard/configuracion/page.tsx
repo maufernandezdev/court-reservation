@@ -28,6 +28,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { PageHeader } from "@/components/shell/page-header";
 
 type SettingsFormValues = {
   cancel_window_hours: number;
@@ -112,12 +113,10 @@ export default function ConfiguracionPage() {
   return (
     <AuthGuard>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Configuración</h1>
-          <p className="text-sm text-muted-foreground">
-            Políticas de cancelación y penalidades del club
-          </p>
-        </div>
+        <PageHeader
+          title="Políticas de cancelación"
+          description="Reglas claras para que nadie reserve “por las dudas”."
+        />
 
         <Card className="max-w-xl">
           <CardHeader>

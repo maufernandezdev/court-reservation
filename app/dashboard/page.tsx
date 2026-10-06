@@ -19,6 +19,7 @@ import { COURT_TYPE_LABELS } from "@/lib/courts";
 import { useReservations } from "@/hooks/use-reservations";
 import type { CourtTypeFilterValue } from "@/components/court-type-filter";
 import { LandPlot, RefreshCw, Users } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -93,12 +94,10 @@ export default function DashboardIndexPage() {
   return (
     <AuthGuard>
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Ocupación actual
-            </h1>
-            <p className="capitalize text-muted-foreground">
+        <PageHeader
+          title="Hoy en el club"
+          eyebrow={
+            <>
               {now.toLocaleDateString("es-AR", {
                 weekday: "long",
                 day: "numeric",
@@ -110,9 +109,9 @@ export default function DashboardIndexPage() {
                 minute: "2-digit",
               })}
               {slot ? ` · Franja ${slot} – ${slotEnd(slot)}` : ""}
-            </p>
-          </div>
-
+            </>
+          }
+          actions={
           <div className="flex items-center gap-2">
             <CourtTypeFilter
               value={courtTypeFilter}
@@ -123,7 +122,8 @@ export default function DashboardIndexPage() {
               Refrescar
             </Button>
           </div>
-        </div>
+          }
+        />
 
         {loadError && (
           <Alert variant="destructive">

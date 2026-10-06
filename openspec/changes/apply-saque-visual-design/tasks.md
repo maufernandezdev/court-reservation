@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fase 1 (base visual) terminada. Siguiente: fase 2 (shell del panel). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 (base visual) y 2 (shell del panel) terminadas. Siguiente: fase 3 (login, registro y verificación). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -18,11 +18,12 @@
 
 ## 2. Shell del panel
 
-- [ ] 2.1 Crear `components/shell/nav-config.ts` con grupos Operación/Club/Administración, rutas existentes, rótulos nuevos (Hoy, Planilla, Equipo, Políticas), íconos lucide y `adminOnly` (incluye Actividad), y verificar que cada `href` apunta a una ruta existente o a `/dashboard/actividad`
-- [ ] 2.2 Crear `components/shell/app-sidebar.tsx` (oscuro, logo, bloque del club con rol, grupos, ítem activo pelota con `aria-current="page"`, usuario + "Cerrar sesión") y verificar a 1440 px que el ítem activo cambia al navegar
-- [ ] 2.3 Crear `components/shell/mobile-tab-bar.tsx` (Hoy, Planilla, Buscar → `/dashboard/reservas?buscar=1`, Caja, Más → `Sheet` con el resto de ítems permitidos, club y cerrar sesión; objetivos ≥ 44 px) y verificar a 390 px que la barra no tapa contenido
-- [ ] 2.4 Reescribir `app/dashboard/layout.tsx` para componer sidebar/tab bar según ancho manteniendo `AuthGuard` y la lógica de rol, y verificar con un usuario operador que no ve ítems solo-admin
-- [ ] 2.5 Crear `components/shell/page-header.tsx` y aplicarlo a todas las páginas del panel (incluidas Socios, Productos, Caja, Reportes, Notificaciones, Suscripción), y verificar que todos los títulos usan la fuente display
+- [x] 2.1 Crear `components/shell/nav-config.ts` con grupos Operación/Club/Administración, rutas existentes, rótulos nuevos (Hoy, Planilla, Equipo, Políticas), íconos lucide y `adminOnly` (incluye Actividad), y verificar que cada `href` apunta a una ruta existente o a `/dashboard/actividad`
+- [x] 2.2 Crear `components/shell/app-sidebar.tsx` (oscuro, logo, bloque del club con rol, grupos, ítem activo pelota con `aria-current="page"`, usuario + "Cerrar sesión") y verificar a 1440 px que el ítem activo cambia al navegar
+- [x] 2.3 Crear `components/shell/mobile-tab-bar.tsx` (Hoy, Planilla, Buscar → `/dashboard/reservas?buscar=1`, Caja, Más → `Sheet` con el resto de ítems permitidos, club y cerrar sesión; objetivos ≥ 44 px) y verificar a 390 px que la barra no tapa contenido
+- [x] 2.4 Reescribir `app/dashboard/layout.tsx` para componer sidebar/tab bar según ancho manteniendo `AuthGuard` y la lógica de rol, y verificar con un usuario operador que no ve ítems solo-admin
+- [x] 2.5 Crear `components/shell/page-header.tsx` y aplicarlo a todas las páginas del panel (incluidas Socios, Productos, Caja, Reportes, Notificaciones, Suscripción), y verificar que todos los títulos usan la fuente display
+  - Verificado 2026-10-06: admin ve los 3 grupos; operador solo Hoy/Planilla (sin Caja en la barra inferior). "Buscar" de la barra apunta a `?buscar=1`, que se conecta en 6.4. Geist Mono confirmada en el eyebrow de Hoy.
 
 ## 3. Acceso: login, registro y verificación
 

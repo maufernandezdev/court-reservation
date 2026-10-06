@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ANNOUNCEMENTS } from "@/lib/mocks/data";
 import { CloudRain, Megaphone, AlertTriangle, Calendar } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 
 const TEMPLATES = [
   {
@@ -77,12 +78,10 @@ export default function NotificationsPage() {
   return (
     <AuthGuard>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notificaciones</h1>
-          <p className="text-muted-foreground">
-            Enviá avisos a socios y guardá un historial de comunicaciones.
-          </p>
-        </div>
+        <PageHeader
+          title="Notificaciones"
+          description="Enviá avisos a socios y guardá un historial de comunicaciones."
+        />
 
         <Card>
           <CardHeader>

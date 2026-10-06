@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { MEMBERS } from "@/lib/mocks/data";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function MembersPage() {
   const [search, setSearch] = useState("");
@@ -27,12 +28,7 @@ export default function MembersPage() {
   return (
     <AuthGuard>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Socios</h1>
-          <p className="text-muted-foreground">
-            Listado de socios del club.
-          </p>
-        </div>
+        <PageHeader title="Socios" description="Listado de socios del club." />
 
         <div className="flex items-center gap-2">
           <Input

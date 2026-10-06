@@ -56,6 +56,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function MiembrosPage() {
   const { membership, isLoading: isLoadingMembership } = useMembership();
@@ -163,18 +164,16 @@ export default function MiembrosPage() {
   return (
     <AuthGuard>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-bold">Miembros</h1>
-            <p className="text-sm text-muted-foreground">
-              Administradores, operadores y profesores que gestionan el club
-            </p>
-          </div>
-          <Button onClick={openInvite}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Agregar miembro
-          </Button>
-        </div>
+        <PageHeader
+          title="Equipo"
+          description="Quién entra al panel y qué puede hacer cada uno."
+          actions={
+            <Button onClick={openInvite}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Agregar miembro
+            </Button>
+          }
+        />
 
         {members.length === 0 ? (
           <Alert>

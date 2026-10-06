@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { SUBSCRIPTION_PLANS } from "@/lib/mocks/data";
 import { Check } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 
 const formatPrice = (n: number) => `$${n.toLocaleString("es-AR")}`;
 
@@ -23,12 +24,10 @@ export default function SubscriptionPage() {
   return (
     <AuthGuard>
       <div className="space-y-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Suscripción del Club</h1>
-          <p className="text-muted-foreground">
-            Elegí el plan que mejor se adapte a tu club.
-          </p>
-        </div>
+        <PageHeader
+          title="Suscripción"
+          description="Elegí el plan que mejor se adapte a tu club."
+        />
 
         <div className="flex justify-center">
           <div className="inline-flex rounded-lg border p-1">
