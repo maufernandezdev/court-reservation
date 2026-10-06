@@ -13,6 +13,7 @@ import { formatMoney } from "@/lib/pricing";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { COURT_TYPE_LABELS } from "@/lib/courts";
 import type { ReservationDetail } from "@/hooks/use-reservation-detail";
+import { describeAuditEntry } from "@/lib/audit";
 import { RESERVATION_TONE_LABELS, toneClasses, toneFor } from "@/lib/reservation-tone";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -31,14 +32,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-
-const AUDIT_LABELS: Record<string, string> = {
-  "reservation.created": "creó el turno",
-  "reservation.updated": "modificó el turno",
-  "reservation.cancelled": "canceló el turno",
-  "payment.registered": "registró un cobro",
-  "credit.applied": "aplicó saldo a favor",
-};
 
 function whatsappHref(phone: string): string | null {
   const digits = phone.replace(/\D/g, "");
@@ -332,9 +325,8 @@ export function ReservationDetailPanel({
                       <strong className="font-semibold">
                         {detail.actorName(entry.actor_id)}
                       </strong>{" "}
-                      {AUDIT_LABELS[entry.action] ?? entry.action}
-                      {typeof entry.payload?.amount === "number" &&
-                        ` de ${formatMoney(entry.payload.amount)}`}
+                      {/* Sin contexto del turno: ya se está viendo ese turno. */}
+                      {describeAuditEntry({ ...entry, payload: { ...entry.payload, customer_name: undefined, date: undefined, time: undefined } })}
                     </span>
                   </li>
                 ))}

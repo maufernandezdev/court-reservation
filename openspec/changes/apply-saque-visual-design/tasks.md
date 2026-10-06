@@ -1,6 +1,6 @@
 # Tasks — apply-saque-visual-design
 
-> **Estado (2026-10-06):** fases 1 a 8 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total, planilla en celular + buscador, Canchas/Equipo/Políticas). Siguiente: fase 9 (página de Actividad). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
+> **Estado (2026-10-06):** fases 1 a 9 terminadas (base visual, shell, acceso, Hoy, refactor del diálogo, planilla de escritorio + arreglo del cobro total, planilla en celular + buscador, Canchas/Equipo/Políticas, Actividad). Siguiente: fase 10 (cierre: recorrida completa, documentación y pendientes). Club de prueba creado en Supabase (admin `saque.admin.prueba@example.com` y operador `saque.operador.prueba@example.com`, contraseñas en `.env.local` como `TEST_*`, que no se versiona) para las recorridas con Playwright. Referencia visual: canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (releer el artboard de cada fase antes de empezarla).
 >
 > **Cómo se trabaja:** una fase por vez. Al cerrar cada fase: `pnpm exec tsc --noEmit` + `pnpm build` sin errores, recorrida visual a 1440 px y 390 px con Playwright CLI, actualizar este estado y commit propio de la fase.
 
@@ -77,8 +77,9 @@
 
 ## 9. Actividad (página nueva)
 
-- [ ] 9.1 Agregar `describeAuditEntry` en `lib/audit.ts` (frase en español por `AuditAction`, con respaldo genérico) y verificar con entradas reales de cada tipo
-- [ ] 9.2 Crear `app/dashboard/actividad/page.tsx` como Server Component (chequeo admin en servidor, lectura de `audit_log` + nombres + reservas/canchas referenciadas, agrupado por día, cursor "Cargar más") con filtros por persona y tipo en un client component sobre `searchParams`, y verificar como admin (ve el log) y como operador (ve el aviso)
+- [x] 9.1 Agregar `describeAuditEntry` en `lib/audit.ts` (frase en español por `AuditAction`, con respaldo genérico) y verificar con entradas reales de cada tipo
+- [x] 9.2 Crear `app/dashboard/actividad/page.tsx` como Server Component (chequeo admin en servidor, lectura de `audit_log` + nombres + reservas/canchas referenciadas, agrupado por día, cursor "Cargar más") con filtros por persona y tipo en un client component sobre `searchParams`, y verificar como admin (ve el log) y como operador (ve el aviso)
+  - Verificado 2026-10-06: admin ve 39 entradas agrupadas por día con frases en español (cobros, cancelaciones con retención/deuda, cambios de rol con nombre, políticas, canchas); filtro "Cobró" → solo cobros; parámetros inválidos se ignoran (Zod); cursor `antes` devuelve las 29 posteriores a la 10ª + "Volver a lo más reciente"; operador ve el aviso. El historial del detalle del turno también usa `describeAuditEntry`. Nota: las entradas de turnos borrados a mano en la base (pruebas) no muestran nombre; con datos reales los turnos nunca se borran (soft delete).
 
 ## 10. Cierre
 
