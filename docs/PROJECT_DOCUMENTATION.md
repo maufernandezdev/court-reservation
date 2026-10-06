@@ -73,3 +73,9 @@ Lugar de notas del proyecto: decisiones, pendientes y configuraciones que no se 
 - **"En curso" (home `/dashboard`):** el bloque de 1h que contiene la hora local del navegador para la fecha de hoy, calculado como `hora actual` truncada a hora completa. Si son las 18:35, la franja en curso es "18:00" (reserva 18:00–19:00). Fuera de la grilla (antes de las 09:00 o después de las 22:59) no hay franja en curso y toda cancha se muestra como disponible.
 - **Fechas:** se manejan como strings `YYYY-MM-DD` (hora local del navegador), no timestamps. Aceptable para un club en un único país; si se opera en varias zonas horarias habría que revisarlo.
 - **RLS:** el aislamiento es por club: `is_member(user_id)` permite ver/tocar solo filas de clubes donde el usuario es miembro. El trigger `reservations_check_court_owner` sigue rechazando insert/update que apunte a una cancha que no pertenezca al mismo owner. Las reglas de negocio por rol (configuración, cancelaciones) se validan en Server Actions.
+
+## Herramientas
+
+- **Playwright CLI global (2026-10-05):** v1.63.0 en `~/.nvm/versions/node/v24.20.0/bin/playwright`. Es la herramienta preferida para verificar la UI del proyecto (screenshots, navegación, tests E2E). Uso típico desde la shell: `playwright screenshot <url> <archivo.png>`, `playwright open <url>`, `playwright test`.
+- **No hay MCP de Playwright configurado** en este proyecto (los únicos MCP configurados son Figma). La carpeta `.playwright-mcp/` del repo son artefactos que dejó el skill `playwright-cli` al usarse el 2026-10-02 (snapshots de página `.yml` y logs de consola); está en `.gitignore` y se puede borrar sin problema.
+- Para levantar la app y recorrerla (verificación manual de flujos), usar el skill `run` de Claude Code o `pnpm dev` + Playwright CLI.
