@@ -40,6 +40,7 @@ function VerificationAccountContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("loading");
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
 
   // Intercambia el ?code= de la URL por una sesión (valida el email)
@@ -47,12 +48,14 @@ function VerificationAccountContent() {
     const code = searchParams.get("code");
     if (!code) {
       setStatus("error");
+      setErrorDetail("La URL no contiene el código de verificación.");
       return;
     }
 
     const supabase = createClient();
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
       setStatus(error ? "error" : "success");
+      setErrorDetail(error?.message ?? null);
     });
   }, [searchParams]);
 
@@ -80,6 +83,11 @@ function VerificationAccountContent() {
               : "El link es inválido o expiró. Pedí un nuevo correo de verificación intentando iniciar sesión."
         }
       />
+      {status === "error" && errorDetail && (
+        <p className="rounded-lg bg-muted px-4 py-3 text-center text-sm text-muted-foreground">
+          Detalle: {errorDetail}
+        </p>
+      )}
       {status !== "loading" && (
         <Button
           size="lg"
