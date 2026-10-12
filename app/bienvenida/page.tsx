@@ -41,10 +41,14 @@ export default async function BienvenidaPage({
     redirect("/login");
   }
 
+  // La bienvenida es solo para quien todavía no tiene club (crear otro club no está disponible).
+  if (memberships.length > 0) {
+    redirect("/dashboard");
+  }
+
   const { opcion } = await searchParams;
   const { data } = await supabase.rpc("my_pending_invitations");
   const invitations = (data ?? []) as PendingInvitation[];
-  const hasClub = memberships.length > 0;
 
   if (opcion === "invitacion") {
     return (
@@ -98,12 +102,8 @@ export default async function BienvenidaPage({
       <div className="flex flex-col gap-6">
         <AuthHeading
           eyebrow="PASO 2 DE 3"
-          title={hasClub ? "Sumá otro club" : "¿Cómo vas a usar saque?"}
-          description={
-            hasClub
-              ? "Podés crear un club nuevo o sumarte a otro con una invitación."
-              : "Tu cuenta ya está lista. Ahora elegí si das de alta tu club o si te suman a uno."
-          }
+          title="¿Cómo vas a usar saque?"
+          description="Tu cuenta ya está lista. Ahora elegí si das de alta tu club o si te suman a uno."
         />
 
         <nav aria-label="Opciones" className="flex flex-col gap-3">
@@ -146,16 +146,7 @@ export default async function BienvenidaPage({
         </nav>
 
         <div className="flex flex-wrap gap-3">
-          {hasClub ? (
-            <Button asChild variant="outline">
-              <Link href="/dashboard">
-                <ArrowLeft />
-                Volver al panel
-              </Link>
-            </Button>
-          ) : (
-            <SignOutButton />
-          )}
+          <SignOutButton />
         </div>
       </div>
     </AuthLayout>

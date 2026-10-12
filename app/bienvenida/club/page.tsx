@@ -8,10 +8,15 @@ export const dynamic = "force-dynamic";
 
 /** Alta del club: paso 2 de 3 (artboard AltaClub). */
 export default async function AltaClubPage() {
-  const { user } = await getSessionContext();
+  const { user, memberships } = await getSessionContext();
 
   if (!user) {
     redirect("/login");
+  }
+
+  // Por ahora solo se da de alta un club desde la bienvenida (sin club todavía).
+  if (memberships.length > 0) {
+    redirect("/dashboard");
   }
 
   return (

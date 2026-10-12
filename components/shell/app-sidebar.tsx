@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronsUpDown, LogOut, Plus } from "lucide-react";
+import { ChevronsUpDown, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CLUB_ROLE_LABELS } from "@/lib/roles";
@@ -14,11 +14,9 @@ import { switchClubAction } from "@/app/dashboard/actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -37,14 +35,39 @@ type AppSidebarProps = {
   onLogout: () => void;
 };
 
+const clubBlockClass =
+  "flex w-full items-center gap-2.5 rounded-xl border border-sidebar-foreground/16 bg-sidebar-foreground/4 p-2.5 text-left";
+
+function ClubBlockContent({ identity, label }: { identity: ShellIdentity; label?: string }) {
+  return (
+    <>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-foreground font-display text-[11px] font-extrabold text-sidebar font-stretch-[125%]">
+        {identity.clubInitials}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <strong className="truncate text-sm">{label ?? identity.clubName}</strong>
+        <span className="text-[13px] text-sidebar-label">{identity.roleLabel}</span>
+      </span>
+    </>
+  );
+}
+
 /**
- * Club activo. Abre un menú con los otros clubes de la persona (solo si tiene
- * más de uno) y "Crear otro club". Cambiar de club recarga todo el panel.
+ * Club activo. Si la persona pertenece a más de un club (la invitaron a varios),
+ * abre un menú para cambiar de club; cambiar recarga todo el panel.
+ * Crear otro club no está disponible por ahora (posible función de planes superiores).
  */
 export function ClubBlock({ identity }: { identity: ShellIdentity }) {
   const { membership, memberships } = useActiveClub();
   const [switchingTo, setSwitchingTo] = useState<string | null>(null);
-  const hasOtherClubs = memberships.length > 1;
+
+  if (memberships.length <= 1) {
+    return (
+      <div className={clubBlockClass}>
+        <ClubBlockContent identity={identity} />
+      </div>
+    );
+  }
 
   const switchTo = async (clubId: string) => {
     if (clubId === membership.club_id || switchingTo) return;
@@ -64,51 +87,36 @@ export function ClubBlock({ identity }: { identity: ShellIdentity }) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={`${identity.clubName}, ${identity.roleLabel}. ${hasOtherClubs ? "Cambiar de club" : "Opciones del club"}`}
-          className="flex w-full items-center gap-2.5 rounded-xl border border-sidebar-foreground/16 bg-sidebar-foreground/4 p-2.5 text-left transition-colors hover:bg-sidebar-foreground/8 focus-visible:outline-2 focus-visible:outline-ball"
+          aria-label={`${identity.clubName}, ${identity.roleLabel}. Cambiar de club`}
+          className={cn(
+            clubBlockClass,
+            "transition-colors hover:bg-sidebar-foreground/8 focus-visible:outline-2 focus-visible:outline-ball"
+          )}
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-foreground font-display text-[11px] font-extrabold text-sidebar font-stretch-[125%]">
-            {identity.clubInitials}
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col">
-            <strong className="truncate text-sm">
-              {switchingTo ? "Cambiando de club…" : identity.clubName}
-            </strong>
-            <span className="text-[13px] text-sidebar-label">{identity.roleLabel}</span>
-          </span>
+          <ClubBlockContent
+            identity={identity}
+            label={switchingTo ? "Cambiando de club…" : undefined}
+          />
           <ChevronsUpDown className="size-4 shrink-0 text-sidebar-label" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-60">
-        {hasOtherClubs && (
-          <>
-            <DropdownMenuLabel>Tus clubes</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={membership.club_id} onValueChange={switchTo}>
-              {memberships.map((m) => (
-                <DropdownMenuRadioItem
-                  key={m.club_id}
-                  value={m.club_id}
-                  disabled={switchingTo !== null}
-                  className="py-2"
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium">{m.club.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {CLUB_ROLE_LABELS[m.role]}
-                    </span>
-                  </span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-          </>
-        )}
-        <DropdownMenuItem asChild>
-          <Link href="/bienvenida/club">
-            <Plus />
-            Crear otro club
-          </Link>
-        </DropdownMenuItem>
+        <DropdownMenuLabel>Tus clubes</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={membership.club_id} onValueChange={switchTo}>
+          {memberships.map((m) => (
+            <DropdownMenuRadioItem
+              key={m.club_id}
+              value={m.club_id}
+              disabled={switchingTo !== null}
+              className="py-2"
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium">{m.club.name}</span>
+                <span className="text-xs text-muted-foreground">{CLUB_ROLE_LABELS[m.role]}</span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -23,7 +23,7 @@ El menú lateral y el menú del celular SHALL mostrar el nombre y las iniciales 
 - **THEN** el menú muestra "Club Norte" y el rol Administrador
 
 ### Requirement: Cambio de club
-Si la persona es miembro de más de un club, el bloque del club en el menú SHALL listar sus clubes con el rol en cada uno y permitir cambiar el club activo. Al cambiar, el panel SHALL recargar todos los datos con el club elegido. Si es miembro de un solo club, el bloque NO SHALL mostrar el selector. El bloque SHALL ofrecer además "Crear otro club".
+Si la persona es miembro de más de un club, el bloque del club en el menú SHALL listar sus clubes con el rol en cada uno y permitir cambiar el club activo. Al cambiar, el panel SHALL recargar todos los datos con el club elegido. Si es miembro de un solo club, el bloque NO SHALL mostrar el selector. El menú NO SHALL ofrecer crear otro club (decisión del 2026-10-12: queda para más adelante, posiblemente en planes superiores).
 
 #### Scenario: Cambiar de club
 - **WHEN** una persona miembro de "Club Norte" (admin) y "Club Sur" (operador) elige "Club Sur"

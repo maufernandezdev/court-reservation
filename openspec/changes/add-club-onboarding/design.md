@@ -67,7 +67,7 @@ Cada `.from(...)` del cliente y de las Server Actions agrega `.eq("club_id", clu
 
 ### 10. Rutas y guardas
 - `app/dashboard/layout.tsx`: sin sesión → `/login`; sin membresías → `/bienvenida`.
-- `/bienvenida` (requiere sesión): elección "Crear mi club" / "Me van a invitar". Con membresías, igual se puede abrir desde "Crear otro club".
+- `/bienvenida` (requiere sesión): elección "Crear mi club" / "Me van a invitar". Solo para personas sin club: con membresías redirige al panel (2026-10-12: se sacó "Crear otro club"; el control es de la app, la RPC `create_club` no lo restringe).
 - `/bienvenida/club`: formulario del artboard `AltaClub` (RHF + Zod), con la vista previa de canchas. Al terminar → `/dashboard/canchas?alta=1`, que muestra un aviso "Paso 3 de 3: definí precio, duración y seña".
 - `/invitacion/[token]`: pública. Server Component que llama a `get_invitation` y elige el estado (válida con/sin cuenta, sesión con otra cuenta, sesión con el mismo correo, vencida, usada, cancelada, inválida); el formulario es un Client Component con RHF + Zod y el toggle de contraseña.
 - Registro y verificación: después de verificar el correo se va a `/dashboard`, que redirige a `/bienvenida`. `proxy.ts` no cambia (solo refresca la sesión).

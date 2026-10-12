@@ -23,9 +23,14 @@ export async function createClubAction(input: ClubOnboardingInput): Promise<Acti
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
   }
 
-  const { supabase, user } = await getSessionContext();
+  const { supabase, user, memberships } = await getSessionContext();
   if (!user) {
     return { success: false, error: "Tu sesión venció. Ingresá de nuevo." };
+  }
+
+  // Crear otro club no está disponible por ahora.
+  if (memberships.length > 0) {
+    return { success: false, error: "Ya pertenecés a un club." };
   }
 
   const { data: clubId, error } = await supabase.rpc("create_club", {

@@ -12,7 +12,7 @@ El sistema SHALL crear solo la cuenta cuando una persona se registra. NO SHALL c
 - **THEN** su cuenta existe, no es miembro de ningún club y no tiene canchas ni reservas propias
 
 ### Requirement: Elección después del registro
-Una persona autenticada sin membresía en ningún club SHALL ver la pantalla de bienvenida con dos opciones: "Crear mi club" y "Me van a invitar". El sistema NO SHALL mostrarle el panel del club mientras no tenga membresía.
+Una persona autenticada sin membresía en ningún club SHALL ver la pantalla de bienvenida con dos opciones: "Crear mi club" y "Me van a invitar". El sistema NO SHALL mostrarle el panel del club mientras no tenga membresía. Quien ya pertenece a un club NO SHALL poder crear otro: la bienvenida y el alta lo devuelven al panel.
 
 #### Scenario: Entrar sin club
 - **WHEN** una persona sin membresías inicia sesión o intenta abrir cualquier pantalla del panel
