@@ -67,7 +67,18 @@ export async function joinWithInvitationAction(
   }
 
   if (!invitation.has_account) {
-    const admin = createAdminClient();
+    let admin: ReturnType<typeof createAdminClient>;
+    try {
+      admin = createAdminClient();
+    } catch (err) {
+      // Falta SUPABASE_SECRET_KEY: no se pueden crear cuentas desde una invitación.
+      console.error(err);
+      return {
+        success: false,
+        error:
+          "No pudimos crear tu cuenta por un problema de configuración del sistema. Avisale al administrador del club.",
+      };
+    }
     const { error: createError } = await admin.auth.admin.createUser({
       email: invitation.email,
       password,
