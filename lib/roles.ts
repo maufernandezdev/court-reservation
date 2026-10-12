@@ -7,15 +7,38 @@ export const CLUB_ROLE_LABELS: Record<ClubRole, string> = {
   profesor: "Profesor",
 };
 
+export type Club = {
+  id: string;
+  name: string;
+  city: string;
+};
+
 export type Membership = {
   id: string;
-  owner_id: string;
+  club_id: string;
   user_id: string;
   role: ClubRole;
   full_name: string;
   email: string;
   created_at: string;
+  club: Club;
 };
+
+/** Cookie con el id del club activo (no es secreta: el RLS sigue protegiendo los datos). */
+export const ACTIVE_CLUB_COOKIE = "club_activo";
+
+/** Iniciales para el bloque del club en el menú ("Club Deportivo Central" → "CDC"). */
+export function clubInitials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word[0])
+      .join("")
+      .slice(0, 3)
+      .toUpperCase() || "?"
+  );
+}
 
 const ROLE_RANK: Record<ClubRole, number> = {
   admin: 3,

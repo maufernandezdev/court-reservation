@@ -3,18 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Reservation } from "@/lib/reservations";
+import { useMembership } from "@/hooks/use-membership";
 
 export function useReservations(date: string) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const supabase = createClient();
+  const clubId = useMembership().membership.club_id;
 
   const load = useCallback(async () => {
     setIsLoading(true);
     const { data, error } = await supabase
       .from("reservations")
       .select("*")
+      .eq("club_id", clubId)
       .eq("date", date)
       .order("time", { ascending: true });
 
@@ -25,7 +28,7 @@ export function useReservations(date: string) {
       setReservations((data ?? []) as Reservation[]);
     }
     setIsLoading(false);
-  }, [supabase, date]);
+  }, [supabase, clubId, date]);
 
   useEffect(() => {
     load();

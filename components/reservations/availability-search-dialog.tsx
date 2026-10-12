@@ -14,6 +14,7 @@ import type { Reservation } from "@/lib/reservations";
 import { formatMoney, getSlotPrice } from "@/lib/pricing";
 import { createClient } from "@/lib/supabase/client";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
+import { useMembership } from "@/hooks/use-membership";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,7 @@ export function AvailabilitySearchDialog({
   onSelect,
 }: AvailabilitySearchDialogProps) {
   const supabase = createClient();
+  const clubId = useMembership().membership.club_id;
   const now = useNow();
   const todayKey = dateKey(now);
   const tomorrowKey = addDaysKey(now, 1);
@@ -88,6 +90,7 @@ export function AvailabilitySearchDialog({
     supabase
       .from("reservations")
       .select("*")
+      .eq("club_id", clubId)
       .eq("date", date)
       .eq("status", "active")
       .order("time", { ascending: true })
@@ -101,7 +104,7 @@ export function AvailabilitySearchDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, date, defaultDate, supabase]);
+  }, [open, date, defaultDate, supabase, clubId]);
 
   const reservationsForSearch =
     date === defaultDate ? activeReservations : (otherDayReservations ?? []);

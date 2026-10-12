@@ -1,12 +1,11 @@
 "use client";
 
 import { useAuth } from "@/hooks/use-auth";
-import { useMembership } from "@/hooks/use-membership";
 import AuthGuard from "@/components/auth-guard";
 import { AppSidebar, type ShellIdentity } from "@/components/shell/app-sidebar";
 import { MobileTabBar } from "@/components/shell/mobile-tab-bar";
-import { CLUB_NAME } from "@/lib/mocks/data";
-import { CLUB_ROLE_LABELS } from "@/lib/roles";
+import { ActiveClubProvider } from "@/components/shell/active-club-provider";
+import { CLUB_ROLE_LABELS, clubInitials, type Membership } from "@/lib/roles";
 
 function initialsOf(text: string): string {
   const words = text.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
@@ -15,25 +14,22 @@ function initialsOf(text: string): string {
   return letters.toUpperCase() || "??";
 }
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+type DashboardShellProps = {
+  membership: Membership;
+  memberships: Membership[];
+  children: React.ReactNode;
+};
+
+export function DashboardShell({ membership, memberships, children }: DashboardShellProps) {
   const { user, logout } = useAuth();
-  const { membership, isLoading: isLoadingMembership } = useMembership();
-  const email = user?.email ?? "";
-  const userName = membership?.full_name?.trim() || email || "Usuario";
-  const isAdmin = membership?.role === "admin";
+  const email = user?.email ?? membership.email;
+  const userName = membership.full_name.trim() || email || "Usuario";
+  const isAdmin = membership.role === "admin";
 
   const identity: ShellIdentity = {
-    clubName: CLUB_NAME,
-    clubInitials: CLUB_NAME.split(/\s+/)
-      .map((word) => word[0])
-      .join("")
-      .slice(0, 3)
-      .toUpperCase(),
-    roleLabel: membership
-      ? CLUB_ROLE_LABELS[membership.role]
-      : isLoadingMembership
-        ? "…"
-        : "Usuario",
+    clubName: membership.club.name,
+    clubInitials: clubInitials(membership.club.name),
+    roleLabel: CLUB_ROLE_LABELS[membership.role],
     userName,
     userEmail: email,
     userInitials: initialsOf(userName),
@@ -41,13 +37,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthGuard>
-      <div className="flex min-h-screen bg-background">
-        <AppSidebar identity={identity} isAdmin={isAdmin} onLogout={logout} />
-        <main className="min-w-0 flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">
-          {children}
-        </main>
-        <MobileTabBar identity={identity} isAdmin={isAdmin} onLogout={logout} />
-      </div>
+      <ActiveClubProvider membership={membership} memberships={memberships}>
+        <div className="flex min-h-screen bg-background">
+          <AppSidebar identity={identity} isAdmin={isAdmin} onLogout={logout} />
+          <main className="min-w-0 flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">
+            {children}
+          </main>
+          <MobileTabBar identity={identity} isAdmin={isAdmin} onLogout={logout} />
+        </div>
+      </ActiveClubProvider>
     </AuthGuard>
   );
 }

@@ -60,7 +60,7 @@ export default function ConfiguracionPage() {
       const { data } = await supabase
         .from("settings")
         .select("*")
-        .eq("owner_id", membership!.owner_id)
+        .eq("club_id", membership!.club_id)
         .maybeSingle();
 
       if (data) {

@@ -15,7 +15,7 @@ export const memberRoleSchema = z.object({
 
 export type MemberWithEmail = {
   id: string;
-  owner_id: string;
+  club_id: string;
   user_id: string;
   role: ClubRole;
   full_name: string;

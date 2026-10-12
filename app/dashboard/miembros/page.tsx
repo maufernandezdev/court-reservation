@@ -87,7 +87,7 @@ export default function MiembrosPage() {
     const { data } = await supabase
       .from("memberships")
       .select("*")
-      .eq("owner_id", membership.owner_id)
+      .eq("club_id", membership.club_id)
       .order("created_at", { ascending: true });
     setMembers((data ?? []) as MemberWithEmail[]);
     setIsLoadingMembers(false);

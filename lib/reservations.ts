@@ -26,7 +26,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
 
 export type Payment = {
   id: string;
-  owner_id: string;
+  club_id: string;
   reservation_id: string;
   kind: PaymentKind;
   amount: number;
@@ -39,7 +39,7 @@ export type Payment = {
 
 export type AuditEntry = {
   id: number;
-  owner_id: string;
+  club_id: string;
   actor_id: string | null;
   entity: string;
   entity_id: string | null;
@@ -50,7 +50,7 @@ export type AuditEntry = {
 
 export type Reservation = {
   id: string;
-  user_id: string;
+  club_id: string;
   court_id: string;
   date: string; // YYYY-MM-DD
   time: string; // "HH:MM", inicio del turno
@@ -96,7 +96,7 @@ export const registerPaymentSchema = z.object({
 });
 
 export type ClubSettings = {
-  owner_id: string;
+  club_id: string;
   cancel_window_hours: number;
   late_penalty_percent: number;
   updated_at: string;

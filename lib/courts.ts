@@ -71,7 +71,7 @@ export type CourtInput = z.infer<typeof courtSchema>;
 
 export type Court = {
   id: string;
-  user_id: string;
+  club_id: string;
   name: string;
   type: CourtType;
   active: boolean;

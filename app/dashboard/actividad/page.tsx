@@ -88,7 +88,7 @@ export default async function ActividadPage({
   let query = supabase
     .from("audit_log")
     .select("*")
-    .eq("owner_id", membership.owner_id)
+    .eq("club_id", membership.club_id)
     .order("created_at", { ascending: false })
     .limit(PAGE_SIZE + 1);
   if (filters.persona) query = query.eq("actor_id", filters.persona);
@@ -101,8 +101,8 @@ export default async function ActividadPage({
       supabase
         .from("memberships")
         .select("id, user_id, full_name, email, role")
-        .eq("owner_id", membership.owner_id),
-      supabase.from("courts").select("id, name").eq("user_id", membership.owner_id),
+        .eq("club_id", membership.club_id),
+      supabase.from("courts").select("id, name").eq("club_id", membership.club_id),
     ]);
 
   const rows = (auditData ?? []) as AuditEntry[];
@@ -131,6 +131,7 @@ export default async function ActividadPage({
     ? await supabase
         .from("reservations")
         .select("id, customer_name, date, time, court_id")
+        .eq("club_id", membership.club_id)
         .in("id", reservationIds)
     : { data: [] };
   const reservationById = new Map(

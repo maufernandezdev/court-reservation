@@ -40,24 +40,28 @@ function failure(error: unknown, fallback: string): ActionResult {
 
 async function fetchCourt(
   supabase: SupabaseClient,
+  clubId: string,
   courtId: string
 ): Promise<Court | null> {
   const { data } = await supabase
     .from("courts")
     .select("*")
     .eq("id", courtId)
+    .eq("club_id", clubId)
     .maybeSingle();
   return (data as Court | null) ?? null;
 }
 
 async function fetchReservation(
   supabase: SupabaseClient,
+  clubId: string,
   id: string
 ): Promise<Reservation | null> {
   const { data } = await supabase
     .from("reservations")
     .select("*")
     .eq("id", id)
+    .eq("club_id", clubId)
     .maybeSingle();
   return (data as Reservation | null) ?? null;
 }
@@ -65,6 +69,7 @@ async function fetchReservation(
 /** Rechaza si ya existe una reserva activa que se solape con el turno. */
 async function assertNoOverlap(
   supabase: SupabaseClient,
+  clubId: string,
   courtId: string,
   date: string,
   time: string,
@@ -74,6 +79,7 @@ async function assertNoOverlap(
   const { data } = await supabase
     .from("reservations")
     .select("id, time, duration_minutes")
+    .eq("club_id", clubId)
     .eq("court_id", courtId)
     .eq("date", date)
     .eq("status", "active");
@@ -97,11 +103,13 @@ async function assertNoOverlap(
 
 async function fetchPayments(
   supabase: SupabaseClient,
+  clubId: string,
   reservationId: string
 ): Promise<Payment[]> {
   const { data } = await supabase
     .from("payments")
     .select("*")
+    .eq("club_id", clubId)
     .eq("reservation_id", reservationId)
     .order("created_at", { ascending: true });
   return (data ?? []) as Payment[];
@@ -116,12 +124,12 @@ function paidAmount(payments: Payment[]): number {
 /** Ajusta el saldo a favor de un cliente vía RPC atómica (delta +/-). */
 async function adjustCredit(
   supabase: SupabaseClient,
-  ownerId: string,
+  clubId: string,
   phone: string,
   delta: number
 ): Promise<void> {
   const { error } = await supabase.rpc("adjust_credit_balance", {
-    p_owner_id: ownerId,
+    p_club_id: clubId,
     p_phone: phone.trim(),
     p_delta: delta,
   });
@@ -145,9 +153,10 @@ export async function createReservationAction(
 
   try {
     const ctx: SessionContext = await requireRole("profesor");
-    const { supabase, user } = ctx;
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
 
-    const court = await fetchCourt(supabase, parsed.data.court_id);
+    const court = await fetchCourt(supabase, clubId, parsed.data.court_id);
     if (!court || !court.active) {
       return { success: false, error: "La cancha seleccionada no está disponible." };
     }
@@ -162,18 +171,17 @@ export async function createReservationAction(
 
     await assertNoOverlap(
       supabase,
+      clubId,
       court.id,
       parsed.data.date,
       parsed.data.time,
       court.slot_duration
     );
 
-    const ownerId = court.user_id;
-
     const { data, error } = await supabase
       .from("reservations")
       .insert({
-        user_id: ownerId,
+        club_id: clubId,
         court_id: court.id,
         date: parsed.data.date,
         time: parsed.data.time,
@@ -194,7 +202,7 @@ export async function createReservationAction(
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "reservation",
       entityId: data.id,
@@ -230,9 +238,10 @@ export async function updateReservationAction(
 
   try {
     const ctx: SessionContext = await requireRole("profesor");
-    const { supabase, user } = ctx;
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
 
-    const existing = await fetchReservation(supabase, id);
+    const existing = await fetchReservation(supabase, clubId, id);
     if (!existing) {
       return { success: false, error: "No se encontró la reserva." };
     }
@@ -243,7 +252,7 @@ export async function updateReservationAction(
       };
     }
 
-    const court = await fetchCourt(supabase, parsed.data.court_id);
+    const court = await fetchCourt(supabase, clubId, parsed.data.court_id);
     if (!court) {
       return { success: false, error: "La cancha seleccionada no existe." };
     }
@@ -258,6 +267,7 @@ export async function updateReservationAction(
 
     await assertNoOverlap(
       supabase,
+      clubId,
       court.id,
       parsed.data.date,
       parsed.data.time,
@@ -276,6 +286,7 @@ export async function updateReservationAction(
         updated_by: user!.id,
       })
       .eq("id", id)
+      .eq("club_id", clubId)
       .select()
       .single();
 
@@ -287,7 +298,7 @@ export async function updateReservationAction(
     }
 
     await writeAudit(supabase, {
-      ownerId: existing.user_id,
+      clubId,
       actorId: user!.id,
       entity: "reservation",
       entityId: id,
@@ -323,8 +334,9 @@ export async function cancelReservationAction(
   try {
     const ctx: SessionContext = await requireRole("profesor");
     const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
 
-    const reservation = await fetchReservation(supabase, id);
+    const reservation = await fetchReservation(supabase, clubId, id);
     if (!reservation) {
       return { success: false, error: "No se encontró la reserva." };
     }
@@ -332,7 +344,7 @@ export async function cancelReservationAction(
       return { success: false, error: "La reserva ya estaba cancelada." };
     }
 
-    const court = await fetchCourt(supabase, reservation.court_id);
+    const court = await fetchCourt(supabase, clubId, reservation.court_id);
     const slotPrice = court
       ? getSlotPrice(court, reservation.duration_minutes)
       : 0;
@@ -341,7 +353,7 @@ export async function cancelReservationAction(
     const { data: settingsRow } = await supabase
       .from("settings")
       .select("cancel_window_hours, late_penalty_percent")
-      .eq("owner_id", reservation.user_id)
+      .eq("club_id", clubId)
       .maybeSingle();
 
     const cancelWindowHours = settingsRow?.cancel_window_hours ?? 24;
@@ -365,7 +377,7 @@ export async function cancelReservationAction(
 
     // Cobros previos ANTES de mutar nada: los profesores no pueden cancelar
     // reservas con cobros registrados (la plata la gestiona el personal).
-    const payments = await fetchPayments(supabase, id);
+    const payments = await fetchPayments(supabase, clubId, id);
     const pendingPayments = payments.filter((p) => !p.released);
     const paidTotal = round2(
       pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0)
@@ -392,6 +404,7 @@ export async function cancelReservationAction(
         updated_by: user!.id,
       })
       .eq("id", id)
+      .eq("club_id", clubId)
       .select()
       .single();
 
@@ -427,7 +440,8 @@ export async function cancelReservationAction(
         const { error: releaseError } = await supabase
           .from("payments")
           .update({ released: true })
-          .eq("id", payment.id);
+          .eq("id", payment.id)
+          .eq("club_id", clubId);
         if (releaseError) {
           throw new Error("No se pudo liberar los cobros de la reserva.");
         }
@@ -441,12 +455,12 @@ export async function cancelReservationAction(
     if (phone) {
       const delta = round2(releasedActual - debt);
       if (delta !== 0) {
-        await adjustCredit(supabase, reservation.user_id, phone, delta);
+        await adjustCredit(supabase, clubId, phone, delta);
       }
     }
 
     await writeAudit(supabase, {
-      ownerId: reservation.user_id,
+      clubId,
       actorId: user!.id,
       entity: "reservation",
       entityId: id,
@@ -491,9 +505,10 @@ export async function registerPaymentAction(
 
   try {
     const ctx: SessionContext = await requireRole("operador");
-    const { supabase, user } = ctx;
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
 
-    const reservation = await fetchReservation(supabase, reservationId);
+    const reservation = await fetchReservation(supabase, clubId, reservationId);
     if (!reservation) {
       return { success: false, error: "No se encontró la reserva." };
     }
@@ -504,13 +519,13 @@ export async function registerPaymentAction(
       };
     }
 
-    const court = await fetchCourt(supabase, reservation.court_id);
+    const court = await fetchCourt(supabase, clubId, reservation.court_id);
     if (!court) {
       return { success: false, error: "No se encontró la cancha." };
     }
 
     // Idempotencia: revalidar el estado real antes de registrar el cobro.
-    const existingPayments = await fetchPayments(supabase, reservationId);
+    const existingPayments = await fetchPayments(supabase, clubId, reservationId);
     if (
       parsed.data.kind === "seña" &&
       existingPayments.some((p) => p.kind === "seña" && !p.released)
@@ -545,7 +560,7 @@ export async function registerPaymentAction(
     // Si ya estaba todo cobrado (ej. saldo a favor que cubrió el turno), solo se marca como pagada.
     if (amount > 0) {
       const { error: paymentError } = await supabase.from("payments").insert({
-        owner_id: reservation.user_id,
+        club_id: clubId,
         reservation_id: reservationId,
         kind: parsed.data.kind,
         amount,
@@ -564,6 +579,7 @@ export async function registerPaymentAction(
       .from("reservations")
       .update({ payment_status: nextStatus, updated_by: user!.id })
       .eq("id", reservationId)
+      .eq("club_id", clubId)
       .select()
       .single();
 
@@ -572,7 +588,7 @@ export async function registerPaymentAction(
     }
 
     await writeAudit(supabase, {
-      ownerId: reservation.user_id,
+      clubId,
       actorId: user!.id,
       entity: "reservation",
       entityId: reservationId,
@@ -593,9 +609,10 @@ export async function applyCreditAction(
 ): Promise<ActionResult> {
   try {
     const ctx: SessionContext = await requireRole("operador");
-    const { supabase, user } = ctx;
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
 
-    const reservation = await fetchReservation(supabase, reservationId);
+    const reservation = await fetchReservation(supabase, clubId, reservationId);
     if (!reservation) {
       return { success: false, error: "No se encontró la reserva." };
     }
@@ -614,7 +631,7 @@ export async function applyCreditAction(
       };
     }
 
-    const court = await fetchCourt(supabase, reservation.court_id);
+    const court = await fetchCourt(supabase, clubId, reservation.court_id);
     if (!court) {
       return { success: false, error: "No se encontró la cancha." };
     }
@@ -622,7 +639,7 @@ export async function applyCreditAction(
     const { data: creditRow } = await supabase
       .from("credit_balances")
       .select("amount")
-      .eq("owner_id", reservation.user_id)
+      .eq("club_id", clubId)
       .eq("customer_phone", phone)
       .maybeSingle();
 
@@ -634,7 +651,7 @@ export async function applyCreditAction(
       };
     }
 
-    const payments = await fetchPayments(supabase, reservationId);
+    const payments = await fetchPayments(supabase, clubId, reservationId);
     const paid = paidAmount(payments);
     const slotPrice = getSlotPrice(court, reservation.duration_minutes);
     const remaining = Math.max(0, slotPrice - paid);
@@ -648,10 +665,10 @@ export async function applyCreditAction(
 
     const applied = Math.min(credit, remaining);
 
-    await adjustCredit(supabase, reservation.user_id, phone, -applied);
+    await adjustCredit(supabase, clubId, phone, -applied);
 
     const { error: paymentError } = await supabase.from("payments").insert({
-      owner_id: reservation.user_id,
+      club_id: clubId,
       reservation_id: reservationId,
       kind: "saldo",
       amount: applied,
@@ -662,7 +679,7 @@ export async function applyCreditAction(
     if (paymentError) {
       // Compensar el descuento del saldo si el registro del pago falló.
       await supabase.rpc("adjust_credit_balance", {
-        p_owner_id: reservation.user_id,
+        p_club_id: clubId,
         p_phone: phone,
         p_delta: applied,
       });
@@ -677,6 +694,7 @@ export async function applyCreditAction(
       .from("reservations")
       .update({ payment_status: nextStatus, updated_by: user!.id })
       .eq("id", reservationId)
+      .eq("club_id", clubId)
       .select()
       .single();
 
@@ -685,7 +703,7 @@ export async function applyCreditAction(
     }
 
     await writeAudit(supabase, {
-      ownerId: reservation.user_id,
+      clubId,
       actorId: user!.id,
       entity: "reservation",
       entityId: reservationId,

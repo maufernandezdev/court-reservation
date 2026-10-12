@@ -20,7 +20,7 @@ export async function createCourtAction(
   try {
     const { supabase, user, membership } = await requireRole("admin");
 
-    const ownerId = membership!.owner_id;
+    const clubId = membership!.club_id;
 
     const { data, error } = await supabase
       .from("courts")
@@ -34,7 +34,7 @@ export async function createCourtAction(
         deposit_enabled: parsed.data.deposit_enabled,
         deposit_type: parsed.data.deposit_type,
         deposit_value: parsed.data.deposit_value,
-        user_id: ownerId,
+        club_id: clubId,
       })
       .select()
       .single();
@@ -44,7 +44,7 @@ export async function createCourtAction(
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "court",
       entityId: data.id,
@@ -80,7 +80,7 @@ export async function updateCourtAction(
   try {
     const { supabase, user, membership } = await requireRole("admin");
 
-    const ownerId = membership!.owner_id;
+    const clubId = membership!.club_id;
 
     const { error } = await supabase
       .from("courts")
@@ -96,14 +96,14 @@ export async function updateCourtAction(
         deposit_value: parsed.data.deposit_value,
       })
       .eq("id", id)
-      .eq("user_id", ownerId);
+      .eq("club_id", clubId);
 
     if (error) {
       return { success: false, error: "No se pudo actualizar la cancha." };
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "court",
       entityId: id,
@@ -131,20 +131,20 @@ export async function deactivateCourtAction(
   try {
     const { supabase, user, membership } = await requireRole("admin");
 
-    const ownerId = membership!.owner_id;
+    const clubId = membership!.club_id;
 
     const { error } = await supabase
       .from("courts")
       .update({ active: false })
       .eq("id", id)
-      .eq("user_id", ownerId);
+      .eq("club_id", clubId);
 
     if (error) {
       return { success: false, error: "No se pudo eliminar la cancha." };
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "court",
       entityId: id,

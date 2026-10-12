@@ -28,6 +28,7 @@ export default async function CanchasPage() {
   const { data, error } = await supabase
     .from("courts")
     .select("*")
+    .eq("club_id", membership.club_id)
     .eq("active", true)
     .order("created_at", { ascending: true });
 

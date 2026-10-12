@@ -91,11 +91,13 @@ export function useReservationDetail({
         supabase
           .from("payments")
           .select("*")
+          .eq("club_id", membership.club_id)
           .eq("reservation_id", reservation.id)
           .order("created_at", { ascending: true }),
         supabase
           .from("audit_log")
           .select("*")
+          .eq("club_id", membership.club_id)
           .eq("entity", "reservation")
           .eq("entity_id", reservation.id)
           .order("created_at", { ascending: false })
@@ -103,7 +105,7 @@ export function useReservationDetail({
         supabase
           .from("memberships")
           .select("user_id, full_name, email")
-          .eq("owner_id", membership.owner_id),
+          .eq("club_id", membership.club_id),
       ]);
 
     setPayments((paymentsData ?? []) as Payment[]);
@@ -113,7 +115,7 @@ export function useReservationDetail({
     const { data: settingsData } = await supabase
       .from("settings")
       .select("*")
-      .eq("owner_id", membership.owner_id)
+      .eq("club_id", membership.club_id)
       .maybeSingle();
     setSettings((settingsData as ClubSettings | null) ?? null);
 
@@ -121,7 +123,7 @@ export function useReservationDetail({
       const { data: creditData } = await supabase
         .from("credit_balances")
         .select("amount")
-        .eq("owner_id", membership.owner_id)
+        .eq("club_id", membership.club_id)
         .eq("customer_phone", reservation.phone.trim())
         .maybeSingle();
       setCredit(creditData ? Number(creditData.amount) : 0);
@@ -130,7 +132,7 @@ export function useReservationDetail({
     }
 
     setIsLoadingExtras(false);
-  }, [supabase, reservation, membership.owner_id]);
+  }, [supabase, reservation, membership.club_id]);
 
   // Reseteo y carga al abrir o cuando la reserva cambia (cobro, edición).
   useEffect(() => {

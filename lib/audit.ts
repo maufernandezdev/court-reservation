@@ -15,7 +15,7 @@ export type AuditAction =
   | "settings.updated";
 
 type AuditInput = {
-  ownerId: string;
+  clubId: string;
   actorId: string | null;
   entity: string;
   entityId?: string | null;
@@ -29,7 +29,7 @@ export async function writeAudit(
   input: AuditInput
 ): Promise<void> {
   const { error } = await supabase.from("audit_log").insert({
-    owner_id: input.ownerId,
+    club_id: input.clubId,
     actor_id: input.actorId,
     entity: input.entity,
     entity_id: input.entityId ?? null,

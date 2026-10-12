@@ -24,7 +24,7 @@ export async function inviteMemberAction(
 
   try {
     const { supabase, user, membership } = await requireRole("admin");
-    const ownerId = membership!.owner_id;
+    const clubId = membership!.club_id;
 
     const { data: invitedUserId, error: rpcError } = await supabase.rpc(
       "find_user_id_by_email",
@@ -47,7 +47,7 @@ export async function inviteMemberAction(
     }
 
     const { error } = await supabase.from("memberships").insert({
-      owner_id: ownerId,
+      club_id: clubId,
       user_id: invitedUserId,
       role: parsed.data.role,
       full_name: parsed.data.full_name.trim(),
@@ -65,7 +65,7 @@ export async function inviteMemberAction(
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "member",
       entityId: invitedUserId,
@@ -100,13 +100,13 @@ export async function updateMemberRoleAction(
 
   try {
     const { supabase, user, membership } = await requireRole("admin");
-    const ownerId = membership!.owner_id;
+    const clubId = membership!.club_id;
 
     const { data: target } = await supabase
       .from("memberships")
       .select("id, user_id, role")
       .eq("id", membershipId)
-      .eq("owner_id", ownerId)
+      .eq("club_id", clubId)
       .single();
 
     if (!target) {
@@ -118,7 +118,7 @@ export async function updateMemberRoleAction(
       const { count } = await supabase
         .from("memberships")
         .select("id", { count: "exact", head: true })
-        .eq("owner_id", ownerId)
+        .eq("club_id", clubId)
         .eq("role", "admin");
 
       if ((count ?? 0) <= 1) {
@@ -133,14 +133,14 @@ export async function updateMemberRoleAction(
       .from("memberships")
       .update({ role: parsed.data.role })
       .eq("id", membershipId)
-      .eq("owner_id", ownerId);
+      .eq("club_id", clubId);
 
     if (error) {
       return { success: false, error: "No se pudo actualizar el rol." };
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "member",
       entityId: target.user_id,
@@ -165,13 +165,13 @@ export async function removeMemberAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { supabase, user, membership } = await requireRole("admin");
-    const ownerId = membership!.owner_id;
+    const clubId = membership!.club_id;
 
     const { data: target } = await supabase
       .from("memberships")
       .select("id, user_id")
       .eq("id", membershipId)
-      .eq("owner_id", ownerId)
+      .eq("club_id", clubId)
       .single();
 
     if (!target) {
@@ -189,14 +189,14 @@ export async function removeMemberAction(
       .from("memberships")
       .delete()
       .eq("id", membershipId)
-      .eq("owner_id", ownerId);
+      .eq("club_id", clubId);
 
     if (error) {
       return { success: false, error: "No se pudo eliminar al miembro." };
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "member",
       entityId: target.user_id,

@@ -19,10 +19,10 @@ export async function saveSettingsAction(
 
   try {
     const { supabase, user, membership } = await requireRole("admin");
-    const ownerId = membership!.owner_id;
+    const clubId = membership!.club_id;
 
     const { error } = await supabase.from("settings").upsert({
-      owner_id: ownerId,
+      club_id: clubId,
       cancel_window_hours: parsed.data.cancel_window_hours,
       late_penalty_percent: parsed.data.late_penalty_percent,
       updated_at: new Date().toISOString(),
@@ -33,10 +33,10 @@ export async function saveSettingsAction(
     }
 
     await writeAudit(supabase, {
-      ownerId,
+      clubId,
       actorId: user!.id,
       entity: "settings",
-      entityId: ownerId,
+      entityId: clubId,
       action: "settings.updated",
       payload: parsed.data,
     });

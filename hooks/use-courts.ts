@@ -4,17 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeTime } from "@/lib/availability";
 import type { Court } from "@/lib/courts";
+import { useMembership } from "@/hooks/use-membership";
 
 export function useCourts() {
   const [courts, setCourts] = useState<Court[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const supabase = createClient();
+  const clubId = useMembership().membership.club_id;
 
   const loadCourts = useCallback(async () => {
     const { data, error } = await supabase
       .from("courts")
       .select("*")
+      .eq("club_id", clubId)
       .eq("active", true)
       .order("created_at", { ascending: true });
 
@@ -31,7 +34,7 @@ export function useCourts() {
       );
     }
     setIsLoading(false);
-  }, [supabase]);
+  }, [supabase, clubId]);
 
   useEffect(() => {
     loadCourts();
