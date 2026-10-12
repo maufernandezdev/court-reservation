@@ -7,12 +7,32 @@ import {
   type MemberInviteInput,
 } from "@/lib/members";
 import type { ClubRole } from "@/lib/roles";
+import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
+import type { SharedInvitation } from "@/lib/invitations";
+import {
+  generateInvitationToken,
+  hashInvitationToken,
+  invitationLink,
+} from "@/lib/invitations-server";
 
-export async function inviteMemberAction(
+type InvitationResult = {
+  success: boolean;
+  error?: string;
+  invitation?: SharedInvitation;
+};
+
+const INVITATION_DAYS = 7;
+
+function expiresAtFromNow(): string {
+  return new Date(Date.now() + INVITATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/** Crea la invitación y devuelve el link (el token no se guarda: solo su hash). */
+export async function createInvitationAction(
   input: MemberInviteInput
-): Promise<{ success: boolean; error?: string }> {
+): Promise<InvitationResult> {
   const parsed = memberInviteSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -25,52 +45,175 @@ export async function inviteMemberAction(
   try {
     const { supabase, user, membership } = await requireRole("admin");
     const clubId = membership!.club_id;
+    const email = parsed.data.email.trim().toLowerCase();
+    const fullName = parsed.data.full_name.trim();
 
-    const { data: invitedUserId, error: rpcError } = await supabase.rpc(
-      "find_user_id_by_email",
-      { p_email: parsed.data.email }
-    );
+    const { data: existingMember } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("club_id", clubId)
+      .eq("email", email)
+      .maybeSingle();
 
-    if (rpcError || !invitedUserId) {
-      return {
-        success: false,
-        error:
-          "No encontramos ningún usuario con ese email. La persona debe registrarse primero desde la pantalla de registro.",
-      };
+    if (existingMember) {
+      return { success: false, error: "Esa persona ya es parte del equipo." };
     }
 
-    if (invitedUserId === user!.id) {
-      return {
-        success: false,
-        error: "Ya sos miembro del club.",
-      };
-    }
+    const token = generateInvitationToken();
+    const expiresAt = expiresAtFromNow();
 
-    const { error } = await supabase.from("memberships").insert({
-      club_id: clubId,
-      user_id: invitedUserId,
-      role: parsed.data.role,
-      full_name: parsed.data.full_name.trim(),
-      email: parsed.data.email.trim().toLowerCase(),
-    });
+    const { data, error } = await supabase
+      .from("club_invitations")
+      .insert({
+        club_id: clubId,
+        email,
+        full_name: fullName,
+        role: parsed.data.role,
+        token_hash: hashInvitationToken(token),
+        invited_by: user!.id,
+        expires_at: expiresAt,
+      })
+      .select("id")
+      .single();
 
     if (error) {
       if (error.code === "23505") {
         return {
           success: false,
-          error: "Ese usuario ya es miembro del club.",
+          error:
+            "Ya hay una invitación abierta para ese correo. Generá un link nuevo desde la lista de invitaciones.",
         };
       }
-      return { success: false, error: "No se pudo agregar al miembro." };
+      return { success: false, error: "No se pudo crear la invitación." };
     }
 
     await writeAudit(supabase, {
       clubId,
       actorId: user!.id,
-      entity: "member",
-      entityId: invitedUserId,
-      action: "member.invited",
-      payload: { email: parsed.data.email, role: parsed.data.role },
+      entity: "invitation",
+      entityId: data.id,
+      action: "invitation.created",
+      payload: { email, role: parsed.data.role, full_name: fullName },
+    });
+
+    revalidatePath("/dashboard/miembros");
+
+    return {
+      success: true,
+      invitation: {
+        link: await invitationLink(token),
+        email,
+        fullName,
+        role: parsed.data.role,
+        expiresAt,
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "No se pudo crear la invitación.",
+    };
+  }
+}
+
+/** Link nuevo para una invitación abierta: invalida el anterior y renueva el vencimiento. */
+export async function regenerateInvitationAction(
+  invitationId: string
+): Promise<InvitationResult> {
+  const parsedId = z.string().uuid("Invitación inválida.").safeParse(invitationId);
+  if (!parsedId.success) {
+    return { success: false, error: "Invitación inválida." };
+  }
+
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+    const token = generateInvitationToken();
+    const expiresAt = expiresAtFromNow();
+
+    const { data, error } = await supabase
+      .from("club_invitations")
+      .update({ token_hash: hashInvitationToken(token), expires_at: expiresAt })
+      .eq("id", parsedId.data)
+      .eq("club_id", clubId)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .select("id, email, full_name, role")
+      .maybeSingle();
+
+    if (error || !data) {
+      return {
+        success: false,
+        error: "No se encontró la invitación (puede que ya la hayan usado o cancelado).",
+      };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "invitation",
+      entityId: data.id,
+      action: "invitation.regenerated",
+      payload: { email: data.email, role: data.role, full_name: data.full_name },
+    });
+
+    revalidatePath("/dashboard/miembros");
+
+    return {
+      success: true,
+      invitation: {
+        link: await invitationLink(token),
+        email: data.email,
+        fullName: data.full_name,
+        role: data.role as ClubRole,
+        expiresAt,
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "No se pudo generar el link.",
+    };
+  }
+}
+
+/** Cancela una invitación abierta: su link deja de servir. */
+export async function revokeInvitationAction(
+  invitationId: string
+): Promise<{ success: boolean; error?: string }> {
+  const parsedId = z.string().uuid("Invitación inválida.").safeParse(invitationId);
+  if (!parsedId.success) {
+    return { success: false, error: "Invitación inválida." };
+  }
+
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+
+    const { data, error } = await supabase
+      .from("club_invitations")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("id", parsedId.data)
+      .eq("club_id", clubId)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .select("id, email, full_name, role")
+      .maybeSingle();
+
+    if (error || !data) {
+      return {
+        success: false,
+        error: "No se encontró la invitación (puede que ya la hayan usado o cancelado).",
+      };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "invitation",
+      entityId: data.id,
+      action: "invitation.revoked",
+      payload: { email: data.email, role: data.role, full_name: data.full_name },
     });
 
     revalidatePath("/dashboard/miembros");
@@ -79,8 +222,7 @@ export async function inviteMemberAction(
   } catch (err) {
     return {
       success: false,
-      error:
-        err instanceof Error ? err.message : "No se pudo agregar al miembro.",
+      error: err instanceof Error ? err.message : "No se pudo cancelar la invitación.",
     };
   }
 }
