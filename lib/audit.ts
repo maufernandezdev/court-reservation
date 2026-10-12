@@ -12,7 +12,13 @@ export type AuditAction =
   | "member.invited"
   | "member.removed"
   | "member.role_updated"
-  | "settings.updated";
+  | "settings.updated"
+  | "club.created"
+  | "club.updated"
+  | "invitation.created"
+  | "invitation.regenerated"
+  | "invitation.revoked"
+  | "invitation.accepted";
 
 type AuditInput = {
   clubId: string;
@@ -55,10 +61,24 @@ export const AUDIT_KIND_LABELS: Record<AuditKind, string> = {
 };
 
 export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
-  created: ["reservation.created", "court.created", "member.invited"],
-  updated: ["reservation.updated", "court.updated", "member.role_updated", "settings.updated"],
+  created: [
+    "reservation.created",
+    "court.created",
+    "member.invited",
+    "club.created",
+    "invitation.created",
+    "invitation.accepted",
+  ],
+  updated: [
+    "reservation.updated",
+    "court.updated",
+    "member.role_updated",
+    "settings.updated",
+    "club.updated",
+    "invitation.regenerated",
+  ],
   charged: ["payment.registered", "credit.applied"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked"],
 };
 
 export function auditKindOf(action: string): AuditKind {
@@ -150,6 +170,21 @@ export function describeAuditEntry(
       return `cambió el rol de ${ctx.memberName ?? "un miembro"} a ${ROLE_NAMES[String(p.role)] ?? String(p.role)}`;
     case "member.removed":
       return `quitó a ${ctx.memberName ?? "un miembro"} del club`;
+    case "club.created": {
+      const counts = (p.courts ?? {}) as Record<string, unknown>;
+      const total = Object.values(counts).reduce<number>((sum, n) => sum + (Number(n) || 0), 0);
+      return `creó el club ${String(p.name ?? "")}${total ? ` con ${total} ${total === 1 ? "cancha" : "canchas"}` : ""}`.trim();
+    }
+    case "club.updated":
+      return `cambió los datos del club: ${String(p.name ?? "")}${p.city ? ` (${String(p.city)})` : ""}`;
+    case "invitation.created":
+      return `invitó a ${String(p.full_name || p.email || "una persona")} como ${ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro")}`;
+    case "invitation.regenerated":
+      return `generó un link nuevo para la invitación de ${String(p.full_name || p.email || "una persona")}`;
+    case "invitation.revoked":
+      return `canceló la invitación de ${String(p.full_name || p.email || "una persona")}`;
+    case "invitation.accepted":
+      return `se sumó al club como ${ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro")}`;
     case "settings.updated":
       return `cambió las políticas: ${String(p.cancel_window_hours ?? "?")} h de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%`;
     default:

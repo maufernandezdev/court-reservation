@@ -111,7 +111,7 @@ export default function RegisterPage() {
           >
             <AuthHeading
               title="Creá tu cuenta"
-              description="Si te invitaron a un club, usá el mismo email de la invitación."
+              description="Si te invitaron a un club, no hace falta registrarte: entrá desde el link de la invitación."
             />
 
             {error && (

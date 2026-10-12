@@ -26,6 +26,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { PageHeader } from "@/components/shell/page-header";
+import { ClubDetailsForm } from "@/components/club/club-details-form";
 
 type SettingsFormValues = {
   cancel_window_hours: number;
@@ -156,205 +157,209 @@ export default function ConfiguracionPage() {
 
   return (
     <AuthGuard>
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(handleSubmit)}
-          className="flex flex-col gap-6"
-        >
-          <PageHeader
-            title="Políticas de cancelación"
-            description="Reglas claras para que nadie reserve “por las dudas”."
-            actions={
-              <Button type="submit" disabled={isSubmitting || !form.formState.isDirty}>
-                {isSubmitting ? "Guardando…" : "Guardar cambios"}
-              </Button>
-            }
-          />
-
-          {formError && (
-            <Alert variant="destructive">
-              <AlertDescription>{formError}</AlertDescription>
-            </Alert>
-          )}
-
-          <section
-            aria-label="Línea de tiempo de la cancelación"
-            className="flex flex-col gap-4 rounded-[20px] bg-sidebar px-7 pt-7 pb-6 text-sidebar-foreground"
+      <div className="flex flex-col gap-6">
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="flex flex-col gap-6"
           >
-            <div className="flex justify-between gap-3 font-mono text-[13px] text-sidebar-muted">
-              <span>Se reserva</span>
-              <span className="text-ball">{windowHours} h antes</span>
-              <span>Empieza el turno</span>
-            </div>
-            <div aria-hidden="true" className="flex h-3.5 gap-1 overflow-hidden rounded-full">
-              <div className="flex-[3] rounded-full bg-sidebar-foreground" />
-              <div
-                className="rounded-full bg-ball"
-                style={{ flex: Math.max(0.6, Math.min(3, windowHours / 16)) }}
-              />
-            </div>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-4">
-              <div className="flex flex-col gap-1">
-                <strong className="text-[17px]">En término</strong>
-                <span className="text-[15px] leading-snug text-sidebar-muted">
-                  Cancela con {windowHours} h o más: lo cobrado queda como saldo a
-                  favor para su próximo turno.
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <strong className="text-[17px] text-ball">Fuera de término</strong>
-                <span className="text-[15px] leading-snug text-sidebar-muted">
-                  Cancela con menos de {windowHours} h: se cobra el {penaltyPercent}% del
-                  turno. Se descuenta de lo cobrado y, si no alcanza, queda como deuda.
-                </span>
-              </div>
-            </div>
-          </section>
+            <PageHeader
+              title="Políticas de cancelación"
+              description="Reglas claras para que nadie reserve “por las dudas”."
+              actions={
+                <Button type="submit" disabled={isSubmitting || !form.formState.isDirty}>
+                  {isSubmitting ? "Guardando…" : "Guardar cambios"}
+                </Button>
+              }
+            />
 
-          <div className="flex flex-wrap items-start gap-6">
+            {formError && (
+              <Alert variant="destructive">
+                <AlertDescription>{formError}</AlertDescription>
+              </Alert>
+            )}
+
             <section
-              aria-labelledby="reglas"
-              className="flex min-w-0 flex-[999_1_460px] flex-col gap-6 rounded-2xl border bg-card p-6"
+              aria-label="Línea de tiempo de la cancelación"
+              className="flex flex-col gap-4 rounded-[20px] bg-sidebar px-7 pt-7 pb-6 text-sidebar-foreground"
             >
-              <h2 id="reglas" className="text-lg font-bold">
-                Reglas para todos los turnos
-              </h2>
-
-              <FormField
-                control={form.control}
-                name="cancel_window_hours"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-[15px]">
-                      Anticipación mínima para cancelar sin cargo
-                    </FormLabel>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <ToggleGroup
-                        type="single"
-                        variant="chip"
-                        spacing={2}
-                        value={HOUR_OPTIONS.includes(Number(field.value)) ? String(field.value) : ""}
-                        onValueChange={(v) => v && field.onChange(Number(v))}
-                        aria-label="Horas de anticipación"
-                        className="flex-wrap"
-                      >
-                        {HOUR_OPTIONS.map((h) => (
-                          <ToggleGroupItem key={h} value={String(h)} size="lg">
-                            {h} h
-                          </ToggleGroupItem>
-                        ))}
-                      </ToggleGroup>
-                      <div className="relative w-28">
-                        <FormControl>
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
-                            step="1"
-                            aria-label="Otra cantidad de horas"
-                            className="pr-8 font-mono"
-                            {...field}
-                            value={field.value ?? ""}
-                          />
-                        </FormControl>
-                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-sm text-muted-foreground">
-                          h
-                        </span>
-                      </div>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="late_penalty_percent"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-[15px]">Penalidad fuera de término</FormLabel>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <ToggleGroup
-                        type="single"
-                        variant="chip"
-                        spacing={2}
-                        value={PENALTY_OPTIONS.includes(Number(field.value)) ? String(field.value) : ""}
-                        onValueChange={(v) => v && field.onChange(Number(v))}
-                        aria-label="Porcentaje de penalidad"
-                        className="flex-wrap"
-                      >
-                        {PENALTY_OPTIONS.map((pct) => (
-                          <ToggleGroupItem key={pct} value={String(pct)} size="lg">
-                            {pct}%
-                          </ToggleGroupItem>
-                        ))}
-                      </ToggleGroup>
-                      <div className="relative w-28">
-                        <FormControl>
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
-                            max="100"
-                            step="1"
-                            aria-label="Otro porcentaje"
-                            className="pr-8 font-mono"
-                            {...field}
-                            value={field.value ?? ""}
-                          />
-                        </FormControl>
-                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-sm text-muted-foreground">
-                          %
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Porcentaje del valor del turno. Con 0% cancelar tarde no cuesta nada.
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                Los profesores no pueden cancelar dentro de esta ventana ni turnos
-                que ya tienen cobros: se lo piden a un operador o administrador.
-              </p>
+              <div className="flex justify-between gap-3 font-mono text-[13px] text-sidebar-muted">
+                <span>Se reserva</span>
+                <span className="text-ball">{windowHours} h antes</span>
+                <span>Empieza el turno</span>
+              </div>
+              <div aria-hidden="true" className="flex h-3.5 gap-1 overflow-hidden rounded-full">
+                <div className="flex-[3] rounded-full bg-sidebar-foreground" />
+                <div
+                  className="rounded-full bg-ball"
+                  style={{ flex: Math.max(0.6, Math.min(3, windowHours / 16)) }}
+                />
+              </div>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-4">
+                <div className="flex flex-col gap-1">
+                  <strong className="text-[17px]">En término</strong>
+                  <span className="text-[15px] leading-snug text-sidebar-muted">
+                    Cancela con {windowHours} h o más: lo cobrado queda como saldo a
+                    favor para su próximo turno.
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <strong className="text-[17px] text-ball">Fuera de término</strong>
+                  <span className="text-[15px] leading-snug text-sidebar-muted">
+                    Cancela con menos de {windowHours} h: se cobra el {penaltyPercent}% del
+                    turno. Se descuenta de lo cobrado y, si no alcanza, queda como deuda.
+                  </span>
+                </div>
+              </div>
             </section>
 
-            {example && (
+            <div className="flex flex-wrap items-start gap-6">
               <section
-                aria-labelledby="ejemplo"
-                className="flex flex-[1_1_360px] flex-col gap-3 rounded-2xl bg-ball p-6 text-ball-foreground"
+                aria-labelledby="reglas"
+                className="flex min-w-0 flex-[999_1_460px] flex-col gap-6 rounded-2xl border bg-card p-6"
               >
-                <h2 id="ejemplo" className="text-lg font-bold">
-                  Así queda con un turno de {formatMoney(example.price)}
+                <h2 id="reglas" className="text-lg font-bold">
+                  Reglas para todos los turnos
                 </h2>
-                <p className="text-sm">
-                  {example.label}
-                  {example.deposit > 0 && (
-                    <>
-                      {" "}
-                      · seña <strong className="font-mono">{formatMoney(example.deposit)}</strong>
-                    </>
+
+                <FormField
+                  control={form.control}
+                  name="cancel_window_hours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[15px]">
+                        Anticipación mínima para cancelar sin cargo
+                      </FormLabel>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ToggleGroup
+                          type="single"
+                          variant="chip"
+                          spacing={2}
+                          value={HOUR_OPTIONS.includes(Number(field.value)) ? String(field.value) : ""}
+                          onValueChange={(v) => v && field.onChange(Number(v))}
+                          aria-label="Horas de anticipación"
+                          className="flex-wrap"
+                        >
+                          {HOUR_OPTIONS.map((h) => (
+                            <ToggleGroupItem key={h} value={String(h)} size="lg">
+                              {h} h
+                            </ToggleGroupItem>
+                          ))}
+                        </ToggleGroup>
+                        <div className="relative w-28">
+                          <FormControl>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              min="0"
+                              step="1"
+                              aria-label="Otra cantidad de horas"
+                              className="pr-8 font-mono"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-sm text-muted-foreground">
+                            h
+                          </span>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
                   )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="late_penalty_percent"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[15px]">Penalidad fuera de término</FormLabel>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ToggleGroup
+                          type="single"
+                          variant="chip"
+                          spacing={2}
+                          value={PENALTY_OPTIONS.includes(Number(field.value)) ? String(field.value) : ""}
+                          onValueChange={(v) => v && field.onChange(Number(v))}
+                          aria-label="Porcentaje de penalidad"
+                          className="flex-wrap"
+                        >
+                          {PENALTY_OPTIONS.map((pct) => (
+                            <ToggleGroupItem key={pct} value={String(pct)} size="lg">
+                              {pct}%
+                            </ToggleGroupItem>
+                          ))}
+                        </ToggleGroup>
+                        <div className="relative w-28">
+                          <FormControl>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              min="0"
+                              max="100"
+                              step="1"
+                              aria-label="Otro porcentaje"
+                              className="pr-8 font-mono"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-sm text-muted-foreground">
+                            %
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Porcentaje del valor del turno. Con 0% cancelar tarde no cuesta nada.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                  Los profesores no pueden cancelar dentro de esta ventana ni turnos
+                  que ya tienen cobros: se lo piden a un operador o administrador.
                 </p>
-                <dl className="flex flex-col text-[15px]">
-                  {example.rows.map((row) => (
-                    <div
-                      key={row.label}
-                      className="flex justify-between gap-3 border-t border-ink/20 py-2.5"
-                    >
-                      <dt>{row.label}</dt>
-                      <dd className="text-right font-mono font-bold">{row.result}</dd>
-                    </div>
-                  ))}
-                </dl>
               </section>
-            )}
-          </div>
-        </form>
-      </Form>
+
+              {example && (
+                <section
+                  aria-labelledby="ejemplo"
+                  className="flex flex-[1_1_360px] flex-col gap-3 rounded-2xl bg-ball p-6 text-ball-foreground"
+                >
+                  <h2 id="ejemplo" className="text-lg font-bold">
+                    Así queda con un turno de {formatMoney(example.price)}
+                  </h2>
+                  <p className="text-sm">
+                    {example.label}
+                    {example.deposit > 0 && (
+                      <>
+                        {" "}
+                        · seña <strong className="font-mono">{formatMoney(example.deposit)}</strong>
+                      </>
+                    )}
+                  </p>
+                  <dl className="flex flex-col text-[15px]">
+                    {example.rows.map((row) => (
+                      <div
+                        key={row.label}
+                        className="flex justify-between gap-3 border-t border-ink/20 py-2.5"
+                      >
+                        <dt>{row.label}</dt>
+                        <dd className="text-right font-mono font-bold">{row.result}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )}
+            </div>
+          </form>
+        </Form>
+
+        <ClubDetailsForm key={membership!.club.id} club={membership!.club} />
+      </div>
     </AuthGuard>
   );
 }

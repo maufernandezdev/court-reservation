@@ -40,11 +40,16 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 4. Bienvenida y alta del club
 
-- [ ] 4.1 Releer el artboard `AltaClub` del canvas; crear `/bienvenida` con las dos opciones y, en "Me van a invitar", el correo de la persona y las invitaciones de `my_pending_invitations` con "Unirme"; verificar con una cuenta sin club ambos casos (sin y con invitación pendiente)
-- [ ] 4.2 Crear `/bienvenida/club` (paso 2 de 3) con RHF + Zod: nombre, ciudad, chips de fútbol/tenis/pádel con contador 0–20, vista previa "Tu planilla" y botón "Crear N canchas"; Server Action `createClubAction` que valida y llama a `create_club`, guarda la cookie del club nuevo y redirige a `/dashboard/canchas?alta=1`; verificar el alta de 4 tenis + 2 pádel y los errores sin nombre y sin canchas
-- [ ] 4.3 Mostrar en Canchas el aviso "Paso 3 de 3" cuando llega `?alta=1`; verificar que desaparece al recargar sin el parámetro
-- [ ] 4.4 Ajustar registro y verificación de cuenta para terminar en `/dashboard` (que redirige a `/bienvenida`); verificar el recorrido completo registro → verificación → bienvenida → alta → Canchas
-- [ ] 4.5 Agregar "Datos del club" (nombre y ciudad, RHF + Zod, solo admin, auditoría `club.updated`) en Políticas; verificar que el menú muestra el nombre nuevo y que un operador no ve la sección
+- [x] 4.1 Releer el artboard `AltaClub` del canvas; crear `/bienvenida` con las dos opciones y, en "Me van a invitar", el correo de la persona y las invitaciones de `my_pending_invitations` con "Unirme"; verificar con una cuenta sin club ambos casos (sin y con invitación pendiente)
+  - `/bienvenida` (Server Component) con las dos opciones y badge "Tenés N invitaciones"; `?opcion=invitacion` muestra el correo y las invitaciones de `my_pending_invitations` con "Unirme" (`acceptPendingInvitationAction`), "Volver a elegir" y "Usar otra cuenta". Con club, la misma pantalla sirve para "Crear otro club" ("Volver al panel"). Verificado con Playwright en local: sin invitación pide esperar y muestra el correo; con invitación de profesor, "Unirme" entra al panel como Profesor.
+- [x] 4.2 Crear `/bienvenida/club` (paso 2 de 3) con RHF + Zod: nombre, ciudad, chips de fútbol/tenis/pádel con contador 0–20, vista previa "Tu planilla" y botón "Crear N canchas"; Server Action `createClubAction` que valida y llama a `create_club`, guarda la cookie del club nuevo y redirige a `/dashboard/canchas?alta=1`; verificar el alta de 4 tenis + 2 pádel y los errores sin nombre y sin canchas
+  - `components/onboarding/club-onboarding-form.tsx` + `lib/clubs.ts` (schema compartido con la acción, como `lib/courts.ts`). `AuthLayout` sumó la variante `wide` (sin el dibujo de cancha, que tapaba los pasos). Verificado a 1440 y 390 px: errores sin nombre y sin canchas (y el de canchas se limpia al agregar), 4 tenis + 2 pádel → "Crear 6 canchas" con vista previa, crea el club y lleva a `/dashboard/canchas?alta=1` con el menú del club nuevo.
+- [x] 4.3 Mostrar en Canchas el aviso "Paso 3 de 3" cuando llega `?alta=1`; verificar que desaparece al recargar sin el parámetro
+  - Verificado: aviso "PASO 3 DE 3" con "Listo, ir a Hoy"; sin el parámetro no aparece.
+- [x] 4.4 Ajustar registro y verificación de cuenta para terminar en `/dashboard` (que redirige a `/bienvenida`); verificar el recorrido completo registro → verificación → bienvenida → alta → Canchas
+  - Registro y verificación ya terminaban en `/dashboard`, que ahora redirige a `/bienvenida`; se cambió la bajada del registro ("si te invitaron… entrá desde el link"). Verificado en local (confirmación de correo deshabilitada): registro → bienvenida → alta → Canchas.
+- [x] 4.5 Agregar "Datos del club" (nombre y ciudad, RHF + Zod, solo admin, auditoría `club.updated`) en Políticas; verificar que el menú muestra el nombre nuevo y que un operador no ve la sección
+  - `ClubDetailsForm` en Políticas + `updateClubDetailsAction` (auditoría `club.updated`, `revalidatePath` del layout). Verificado: el menú muestra el nombre nuevo, Actividad registra "creó el club" y "cambió los datos del club", y el operador no ve la sección.
 
 ## 5. Invitaciones
 

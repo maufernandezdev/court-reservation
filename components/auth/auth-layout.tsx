@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { CourtLines } from "@/components/brand/court-lines";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/brand";
+import { cn } from "@/lib/utils";
 
 const SPORTS = ["Tenis", "Pádel", "Fútbol", "Clubes"];
 
@@ -10,6 +11,8 @@ type AuthLayoutProps = {
   /** Contenido alternativo del panel de marca (ej. pasos del registro). */
   aside?: React.ReactNode;
   courtVariant?: "horizontal" | "vertical";
+  /** Panel de marca más angosto y contenido de hasta 880 px (alta del club, artboard AltaClub). */
+  wide?: boolean;
 };
 
 /**
@@ -21,18 +24,27 @@ export function AuthLayout({
   children,
   aside,
   courtVariant = "horizontal",
+  wide = false,
 }: AuthLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
-      <section className="relative flex shrink-0 flex-col justify-between gap-12 overflow-hidden bg-sidebar px-6 py-5 text-sidebar-foreground lg:min-h-screen lg:flex-[1_1_560px] lg:px-14 lg:py-12">
-        <CourtLines
-          variant={courtVariant}
-          className={
-            courtVariant === "horizontal"
-              ? "absolute -right-36 -bottom-10 hidden w-[900px] -rotate-[8deg] lg:block"
-              : "absolute top-[18%] left-[40%] hidden w-[520px] lg:block"
-          }
-        />
+      <section
+        className={cn(
+          "relative flex shrink-0 flex-col justify-between gap-12 overflow-hidden bg-sidebar px-6 py-5 text-sidebar-foreground lg:min-h-screen lg:px-14 lg:py-12",
+          wide ? "lg:flex-[1_1_360px] lg:px-12" : "lg:flex-[1_1_560px]"
+        )}
+      >
+        {/* En la variante ancha el panel es angosto: el dibujo taparía los pasos (el artboard no lo tiene). */}
+        {!wide && (
+          <CourtLines
+            variant={courtVariant}
+            className={
+              courtVariant === "horizontal"
+                ? "absolute -right-36 -bottom-10 hidden w-[900px] -rotate-[8deg] lg:block"
+                : "absolute top-[18%] left-[40%] hidden w-[520px] lg:block"
+            }
+          />
+        )}
 
         <Link
           href="/login"
@@ -70,8 +82,13 @@ export function AuthLayout({
         </p>
       </section>
 
-      <section className="flex flex-1 items-start justify-center px-4 py-8 sm:items-center sm:px-6 lg:flex-[1_1_440px] lg:py-12">
-        <div className="w-full max-w-[420px]">{children}</div>
+      <section
+        className={cn(
+          "flex flex-1 items-start justify-center px-4 py-8 sm:px-6 lg:py-12",
+          wide ? "lg:flex-[999_1_640px] lg:px-8 lg:py-14" : "sm:items-center lg:flex-[1_1_440px]"
+        )}
+      >
+        <div className={cn("w-full", wide ? "max-w-[880px]" : "max-w-[420px]")}>{children}</div>
       </section>
     </div>
   );

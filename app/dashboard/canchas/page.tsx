@@ -1,4 +1,5 @@
-import { LandPlot, ShieldAlert } from "lucide-react";
+import Link from "next/link";
+import { LandPlot, ShieldAlert, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionContext } from "@/lib/auth";
 import { normalizeTime } from "@/lib/availability";
@@ -9,7 +10,11 @@ import { NewCourtDialog } from "@/components/courts/new-court-dialog";
 import { CourtCardActions } from "@/components/courts/court-card-actions";
 import { PageHeader } from "@/components/shell/page-header";
 
-export default async function CanchasPage() {
+export default async function CanchasPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { membership } = await getSessionContext();
 
   // Configurar canchas (precios, horarios, señas) es exclusivo del admin.
@@ -23,6 +28,10 @@ export default async function CanchasPage() {
       </Alert>
     );
   }
+
+  // Llega desde el alta del club (paso 3 de 3).
+  const { alta } = await searchParams;
+  const isOnboarding = alta === "1";
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -45,6 +54,22 @@ export default async function CanchasPage() {
         description="Precio, duración del turno, horario y seña de cada cancha."
         actions={<NewCourtDialog triggerLabel="Nueva cancha" />}
       />
+
+      {isOnboarding && (
+        <Alert className="border-ball bg-ball text-ball-foreground">
+          <Sparkles className="size-4" />
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-ball-foreground">
+            <span>
+              <strong className="font-mono">PASO 3 DE 3</strong> · Tu club ya está creado.
+              Las canchas arrancan en $0 con turnos de 60 minutos: editá cada una (menú ⋮) para
+              definir precio, duración y seña.
+            </span>
+            <Link href="/dashboard" className="font-semibold underline underline-offset-4">
+              Listo, ir a Hoy
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive">
