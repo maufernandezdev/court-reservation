@@ -1,4 +1,6 @@
 > **Estado:** registrado (2026-10-06) como pendiente del rediseño `apply-saque-visual-design`. Sin specs, diseño ni tareas todavía.
+>
+> **Postergado (2026-10-12):** por ahora no se implementa. Se retoma solo si el producto crece y se instala en otros clubes (ver `add-club-onboarding`).
 
 ## Why
 
