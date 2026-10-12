@@ -24,8 +24,8 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
   - Verificado en local: hash sha256 de Node == `invitation_token_hash`; solo el admin del club crea invitaciones; segunda invitación abierta al mismo correo → índice único; `anon` ve `pending` con `has_account` o `invalid` sin datos, no lee la tabla ni acepta; aceptar con otro correo, revocada, vencida o ya usada → error en español; aceptación crea la membresía con rol y nombre y audita `invitation.accepted`; regenerar invalida el token viejo; `my_pending_invitations` no lista vencidas; `accept_invitation_by_id` exige el mismo correo; `accept_invitation_internal` no se puede llamar desde la API.
 - [x] 2.6 Escribir `0007_down.sql` y probarlo en la copia (sube 0007, baja, vuelve a subir) sin pérdida de filas
   - `supabase/rollback/0007_down.sql` (fuera de `migrations/`). Verificado en local: aborta si hay clubes creados después de 0007; sin ellos, bajar → subir → bajar → subir deja los mismos conteos de canchas, reservas, cobros, saldos, políticas y auditoría (las membresías vacías se recrean al bajar y se vuelven a borrar al subir).
-- [ ] 2.7 Aplicar 0007 en el proyecto real con `supabase db push` y repetir los conteos de 1.4
-  - Se hace al final, junto con el código nuevo (el código actual no funciona con las columnas renombradas) y con confirmación del usuario. Mientras tanto se desarrolla contra el Supabase local.
+- [x] 2.7 Aplicar 0007 en el proyecto real con `supabase db push` y repetir los conteos de 1.4
+  - Aplicada 2026-10-12 con confirmación del usuario (`supabase db push --linked`). Entre el relevamiento de 1.4 y la aplicación, `8216ab60…` (fernandeznm24) pasó a tener datos (5 canchas, 1 reserva, 1 cobro, políticas, 8 de auditoría), así que se conservó: quedaron 3 clubes "Club Deportivo Central" con exactamente los conteos previos y 4 membresías (se borraron los 5 clubes vacíos). Trigger `on_auth_user_created`, `handle_new_user` y `find_user_id_by_email` eliminados; funciones nuevas presentes.
 
 ## 3. Club activo en el servidor y en el cliente
 
