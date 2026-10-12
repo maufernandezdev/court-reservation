@@ -48,3 +48,6 @@ supabase/.temp/
 
 # claude settings
 .claude/settings.local.json
+
+# claude settings
+/files
