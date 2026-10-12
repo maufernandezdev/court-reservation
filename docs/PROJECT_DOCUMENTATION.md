@@ -13,6 +13,8 @@ Lugar de notas del proyecto: decisiones, pendientes y configuraciones que no se 
 - Si la confirmación de email está deshabilitada en el proyecto, `signUp` devuelve sesión y el usuario entra directo al dashboard (ya manejado en el código).
 - Cuando se configure el SMTP propio: Authentication → Emails → conectar SMTP, y probar el flujo completo.
 
+- **(2026-10-12) Error falso "PKCE code verifier not found" al verificar:** Supabase valida el correo al abrir el link (`/auth/v1/verify`) y recién después redirige a `/verification-account?code=…`. El cliente del navegador de `@supabase/ssr` canjea ese `code` solo al iniciarse (`detectSessionInUrl`, activo por defecto) y borra el verificador; la página volvía a llamar a `exchangeCodeForSession` y ese segundo canje fallaba, aunque la cuenta ya estaba validada y la sesión iniciada. Ahora la página solo espera el canje automático (`getSession`). Si el link se abre en otro navegador o dispositivo (sin el verificador guardado al registrarse), no hay sesión pero el correo igual quedó validado: muestra "¡Cuenta verificada!" y manda a ingresar. Probado en Supabase local con confirmación activada y Mailpit (reproduce el error con el código anterior).
+
 ### Límite de emails del SMTP por defecto
 
 - El SMTP por defecto de Supabase permite solo **2 emails por hora por proyecto**, compartidos entre todos los endpoints (signup, reenvío, magic link, recuperación de contraseña). Además hay un cooldown de 60 s entre reenvíos al mismo email.

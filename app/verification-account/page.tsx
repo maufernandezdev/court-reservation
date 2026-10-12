@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AuthHeading, AuthLayout } from "@/components/auth/auth-layout";
 
-type Status = "loading" | "success" | "error";
+// "verified": el correo quedó validado pero sin sesión en este navegador
+// (link abierto en otro navegador o dispositivo): hay que ingresar a mano.
+type Status = "loading" | "success" | "verified" | "error";
 
 const REDIRECT_PATH = "/dashboard";
 const COUNTDOWN_SECONDS = 10;
@@ -16,17 +18,18 @@ const COUNTDOWN_SECONDS = 10;
 const TITLES: Record<Status, string> = {
   loading: "Verificando tu cuenta…",
   success: "¡Cuenta verificada!",
+  verified: "¡Cuenta verificada!",
   error: "No pudimos verificar tu cuenta",
 };
 
 function StatusIcon({ status }: { status: Status }) {
   const Icon =
-    status === "loading" ? Loader2 : status === "success" ? CheckCircle2 : XCircle;
+    status === "loading" ? Loader2 : status === "error" ? XCircle : CheckCircle2;
   return (
     <span
       className={cn(
         "flex size-12 items-center justify-center rounded-xl",
-        status === "success" && "bg-ball text-ball-foreground",
+        (status === "success" || status === "verified") && "bg-ball text-ball-foreground",
         status === "loading" && "bg-muted text-foreground",
         status === "error" && "bg-danger-soft text-danger-soft-foreground"
       )}
@@ -43,20 +46,32 @@ function VerificationAccountContent() {
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
 
-  // Intercambia el ?code= de la URL por una sesión (valida el email)
+  // Supabase ya validó el correo al abrir el link y redirige acá con ?code=.
+  // El cliente del navegador canjea ese code por una sesión solo, al iniciarse
+  // (detectSessionInUrl): no hay que volver a llamar a exchangeCodeForSession,
+  // porque el segundo canje falla ("PKCE code verifier not found") aunque todo salió bien.
   useEffect(() => {
-    const code = searchParams.get("code");
-    if (!code) {
+    const linkError = searchParams.get("error_description") ?? searchParams.get("error");
+    if (linkError) {
+      setStatus("error");
+      setErrorDetail(linkError);
+      return;
+    }
+
+    if (!searchParams.get("code")) {
       setStatus("error");
       setErrorDetail("La URL no contiene el código de verificación.");
       return;
     }
 
-    const supabase = createClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      setStatus(error ? "error" : "success");
-      setErrorDetail(error?.message ?? null);
-    });
+    // getSession espera a que termine el canje automático.
+    createClient()
+      .auth.getSession()
+      .then(({ data: { session } }) => {
+        // Sin sesión: el link se abrió en otro navegador (el canje necesita el
+        // verificador guardado al registrarse), pero el correo igual quedó validado.
+        setStatus(session ? "success" : "verified");
+      });
   }, [searchParams]);
 
   // Cuenta regresiva para redirigir automáticamente
@@ -80,7 +95,9 @@ function VerificationAccountContent() {
             ? "Estamos validando tu correo. No cierres esta pestaña."
             : status === "success"
               ? `Tu correo fue validado correctamente. Te llevamos al inicio en ${countdown} segundos.`
-              : "El link es inválido o expiró. Pedí un nuevo correo de verificación intentando iniciar sesión."
+              : status === "verified"
+                ? "Tu correo fue validado correctamente. Ingresá con tu email y contraseña para seguir."
+                : "El link es inválido o expiró. Pedí un nuevo correo de verificación intentando iniciar sesión."
         }
       />
       {status === "error" && errorDetail && (
@@ -91,10 +108,10 @@ function VerificationAccountContent() {
       {status !== "loading" && (
         <Button
           size="lg"
-          variant={status === "success" ? "default" : "outline"}
-          onClick={() => router.push(REDIRECT_PATH)}
+          variant={status === "error" ? "outline" : "default"}
+          onClick={() => router.push(status === "verified" ? "/login" : REDIRECT_PATH)}
         >
-          Ir al inicio
+          {status === "verified" ? "Ingresar" : "Ir al inicio"}
         </Button>
       )}
     </div>
