@@ -13,12 +13,15 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { FEATURES, type Feature } from "@/lib/features";
 
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** Módulo que se puede ocultar con `lib/features.ts`. */
+  feature?: Feature;
 };
 
 export type NavGroup = {
@@ -45,7 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/canchas", label: "Canchas", icon: LandPlot, adminOnly: true },
       { href: "/dashboard/socios", label: "Socios", icon: Users, adminOnly: true },
       { href: "/dashboard/miembros", label: "Equipo", icon: IdCard, adminOnly: true },
-      { href: "/dashboard/productos", label: "Productos", icon: Package, adminOnly: true },
+      { href: "/dashboard/productos", label: "Productos", icon: Package, adminOnly: true, feature: "products" },
     ],
   },
   {
@@ -54,7 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/configuracion", label: "Políticas", icon: ShieldCheck, adminOnly: true },
       { href: "/dashboard/actividad", label: "Actividad", icon: History, adminOnly: true },
       { href: "/dashboard/reportes", label: "Reportes", icon: ChartColumn, adminOnly: true },
-      { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell, adminOnly: true },
+      { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell, adminOnly: true, feature: "notifications" },
       { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard, adminOnly: true },
     ],
   },
@@ -63,7 +66,9 @@ export const NAV_GROUPS: NavGroup[] = [
 export function visibleGroups(isAdmin: boolean): NavGroup[] {
   return NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.adminOnly || isAdmin),
+    items: group.items.filter(
+      (item) => (!item.adminOnly || isAdmin) && (!item.feature || FEATURES[item.feature])
+    ),
   })).filter((group) => group.items.length > 0);
 }
 

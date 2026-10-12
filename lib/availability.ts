@@ -33,6 +33,22 @@ export function getCourtSlots(
 }
 
 /** Solapamiento entre dos intervalos de tiempo (en minutos desde 00:00). */
+/**
+ * Franja por defecto para "Nuevo turno": la primera desde `fromMinutes` (si se
+ * indica, p. ej. la hora actual en el día de hoy) o, si no hay, la apertura.
+ */
+export function defaultSlot(
+  court: Pick<Court, "open_time" | "close_time" | "slot_duration">,
+  fromMinutes?: number
+): string {
+  const slots = getCourtSlots(court);
+  return (
+    (fromMinutes !== undefined ? slots.find((s) => timeToMinutes(s) >= fromMinutes) : undefined) ??
+    slots[0] ??
+    court.open_time
+  );
+}
+
 export function rangesOverlap(
   startA: number,
   durationA: number,

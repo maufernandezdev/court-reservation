@@ -22,7 +22,7 @@ import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
 import type { Reservation } from "@/lib/reservations";
 import { formatMoney } from "@/lib/pricing";
-import { buildAvailabilityMessage } from "@/lib/availability";
+import { buildAvailabilityMessage, defaultSlot, timeToMinutes } from "@/lib/availability";
 import {
   amountDue,
   computeDaySummary,
@@ -119,6 +119,8 @@ export default function DashboardIndexPage() {
   const [courtTypeFilter, setCourtTypeFilter] =
     useState<CourtTypeFilterValue>("all");
   const [charging, setCharging] = useState<Reservation | null>(null);
+  // "Nuevo turno" y "Reservar" abren el alta acá mismo (mismo diálogo que la planilla).
+  const [creating, setCreating] = useState<{ courtId: string; time: string } | null>(null);
 
   const { courts, isLoading: isLoadingCourts, error: courtsError } = useCourts();
   const { membership } = useMembership();
@@ -209,11 +211,15 @@ export default function DashboardIndexPage() {
                 onChange={setCourtTypeFilter}
                 available={availableTypes}
               />
-              <Button asChild>
-                <Link href="/dashboard/reservas">
-                  <Plus className="text-ball" strokeWidth={2.4} />
-                  Nuevo turno
-                </Link>
+              <Button
+                onClick={() => {
+                  const court = visibleCourts[0];
+                  if (court) setCreating({ courtId: court.id, time: defaultSlot(court, nowMinutes) });
+                }}
+                disabled={visibleCourts.length === 0}
+              >
+                <Plus className="text-ball" strokeWidth={2.4} />
+                Nuevo turno
               </Button>
             </>
           }
@@ -415,12 +421,18 @@ export default function DashboardIndexPage() {
                             {gap.court.name} · {COURT_TYPE_LABELS[gap.court.type]}
                           </span>
                         </span>
-                        <Link
-                          href="/dashboard/reservas"
-                          className="text-sm font-semibold underline-offset-4 hover:underline"
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCreating({
+                              courtId: gap.court.id,
+                              time: defaultSlot(gap.court, timeToMinutes(gap.start)),
+                            })
+                          }
+                          className="text-sm font-semibold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ball"
                         >
                           Reservar
-                        </Link>
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -437,6 +449,28 @@ export default function DashboardIndexPage() {
               </section>
             </div>
           </>
+        )}
+
+        {membership && creating && (
+          <ReservationDialog
+            open={!!creating}
+            onOpenChange={(open) => !open && setCreating(null)}
+            mode="create"
+            reservation={null}
+            initialCourtId={creating.courtId}
+            initialTime={creating.time}
+            initialDate={todayKey}
+            courts={courts}
+            activeReservations={reservations.filter((r) => r.status === "active")}
+            membership={membership}
+            onSaved={(r) => {
+              upsertLocal(r);
+              setCreating(null);
+              refetchPayments();
+            }}
+            onCancelled={(r) => upsertLocal(r)}
+            showDetail={false}
+          />
         )}
 
         {membership && charging && (

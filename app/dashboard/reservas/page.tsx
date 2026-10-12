@@ -28,7 +28,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useReservationDetail } from "@/hooks/use-reservation-detail";
 import { type Court, type CourtType } from "@/lib/courts";
-import { getCourtSlots, timeToMinutes } from "@/lib/availability";
+import { defaultSlot, getCourtSlots } from "@/lib/availability";
 import type { Reservation } from "@/lib/reservations";
 import type { Membership } from "@/lib/roles";
 import {
@@ -259,13 +259,7 @@ function ReservationsPageContent() {
   const openNewFromHeader = () => {
     const court = visibleCourts[0];
     if (!court) return;
-    const slots = getCourtSlots(court);
-    const nowMin = minutesOfDay(now);
-    const time =
-      (isToday ? slots.find((s) => timeToMinutes(s) >= nowMin) : undefined) ??
-      slots[0] ??
-      court.open_time;
-    openCreateDialog(court.id, time);
+    openCreateDialog(court.id, defaultSlot(court, isToday ? minutesOfDay(now) : undefined));
   };
 
   const handleReservationSaved = (reservation: Reservation) => {
