@@ -48,8 +48,6 @@ export type SubscriptionPlan = {
   active?: boolean;
 };
 
-export const CLUB_NAME = "Club Deportivo Central";
-
 export const TIME_SLOTS = [
   "09:00",
   "10:00",

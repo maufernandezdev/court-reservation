@@ -68,9 +68,12 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 6. Selector de club
 
-- [ ] 6.1 Mostrar nombre e iniciales del club activo en el menú lateral y en el del celular, y borrar `CLUB_NAME` de `lib/mocks/data.ts` si ya no se usa; verificar con el club migrado y con uno recién creado
-- [ ] 6.2 Convertir el bloque del club en un menú (shadcn `DropdownMenu`) con la lista de clubes y el rol en cada uno solo si hay más de uno, más "Crear otro club"; `switchClubAction` valida la membresía, escribe la cookie y recarga; verificar con un usuario miembro de dos clubes que planilla, canchas y equipo cambian y que los permisos son los del club elegido
-- [ ] 6.3 Verificar que si sacan a una persona de su club activo, en el próximo acceso entra a su otro club o a `/bienvenida`
+- [x] 6.1 Mostrar nombre e iniciales del club activo en el menú lateral y en el del celular, y borrar `CLUB_NAME` de `lib/mocks/data.ts` si ya no se usa; verificar con el club migrado y con uno recién creado
+  - El menú lateral y el del celular toman nombre, iniciales y rol de la membresía activa (desde la fase 3); se borró `CLUB_NAME` de `lib/mocks/data.ts`. Verificado con el club migrado y con uno recién creado (fase 4).
+- [x] 6.2 Convertir el bloque del club en un menú (shadcn `DropdownMenu`) con la lista de clubes y el rol en cada uno solo si hay más de uno, más "Crear otro club"; `switchClubAction` valida la membresía, escribe la cookie y recarga; verificar con un usuario miembro de dos clubes que planilla, canchas y equipo cambian y que los permisos son los del club elegido
+  - `ClubBlock` es un `DropdownMenu`: "Tus clubes" (radio con rol) solo con más de un club, siempre "Crear otro club"; `switchClubAction` (`app/dashboard/actions.ts`) valida la membresía, escribe la cookie y el cliente recarga `/dashboard` completo. Verificado con un usuario admin de "Club Otro" y profesor de "Club Deportivo Central": al cambiar, el rol, Canchas y la planilla son los del club elegido, se mantiene al recargar, y un usuario de un solo club no ve la lista. Funciona también desde "Más" en el celular.
+- [x] 6.3 Verificar que si sacan a una persona de su club activo, en el próximo acceso entra a su otro club o a `/bienvenida`
+  - Verificado: con la cookie apuntando al club del que lo sacaron, entra a su otro club; una persona sin clubes va a `/bienvenida` desde cualquier pantalla del panel.
 
 ## 7. Cierre
 
