@@ -36,6 +36,7 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 5. Cierre
 
-- [ ] 5.1 Aplicar `0011` en producción con confirmación del usuario y borrar los objetos de prueba del bucket
+- [x] 5.1 Aplicar `0011` en producción con confirmación del usuario y borrar los objetos de prueba del bucket
+  - Aplicadas 2026-10-12 con confirmación del usuario `0009` (pendiente de `add-reservation-types-and-socios`) y `0011` con `supabase db push`. Verificado: 10 perfiles para 10 usuarios, los 3 nombres cargados copiados, triggers `memberships_assign_profe_color` y `on_auth_user_email_changed` creados; Mi perfil carga en `localhost:3000` contra la base real. Los objetos de prueba del bucket se borraron en cada prueba (el bucket quedó en 0 objetos).
 - [x] 5.2 Actualizar README (variables de R2, Mi perfil), `docs/PROJECT_DOCUMENTATION.md` y marcar "Editar perfil" en `docs/next-steps.md`
   - README (variables de R2 con `R2_BUCKET_NAME`, Mi perfil en la tabla, `components/profile/`), `docs/PROJECT_DOCUMENTATION.md` (sección de 0011 y R2; pendientes de producción 0009 y 0011) y "Editar perfil" marcado ✅ en `docs/next-steps.md`.
