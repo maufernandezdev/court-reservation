@@ -7,8 +7,10 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 2. Base de datos
 
-- [ ] 2.1 Migración `0011_profiles.sql`: `profiles` con RLS (propia + miembros de un club en común), backfill desde `memberships`, `update_my_name`, `set_my_profe_color` y trigger que copia el correo confirmado a `memberships.email`; verificar en local con usuarios de dos clubes (lectura cruzada solo con club en común, nombre propio en todas las membresías, color solo si es profe y de la paleta)
-- [ ] 2.2 `supabase/rollback/0011_down.sql` y prueba subir → bajar → subir en local
+- [x] 2.1 Migración `0011_profiles.sql`: `profiles` con RLS (propia + miembros de un club en común), backfill desde `memberships`, `update_my_name`, `set_my_profe_color` y trigger que copia el correo confirmado a `memberships.email`; verificar en local con usuarios de dos clubes (lectura cruzada solo con club en común, nombre propio en todas las membresías, color solo si es profe y de la paleta)
+  - Verificado en local: backfill de 21 perfiles (uno por usuario, nombre más reciente de sus membresías); el operador lee los perfiles de su club (5), alguien sin club solo el propio y nadie el de otro club; `update` directo bloqueado (0 filas); `update_my_name` recorta, actualiza perfil y todas las membresías y rechaza vacío; `set_my_avatar` solo acepta la ruta propia; `set_my_profe_color` funciona para el profe, rechaza al operador y colores fuera de la paleta; cambiar `auth.users.email` copia el correo a las membresías. Se agregó `shares_club_with` (no estaba en design) para la policy y la ruta de fotos.
+- [x] 2.2 `supabase/rollback/0011_down.sql` y prueba subir → bajar → subir en local
+  - `supabase/rollback/0011_down.sql`. Verificado: subir → bajar → subir sin cambios en membresías, turnos ni nombres.
 
 ## 3. Mi perfil
 
