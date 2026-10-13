@@ -1,6 +1,5 @@
 import type { Court } from "@/lib/courts";
 import type { Payment, Reservation } from "@/lib/reservations";
-import { getSlotPrice } from "@/lib/pricing";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 
 /**
@@ -34,18 +33,10 @@ export function paidByReservation(payments: DayPayment[]): Map<string, number> {
   return map;
 }
 
-export function reservationPrice(court: Court | undefined, reservation: Reservation): number {
-  return court ? getSlotPrice(court, reservation.duration_minutes) : 0;
-}
-
-/** Saldo pendiente de un turno activo (0 si está pagado o cancelado). */
-export function amountDue(
-  court: Court | undefined,
-  reservation: Reservation,
-  paid: number
-): number {
+/** Saldo pendiente de un turno activo (0 si está pagado o cancelado), sobre el valor fijado. */
+export function amountDue(reservation: Reservation, paid: number): number {
   if (reservation.status !== "active" || reservation.payment_status === "pagada") return 0;
-  return Math.max(0, reservationPrice(court, reservation) - paid);
+  return Math.max(0, Number(reservation.price) - paid);
 }
 
 export function computeDaySummary(
@@ -67,7 +58,7 @@ export function computeDaySummary(
   let pending = 0;
   let pendingCount = 0;
   for (const r of active) {
-    const due = amountDue(courtById.get(r.court_id), r, paid.get(r.id) ?? 0);
+    const due = amountDue(r, paid.get(r.id) ?? 0);
     if (due > 0) {
       pending += due;
       pendingCount += 1;

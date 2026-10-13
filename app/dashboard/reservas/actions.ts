@@ -11,7 +11,7 @@ import {
   type ReservationInput,
 } from "@/lib/reservations";
 import type { Court } from "@/lib/courts";
-import { getDepositAmount, getSlotPrice } from "@/lib/pricing";
+import { depositFor, quotePrice, type SportPrices } from "@/lib/pricing";
 import { getCourtSlots, rangesOverlap, timeToMinutes } from "@/lib/availability";
 import { requireRole, type SessionContext } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
@@ -50,6 +50,21 @@ async function fetchCourt(
     .eq("club_id", clubId)
     .maybeSingle();
   return (data as Court | null) ?? null;
+}
+
+/** Precios del tipo de cancha (público, profe y seña). */
+async function fetchSportPrices(
+  supabase: SupabaseClient,
+  clubId: string,
+  sport: Court["type"]
+): Promise<SportPrices | undefined> {
+  const { data } = await supabase
+    .from("sport_prices")
+    .select("*")
+    .eq("club_id", clubId)
+    .eq("sport", sport)
+    .maybeSingle();
+  return (data as SportPrices | null) ?? undefined;
 }
 
 async function fetchReservation(
@@ -178,11 +193,19 @@ export async function createReservationAction(
       court.slot_duration
     );
 
+    // El valor queda fijado al reservar (precio del tipo de cancha × duración).
+    const price = quotePrice(
+      await fetchSportPrices(supabase, clubId, court.type),
+      "standard",
+      court.slot_duration
+    );
+
     const { data, error } = await supabase
       .from("reservations")
       .insert({
         club_id: clubId,
         court_id: court.id,
+        price,
         date: parsed.data.date,
         time: parsed.data.time,
         duration_minutes: court.slot_duration,
@@ -275,10 +298,21 @@ export async function updateReservationAction(
       id
     );
 
+    // Si cambia la cancha, el valor se recalcula con los precios de su tipo.
+    const price =
+      court.id === existing.court_id
+        ? Number(existing.price)
+        : quotePrice(
+            await fetchSportPrices(supabase, clubId, court.type),
+            existing.kind,
+            existing.duration_minutes
+          );
+
     const { data, error } = await supabase
       .from("reservations")
       .update({
         court_id: court.id,
+        price,
         date: parsed.data.date,
         time: parsed.data.time,
         customer_name: parsed.data.customer_name.trim(),
@@ -344,10 +378,8 @@ export async function cancelReservationAction(
       return { success: false, error: "La reserva ya estaba cancelada." };
     }
 
-    const court = await fetchCourt(supabase, clubId, reservation.court_id);
-    const slotPrice = court
-      ? getSlotPrice(court, reservation.duration_minutes)
-      : 0;
+    // Valor fijado al reservar.
+    const slotPrice = Number(reservation.price);
 
     // Política del club (defaults si no configuró).
     const { data: settingsRow } = await supabase
@@ -541,14 +573,11 @@ export async function registerPaymentAction(
 
     // "total" cobra solo el saldo: precio del turno menos lo ya cobrado
     // (seña, pagos previos o saldo a favor aplicado, sin contar lo liberado).
+    const slotPrice = Number(reservation.price);
     const amount =
       parsed.data.kind === "seña"
-        ? getDepositAmount(court, reservation.duration_minutes)
-        : Math.max(
-            0,
-            getSlotPrice(court, reservation.duration_minutes) -
-              paidAmount(existingPayments)
-          );
+        ? depositFor(await fetchSportPrices(supabase, clubId, court.type), slotPrice)
+        : Math.max(0, slotPrice - paidAmount(existingPayments));
 
     if (parsed.data.kind === "seña" && amount <= 0) {
       return {
@@ -653,7 +682,7 @@ export async function applyCreditAction(
 
     const payments = await fetchPayments(supabase, clubId, reservationId);
     const paid = paidAmount(payments);
-    const slotPrice = getSlotPrice(court, reservation.duration_minutes);
+    const slotPrice = Number(reservation.price);
     const remaining = Math.max(0, slotPrice - paid);
 
     if (remaining <= 0) {

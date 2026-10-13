@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import AuthGuard from "@/components/auth-guard";
 import { useMembership } from "@/hooks/use-membership";
 import { useCourts } from "@/hooks/use-courts";
-import { formatMoney, getDepositAmount, getSlotPrice } from "@/lib/pricing";
+import { depositFor, formatMoney, hourlyPrice, quotePrice } from "@/lib/pricing";
+import { useSportPrices } from "@/hooks/use-sport-prices";
 import { cancellationOutcome } from "@/lib/cancellation";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { createClient } from "@/lib/supabase/client";
@@ -31,15 +32,24 @@ import { ClubDetailsForm } from "@/components/club/club-details-form";
 type SettingsFormValues = {
   cancel_window_hours: number;
   late_penalty_percent: number;
+  tournament_duration_minutes: number;
 };
 
 const HOUR_OPTIONS = [2, 6, 12, 24, 48];
 const PENALTY_OPTIONS = [0, 25, 50, 100];
+const TOURNAMENT_OPTIONS = [60, 90, 120, 150, 180];
+
+function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m}`;
+}
 const REFERENCE_PRICE = 20000;
 
 export default function ConfiguracionPage() {
   const { membership, isLoading: isLoadingMembership } = useMembership();
   const { courts } = useCourts();
+  const { prices } = useSportPrices();
   const isAdmin = membership?.role === "admin";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -49,6 +59,7 @@ export default function ConfiguracionPage() {
     defaultValues: {
       cancel_window_hours: 24,
       late_penalty_percent: 50,
+      tournament_duration_minutes: 90,
     },
   });
 
@@ -69,6 +80,7 @@ export default function ConfiguracionPage() {
         form.reset({
           cancel_window_hours: settings.cancel_window_hours,
           late_penalty_percent: settings.late_penalty_percent,
+          tournament_duration_minutes: settings.tournament_duration_minutes,
         });
       }
     }
@@ -94,15 +106,14 @@ export default function ConfiguracionPage() {
   const windowHours = Number(form.watch("cancel_window_hours")) || 0;
   const penaltyPercent = Number(form.watch("late_penalty_percent")) || 0;
 
-  // Ejemplo con la primera cancha con precio (o un valor de referencia rotulado).
-  const exampleCourt = courts.find((c) => c.price_per_hour > 0);
+  // Ejemplo con la primera cancha cuyo tipo tiene precio (o un valor de referencia rotulado).
+  const exampleCourt = courts.find((c) => hourlyPrice(prices[c.type], "standard") > 0);
   const example = (() => {
+    const examplePrices = exampleCourt ? prices[exampleCourt.type] : undefined;
     const price = exampleCourt
-      ? getSlotPrice(exampleCourt, exampleCourt.slot_duration)
+      ? quotePrice(examplePrices, "standard", exampleCourt.slot_duration)
       : REFERENCE_PRICE;
-    const deposit = exampleCourt
-      ? getDepositAmount(exampleCourt, exampleCourt.slot_duration)
-      : 0;
+    const deposit = exampleCourt ? depositFor(examplePrices, price) : 0;
     const describe = (late: boolean, paid: number) => {
       const o = cancellationOutcome({ late, slotPrice: price, paid, penaltyPercent });
       const parts = [
@@ -355,6 +366,45 @@ export default function ConfiguracionPage() {
                 </section>
               )}
             </div>
+
+            <section
+              aria-labelledby="torneos"
+              className="flex flex-col gap-4 rounded-2xl border bg-card p-6"
+            >
+              <div className="flex flex-col gap-1">
+                <h2 id="torneos" className="text-lg font-bold">
+                  Torneos
+                </h2>
+                <p className="text-[15px] text-pretty text-muted-foreground">
+                  Duración con la que arranca cada turno de torneo. Se puede cambiar en cada turno.
+                </p>
+              </div>
+              <FormField
+                control={form.control}
+                name="tournament_duration_minutes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Duración estándar de torneo</FormLabel>
+                    <ToggleGroup
+                      type="single"
+                      variant="chip"
+                      spacing={2}
+                      value={String(field.value ?? "")}
+                      onValueChange={(v) => v && field.onChange(Number(v))}
+                      aria-label="Duración estándar de torneo"
+                      className="flex-wrap"
+                    >
+                      {TOURNAMENT_OPTIONS.map((minutes) => (
+                        <ToggleGroupItem key={minutes} value={String(minutes)} size="lg">
+                          {durationLabel(minutes)}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </section>
           </form>
         </Form>
 

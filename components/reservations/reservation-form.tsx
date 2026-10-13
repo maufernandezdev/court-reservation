@@ -12,7 +12,8 @@ import {
   type ReservationInput,
 } from "@/lib/reservations";
 import { getCourtSlots, rangesOverlap, timeToMinutes } from "@/lib/availability";
-import { formatMoney, getDepositAmount, getSlotPrice } from "@/lib/pricing";
+import { depositFor, formatMoney, quotePrice } from "@/lib/pricing";
+import { useSportPrices } from "@/hooks/use-sport-prices";
 import {
   createReservationAction,
   updateReservationAction,
@@ -93,15 +94,15 @@ export function ReservationForm({
   const watchedCourtId = form.watch("court_id");
   const selectedCourt =
     courts.find((court) => court.id === watchedCourtId) ?? null;
+  const { prices } = useSportPrices();
   const slotPrice = selectedCourt
-    ? getSlotPrice(selectedCourt, reservation?.duration_minutes ?? selectedCourt.slot_duration)
-    : 0;
-  const deposit = selectedCourt
-    ? getDepositAmount(
-        selectedCourt,
+    ? quotePrice(
+        prices[selectedCourt.type],
+        reservation?.kind ?? "standard",
         reservation?.duration_minutes ?? selectedCourt.slot_duration
       )
     : 0;
+  const deposit = selectedCourt ? depositFor(prices[selectedCourt.type], slotPrice) : 0;
   const isCancelled = reservation?.status === "cancelled";
 
   // Si el formulario queda montado y cambia la reserva o se reabre, se resetea.

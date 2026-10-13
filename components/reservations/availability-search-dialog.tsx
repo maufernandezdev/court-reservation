@@ -11,7 +11,8 @@ import {
   minutesToTime,
 } from "@/lib/availability";
 import type { Reservation } from "@/lib/reservations";
-import { formatMoney, getSlotPrice } from "@/lib/pricing";
+import { formatMoney, quotePrice } from "@/lib/pricing";
+import { useSportPrices } from "@/hooks/use-sport-prices";
 import { createClient } from "@/lib/supabase/client";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useMembership } from "@/hooks/use-membership";
@@ -62,6 +63,7 @@ export function AvailabilitySearchDialog({
 }: AvailabilitySearchDialogProps) {
   const supabase = createClient();
   const clubId = useMembership().membership.club_id;
+  const { prices } = useSportPrices();
   const now = useNow();
   const todayKey = dateKey(now);
   const tomorrowKey = addDaysKey(now, 1);
@@ -275,7 +277,7 @@ export function AvailabilitySearchDialog({
                     <strong className="text-[15px]">{slot.court.name}</strong>
                     <span className="text-[13px] text-muted-foreground">
                       {COURT_TYPE_LABELS[slot.court.type]} · {slot.court.slot_duration} min ·{" "}
-                      {formatMoney(getSlotPrice(slot.court, slot.court.slot_duration))}
+                      {formatMoney(quotePrice(prices[slot.court.type], "standard", slot.court.slot_duration))}
                     </span>
                   </span>
                   <Button

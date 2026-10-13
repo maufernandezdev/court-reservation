@@ -15,6 +15,7 @@ export type AuditAction =
   | "settings.updated"
   | "club.created"
   | "club.updated"
+  | "prices.updated"
   | "invitation.created"
   | "invitation.regenerated"
   | "invitation.revoked"
@@ -76,6 +77,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "settings.updated",
     "club.updated",
     "invitation.regenerated",
+    "prices.updated",
   ],
   charged: ["payment.registered", "credit.applied"],
   cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked"],
@@ -175,6 +177,10 @@ export function describeAuditEntry(
       const total = Object.values(counts).reduce<number>((sum, n) => sum + (Number(n) || 0), 0);
       return `creó el club ${String(p.name ?? "")}${total ? ` con ${total} ${total === 1 ? "cancha" : "canchas"}` : ""}`.trim();
     }
+    case "prices.updated": {
+      const sport = { tenis: "tenis", padel: "pádel", futbol: "fútbol" }[String(p.sport)] ?? String(p.sport ?? "");
+      return `cambió los precios de ${sport}: ${money(p.public_price_per_hour)} por hora (profe ${money(p.profe_price_per_hour)})`;
+    }
     case "club.updated":
       return `cambió los datos del club: ${String(p.name ?? "")}${p.city ? ` (${String(p.city)})` : ""}`;
     case "invitation.created":
@@ -186,7 +192,7 @@ export function describeAuditEntry(
     case "invitation.accepted":
       return `se sumó al club como ${ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro")}`;
     case "settings.updated":
-      return `cambió las políticas: ${String(p.cancel_window_hours ?? "?")} h de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%`;
+      return `cambió las políticas: ${String(p.cancel_window_hours ?? "?")} h de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%${p.tournament_duration_minutes ? `, torneos de ${String(p.tournament_duration_minutes)} min` : ""}`;
     default:
       return `hizo "${entry.action}"`;
   }

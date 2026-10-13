@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionContext } from "@/lib/auth";
 import { normalizeTime } from "@/lib/availability";
 import { COURT_TYPE_LABELS, type Court, type CourtType } from "@/lib/courts";
-import { formatMoney, getSlotPrice } from "@/lib/pricing";
+import { depositFor, formatMoney, pricesBySport, quotePrice, type SportPrices } from "@/lib/pricing";
+import { SportPricesSection } from "@/components/courts/sport-prices-section";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NewCourtDialog } from "@/components/courts/new-court-dialog";
 import { CourtCardActions } from "@/components/courts/court-card-actions";
@@ -41,6 +42,13 @@ export default async function CanchasPage({
     .eq("active", true)
     .order("created_at", { ascending: true });
 
+  const { data: pricesData } = await supabase
+    .from("sport_prices")
+    .select("*")
+    .eq("club_id", membership.club_id);
+  const priceRows = (pricesData ?? []) as SportPrices[];
+  const prices = pricesBySport(priceRows);
+
   const courts = (data ?? []).map((court) => ({
     ...(court as Court),
     open_time: normalizeTime((court as Court).open_time),
@@ -51,7 +59,7 @@ export default async function CanchasPage({
     <div className="space-y-6">
       <PageHeader
         title="Canchas"
-        description="Precio, duración del turno, horario y seña de cada cancha."
+        description="Precios por deporte y, para cada cancha, duración del turno y horario."
         actions={<NewCourtDialog triggerLabel="Nueva cancha" />}
       />
 
@@ -61,8 +69,8 @@ export default async function CanchasPage({
           <AlertDescription className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-ball-foreground">
             <span>
               <strong className="font-mono">PASO 3 DE 3</strong> · Tu club ya está creado.
-              Las canchas arrancan en $0 con turnos de 60 minutos: editá cada una (menú ⋮) para
-              definir precio, duración y seña.
+              Cargá abajo los precios de cada deporte (público, profe y seña); si alguna cancha
+              tiene otro horario o duración de turno, editala desde su menú ⋮.
             </span>
             <Link href="/dashboard" className="font-semibold underline underline-offset-4">
               Listo, ir a Hoy
@@ -77,6 +85,18 @@ export default async function CanchasPage({
             No se pudieron cargar las canchas.
           </AlertDescription>
         </Alert>
+      )}
+
+      <SportPricesSection
+        sports={[...new Set(courts.map((c) => c.type))].map((sport) => ({
+          sport,
+          slotDuration: courts.find((c) => c.type === sport)!.slot_duration,
+        }))}
+        rows={priceRows}
+      />
+
+      {courts.length > 0 && (
+        <h2 className="text-lg font-bold">Canchas</h2>
       )}
 
       {courts.length === 0 ? (
@@ -116,17 +136,17 @@ export default async function CanchasPage({
               </div>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
                 <div>
-                  <dt className="text-[13px] text-muted-foreground">Precio por hora</dt>
+                  <dt className="text-[13px] text-muted-foreground">Turno público</dt>
                   <dd className="mt-0.5 font-mono font-semibold">
-                    {court.price_per_hour > 0
-                      ? formatMoney(court.price_per_hour)
-                      : "Sin configurar"}
+                    {quotePrice(prices[court.type], "standard", court.slot_duration) > 0
+                      ? formatMoney(quotePrice(prices[court.type], "standard", court.slot_duration))
+                      : "Sin precio"}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[13px] text-muted-foreground">Turno</dt>
-                  <dd className="mt-0.5 font-semibold">
-                    {court.slot_duration} min · {formatMoney(getSlotPrice(court, court.slot_duration))}
+                  <dt className="text-[13px] text-muted-foreground">Turno profe</dt>
+                  <dd className="mt-0.5 font-mono font-semibold">
+                    {formatMoney(quotePrice(prices[court.type], "profe", court.slot_duration))}
                   </dd>
                 </div>
                 <div>
@@ -138,11 +158,13 @@ export default async function CanchasPage({
                 <div>
                   <dt className="text-[13px] text-muted-foreground">Seña</dt>
                   <dd className="mt-0.5 font-semibold">
-                    {court.deposit_enabled
-                      ? court.deposit_type === "percent"
-                        ? `${court.deposit_value} %`
-                        : formatMoney(court.deposit_value)
-                      : "No pide"}
+                    {(() => {
+                      const deposit = depositFor(
+                        prices[court.type],
+                        quotePrice(prices[court.type], "standard", court.slot_duration)
+                      );
+                      return deposit > 0 ? formatMoney(deposit) : "No pide";
+                    })()}
                   </dd>
                 </div>
               </dl>

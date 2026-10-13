@@ -12,7 +12,8 @@ import type {
   Reservation,
 } from "@/lib/reservations";
 import type { Membership } from "@/lib/roles";
-import { formatMoney, getDepositAmount, getSlotPrice } from "@/lib/pricing";
+import { depositFor, formatMoney } from "@/lib/pricing";
+import { useSportPrices } from "@/hooks/use-sport-prices";
 import { cancellationOutcome } from "@/lib/cancellation";
 import {
   applyCreditAction,
@@ -63,15 +64,13 @@ export function useReservationDetail({
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
 
+  const { prices } = useSportPrices();
   const court = reservation
     ? (courts.find((c) => c.id === reservation.court_id) ?? null)
     : null;
-  const slotPrice =
-    court && reservation ? getSlotPrice(court, reservation.duration_minutes) : 0;
-  const deposit =
-    court && reservation
-      ? getDepositAmount(court, reservation.duration_minutes)
-      : 0;
+  // Valor fijado en el turno; la seña sale de la configuración del tipo de cancha.
+  const slotPrice = reservation ? Number(reservation.price) : 0;
+  const deposit = court ? depositFor(prices[court.type], slotPrice) : 0;
 
   const isCancelled = reservation?.status === "cancelled";
   const depositPaid = payments

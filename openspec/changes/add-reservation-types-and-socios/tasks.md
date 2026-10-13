@@ -15,9 +15,12 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 2. Precios por deporte
 
-- [ ] 2.1 `lib/pricing.ts`: `quotePrice` (deporte, tipo, duración) y `depositFor` sobre el valor fijado; reemplazar `getSlotPrice`/`getDepositAmount` en cobros, cancelación, detalle, Hoy (`lib/daily-overview.ts`), Caja y buscador; verificar que un cambio de precio no altera turnos existentes
-- [ ] 2.2 Sección "Precios" en Canchas (una tarjeta por deporte del club: público, profe y seña, RHF + Zod, solo admin, auditoría `prices.updated`) y formulario de cancha sin precio ni seña (alta de cancha de un deporte nuevo crea su fila de precios); verificar los escenarios de `sport-pricing`
-- [ ] 2.3 Políticas: sección "Torneos" con la duración estándar (pasos de 30); verificar que solo el admin la cambia y que el ejemplo de cancelación usa los precios por deporte
+- [x] 2.1 `lib/pricing.ts`: `quotePrice` (deporte, tipo, duración) y `depositFor` sobre el valor fijado; reemplazar `getSlotPrice`/`getDepositAmount` en cobros, cancelación, detalle, Hoy (`lib/daily-overview.ts`), Caja y buscador; verificar que un cambio de precio no altera turnos existentes
+  - `lib/pricing.ts`: `quotePrice`, `hourlyPrice`, `depositFor`, `pricesBySport`, `sportPricesSchema`; `hooks/use-sport-prices.ts`. Cobros, cancelación, aplicar saldo, detalle, Hoy (`amountDue` sin cancha) y Políticas usan `reservation.price`; formulario y buscador cotizan con `quotePrice`. Alta fija el valor; edición lo recalcula si cambia la cancha. Verificado en local: con tenis subido a $11.000 el turno existente sigue en $10.000, el nuevo queda en $11.000 y la seña 30 % cobra $3.300.
+- [x] 2.2 Sección "Precios" en Canchas (una tarjeta por deporte del club: público, profe y seña, RHF + Zod, solo admin, auditoría `prices.updated`) y formulario de cancha sin precio ni seña (alta de cancha de un deporte nuevo crea su fila de precios); verificar los escenarios de `sport-pricing`
+  - `components/courts/sport-prices-section.tsx` (una tarjeta por deporte del club con resumen en vivo) + `updateSportPricesAction` (auditoría `prices.updated`); formulario y tarjetas de cancha sin precio ni seña propios; crear una cancha de un deporte nuevo crea su fila de precios. Verificado: tarjetas de tenis y pádel, guardado, fútbol aparece al crear su primera cancha, Actividad registra el cambio.
+- [x] 2.3 Políticas: sección "Torneos" con la duración estándar (pasos de 30); verificar que solo el admin la cambia y que el ejemplo de cancelación usa los precios por deporte
+  - Sección "Torneos" en Políticas (60 min a 3 h) en el mismo formulario; el ejemplo de cancelación usa los precios por deporte. Verificado: el admin guarda 2 h (120 en la base) y el operador no accede a Políticas.
 
 ## 3. Socios
 
@@ -40,5 +43,6 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 ## 6. Cierre
 
 - [ ] 6.1 Recorrido completo en local: precios de tenis y pádel, socios, turno estándar con socio, turno de profe cargado por el operador y por el profe, torneo singles y dobles con duración cambiada, fijo con baja, cobro y cancelación de cada tipo, Caja y Actividad
-- [ ] 6.2 Aplicar `0008` en producción con confirmación del usuario y repetir conteos
+- [x] 6.2 Aplicar `0008` en producción con confirmación del usuario y repetir conteos
+  - Aplicada 2026-10-12 antes de la fase 2, con confirmación del usuario, para que su `localhost:3000` (base real) siga funcionando mientras se desarrolla (la migración es aditiva). Verificado: los 24 turnos conservan su valor (`price` = precio de la cancha × duración en todos), 24 personas, precios por deporte desde las canchas. Hay un club nuevo de prueba del usuario (`0a3a89e7…`) con precios en $0.
 - [ ] 6.3 Actualizar README, `docs/PROJECT_DOCUMENTATION.md` y marcar en `docs/next-steps.md` los puntos aplicados; marcar `add-fixed-reservations` como absorbido por este cambio

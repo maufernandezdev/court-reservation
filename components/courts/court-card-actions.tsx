@@ -49,13 +49,9 @@ function toFormValues(court: Court): CourtInput {
   return {
     name: court.name,
     type: court.type,
-    price_per_hour: court.price_per_hour,
     slot_duration: court.slot_duration,
     open_time: court.open_time,
     close_time: court.close_time,
-    deposit_enabled: court.deposit_enabled,
-    deposit_type: court.deposit_type,
-    deposit_value: court.deposit_value,
   };
 }
 

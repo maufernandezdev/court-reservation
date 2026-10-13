@@ -7,7 +7,10 @@ import { writeAudit } from "@/lib/audit";
 import { clubDetailsSchema, type ClubDetailsInput } from "@/lib/clubs";
 
 export async function saveSettingsAction(
-  input: Pick<ClubSettings, "cancel_window_hours" | "late_penalty_percent">
+  input: Pick<
+    ClubSettings,
+    "cancel_window_hours" | "late_penalty_percent" | "tournament_duration_minutes"
+  >
 ): Promise<{ success: boolean; error?: string }> {
   const parsed = clubSettingsSchema.safeParse(input);
 
@@ -26,6 +29,7 @@ export async function saveSettingsAction(
       club_id: clubId,
       cancel_window_hours: parsed.data.cancel_window_hours,
       late_penalty_percent: parsed.data.late_penalty_percent,
+      tournament_duration_minutes: parsed.data.tournament_duration_minutes,
       updated_at: new Date().toISOString(),
     });
 

@@ -355,7 +355,7 @@ export default function DashboardIndexPage() {
                         {upcoming.map((r) => {
                           const tone = toneFor(r);
                           const court = courtById.get(r.court_id);
-                          const due = amountDue(court, r, paid.get(r.id) ?? 0);
+                          const due = amountDue(r, paid.get(r.id) ?? 0);
                           return (
                             <tr key={r.id} className="border-t border-muted">
                               <td className="py-2.5 pr-2 pl-4 align-top font-mono font-semibold sm:pl-5 sm:align-middle">{r.time}</td>

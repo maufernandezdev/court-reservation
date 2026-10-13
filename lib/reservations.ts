@@ -3,6 +3,16 @@ import { z } from "zod";
 export const RESERVATION_STATUSES = ["active", "cancelled"] as const;
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 
+/** Tipo de turno: estándar (público), de profe o de torneo. */
+export const RESERVATION_KINDS = ["standard", "profe", "torneo"] as const;
+export type ReservationKind = (typeof RESERVATION_KINDS)[number];
+
+export const RESERVATION_KIND_LABELS: Record<ReservationKind, string> = {
+  standard: "Estándar",
+  profe: "Profe",
+  torneo: "Torneo",
+};
+
 export const PAYMENT_STATUSES = ["pendiente", "senada", "pagada"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
@@ -63,6 +73,13 @@ export type Reservation = {
   cancelled_by: string | null;
   cancel_reason: string | null;
   late_cancel: boolean;
+  kind: ReservationKind;
+  /** Profe que usa el turno (solo en turnos de profe). */
+  profe_user_id: string | null;
+  /** Valor fijado al reservar (precio del tipo de cancha × duración). */
+  price: number;
+  /** Serie del turno fijo semanal, si es una fecha de un fijo. */
+  series_id: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -99,6 +116,8 @@ export type ClubSettings = {
   club_id: string;
   cancel_window_hours: number;
   late_penalty_percent: number;
+  /** Duración con la que arranca un turno de torneo (editable en cada turno). */
+  tournament_duration_minutes: number;
   updated_at: string;
 };
 
@@ -112,4 +131,10 @@ export const clubSettingsSchema = z.object({
     .number({ message: "Ingresá un porcentaje válido" })
     .min(0, "El porcentaje no puede ser negativo")
     .max(100, "El porcentaje no puede superar 100"),
+  tournament_duration_minutes: z.coerce
+    .number({ message: "Elegí la duración de los torneos" })
+    .int()
+    .min(30, "La duración mínima es de 30 minutos")
+    .max(360, "La duración máxima es de 6 horas")
+    .refine((value) => value % 30 === 0, "La duración va en pasos de 30 minutos"),
 });
