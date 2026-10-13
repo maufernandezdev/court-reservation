@@ -1,4 +1,25 @@
 
+## 🧪 Pruebas pendientes (las hace Mau) — anotado 12/10/2026
+
+Todo lo implementado se probó con scripts automáticos contra un Supabase local y una pasada corta contra la base real. Falta la **prueba manual** en `localhost:3000` (base real) antes de darlo por cerrado. Si algo falla, anotarlo debajo del punto.
+
+**Antes de empezar:** en Canchas → Precios, cargar público, profe y seña de cada deporte (el club nuevo de prueba tiene todo en $0).
+
+- [ ] **Registro y verificación de cuenta:** registrarse con un correo del equipo de Supabase, abrir el link en el mismo navegador (entra solo) y en otro navegador o el celular (dice "¡Cuenta verificada!" y pide ingresar).
+- [ ] **Bienvenida y alta del club:** cuenta nueva → "Crear mi club" → canchas por deporte → paso 3 en Canchas. "Me van a invitar" con y sin invitación pendiente.
+- [ ] **Invitaciones:** desde Equipo, invitar por WhatsApp y con "Copiar link"; entrar desde el link con una cuenta nueva (elige contraseña) y con una existente; link vencido, cancelado y regenerado; sacar a alguien del equipo.
+- [ ] **Socios:** alta, edición, baja y búsqueda (nombre, DNI, teléfono) como admin y como operador; el profe no los ve.
+- [ ] **Turnos:** estándar con socio y con persona no socia (buscador con teclado), turno de profe cargado por el operador y por el profe, torneo singles y dobles con duración cambiada; colores y leyenda en la planilla (escritorio y celular).
+- [ ] **Turnos fijos:** crear uno con una semana ocupada (avisa la fecha salteada), navegar meses adelante, cancelar una fecha suelta, dar de baja desde una fecha con una fecha ya señada (queda activa y avisa).
+- [ ] **Precios:** cambiar precios y ver que los turnos ya reservados mantienen su valor; seña fija y por porcentaje.
+- [ ] **Cobros y cancelaciones por tipo:** cobrar seña y total de estándar, profe y torneo; cancelar en término y fuera de término; revisar Caja del día y Actividad.
+- [ ] **Hoy:** "Nuevo turno" y "Reservar" en huecos libres abren el diálogo; resumen y "Por cobrar" con los valores fijados.
+- [ ] **Mi perfil:** cambiar nombre (se ve en menú, Equipo y Actividad), contraseña (con la actual), correo (llegan dos links; con el SMTP de prueba solo a correos del equipo), subir/cambiar/quitar foto, color del profe; otra persona de otro club no ve tu foto.
+- [ ] **Permisos por rol:** recorrer el panel como admin, operador y profesor y confirmar qué ve y qué puede hacer cada uno (matriz de Equipo).
+- [ ] **Verificaciones manuales viejas** de `openspec/changes/add-club-operations-foundation/tasks.md` (1.3, 2.2, 3.3 y 11.2): hacerlas y tildarlas para poder archivar ese cambio.
+
+**Todavía sin implementar:** precio de noche (`openspec/changes/add-night-pricing/`, planificado). **Antes de publicar:** cargar `SUPABASE_SECRET_KEY` y las variables de R2 en el hosting, y configurar un SMTP propio para que lleguen los correos a personas reales.
+
 ## ✅ Modulo de productos
 > ✅ **Aplicado (12/10/2026).** Productos ya no aparece en el menú y `/dashboard/productos` redirige a Hoy. El código queda intacto: se vuelve a mostrar poniendo `products: true` en `lib/features.ts`.
 

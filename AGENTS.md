@@ -12,6 +12,14 @@ Instrucciones para agentes de IA que trabajen en este repositorio.
 
 ## Reglas obligatorias
 
+### Cloudflare: acceso mediante Wrangler
+
+- Para conectarse a Cloudflare y administrar recursos del proyecto, usar el CLI **Wrangler**. Hay una instalación global disponible como `wrangler` y una sesión OAuth configurada en este equipo.
+- Antes de operar, ejecutar `wrangler whoami` para verificar la sesión y la cuenta de destino. Si la sesión expiró, usar `wrangler login`; no solicitar tokens ni credenciales por chat.
+- Para operaciones administrativas, usar el CLI global. Si el proyecto tiene una versión local de Wrangler o scripts propios de desarrollo/despliegue, respetar esa versión y ejecutarlos con pnpm.
+- Consultar `wrangler --help` y `wrangler <comando> --help` para confirmar la sintaxis vigente, especialmente para R2. Verificar el recurso, la cuenta y el entorno antes de modificar recursos remotos.
+- No copiar credenciales de Wrangler al repositorio ni registrar secretos en código, documentación o logs.
+
 ### Validación de formularios con Zod
 
 - **Todo formulario debe validar sus inputs con Zod.** No hay excepciones.
