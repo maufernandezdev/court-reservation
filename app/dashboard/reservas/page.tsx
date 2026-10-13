@@ -3,14 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  LandPlot,
-  Plus,
-  Search,
-} from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, LandPlot, Plus, Search, Repeat, Trophy } from "lucide-react";
 import AuthGuard from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +22,7 @@ import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useReservationDetail } from "@/hooks/use-reservation-detail";
 import { type Court, type CourtType } from "@/lib/courts";
 import { defaultSlot, getCourtSlots } from "@/lib/availability";
+import { PROFE_COLORS } from "@/lib/profe-colors";
 import type { Reservation } from "@/lib/reservations";
 import type { Membership } from "@/lib/roles";
 import {
@@ -58,12 +52,12 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
-/** Leyenda de estados (sin "fijo", que todavía no existe). */
+/** Leyenda: estados de pago (turnos estándar) y tipos de turno. */
 function StatusLegend() {
   return (
     <ul
-      className="flex flex-wrap items-center gap-4 text-[13px] text-muted-foreground"
-      aria-label="Estados del turno"
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground"
+      aria-label="Referencias de la planilla"
     >
       {RESERVATION_TONES.filter((t) => t !== "fixed").map((tone) => (
         <li key={tone} className="flex items-center gap-1.5">
@@ -71,6 +65,24 @@ function StatusLegend() {
           {RESERVATION_TONE_LABELS[tone]}
         </li>
       ))}
+      <li className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="size-3.5 rounded"
+          style={{ background: `linear-gradient(135deg, ${PROFE_COLORS[0].value} 50%, ${PROFE_COLORS[1].value} 50%)` }}
+        />
+        Profe (color de cada profe)
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className={cn("flex size-3.5 items-center justify-center rounded", toneClasses("fixed"))}>
+          <Trophy className="size-2.5" />
+        </span>
+        Torneo
+      </li>
+      <li className="flex items-center gap-1.5">
+        <Repeat aria-hidden="true" className="size-3.5" />
+        Fijo
+      </li>
     </ul>
   );
 }

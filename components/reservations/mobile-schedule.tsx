@@ -3,13 +3,16 @@
 import { useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
-import type { Reservation } from "@/lib/reservations";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import {
   RESERVATION_TONE_LABELS,
-  toneClasses,
   toneFor,
+  reservationLook,
+  reservationTitle,
 } from "@/lib/reservation-tone";
+import { RESERVATION_KIND_LABELS, type Reservation } from "@/lib/reservations";
+import { ReservationMarks } from "@/components/reservations/reservation-marks";
+import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
@@ -113,6 +116,7 @@ export function MobileSchedule({
   onSelect,
   onCreate,
 }: MobileScheduleProps) {
+  const profeColors = useProfeColors();
   const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
   const [fromOpening, setFromOpening] = useState(false);
 
@@ -247,6 +251,7 @@ export function MobileSchedule({
           }
           const r = row.reservation;
           const tone = toneFor(r);
+          const look = reservationLook(r, r.profe_user_id ? profeColors.get(r.profe_user_id) : null);
           const end = minutesToTime(timeToMinutes(r.time) + r.duration_minutes);
           return (
             <li key={r.id}>
@@ -255,14 +260,20 @@ export function MobileSchedule({
                 onClick={() => onSelect(r)}
                 className={cn(
                   "flex min-h-[60px] w-full items-center gap-3 rounded-xl py-2 pr-3 pl-3.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
-                  toneClasses(tone)
+                  look.className
                 )}
+                style={look.style}
               >
                 <span className="w-13 font-mono text-[15px] font-semibold">{r.time}</span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <strong className="truncate text-[15px]">{r.customer_name}</strong>
+                  <span className="flex items-center gap-1.5">
+                    <strong className="min-w-0 truncate text-[15px]">{reservationTitle(r)}</strong>
+                    <ReservationMarks reservation={r} />
+                  </span>
                   <span className="text-[13px] opacity-85">
-                    {r.time}–{end} · {RESERVATION_TONE_LABELS[tone]}
+                    {r.time}–{end}
+                    {r.kind !== "standard" ? ` · ${RESERVATION_KIND_LABELS[r.kind]}` : ""} ·{" "}
+                    {RESERVATION_TONE_LABELS[tone]}
                   </span>
                 </span>
                 <ChevronRight className="size-[18px] shrink-0 opacity-70" />

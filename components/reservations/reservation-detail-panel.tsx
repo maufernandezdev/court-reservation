@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { History, Loader2, MessageCircle, Pencil, Wallet, X } from "lucide-react";
+import { History, Loader2, MessageCircle, Pencil, Wallet, X, Repeat, Trophy } from "lucide-react";
 import {
+  sortedParticipants,
+  RESERVATION_KIND_LABELS,
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
@@ -14,7 +16,14 @@ import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { COURT_TYPE_LABELS } from "@/lib/courts";
 import type { ReservationDetail } from "@/hooks/use-reservation-detail";
 import { describeAuditEntry } from "@/lib/audit";
-import { RESERVATION_TONE_LABELS, toneClasses, toneFor } from "@/lib/reservation-tone";
+import {
+  RESERVATION_TONE_LABELS,
+  reservationLook,
+  reservationTitle,
+  toneFor,
+} from "@/lib/reservation-tone";
+import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
+import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +81,7 @@ export function ReservationDetailPanel({
   showHeader = true,
 }: ReservationDetailPanelProps) {
   const tone = toneFor(reservation);
+  const profeColors = useProfeColors();
   const {
     court,
     isLoadingExtras,
@@ -101,9 +111,33 @@ export function ReservationDetailPanel({
       {showHeader && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
-            <Badge variant={tone} className="px-2.5 py-1 text-[13px]">
-              {RESERVATION_TONE_LABELS[tone]}
-            </Badge>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <Badge variant={tone} className="px-2.5 py-1 text-[13px]">
+                {RESERVATION_TONE_LABELS[tone]}
+              </Badge>
+              {reservation.kind !== "standard" && (
+                <Badge
+                  className={cn(
+                    "px-2.5 py-1 text-[13px]",
+                    reservation.kind === "torneo" ? "bg-line text-line-foreground" : "text-white"
+                  )}
+                  style={
+                    reservation.kind === "profe"
+                      ? { backgroundColor: (reservation.profe_user_id && profeColors.get(reservation.profe_user_id)) || FALLBACK_PROFE_COLOR }
+                      : undefined
+                  }
+                >
+                  {reservation.kind === "torneo" && <Trophy aria-hidden="true" />}
+                  {RESERVATION_KIND_LABELS[reservation.kind]}
+                </Badge>
+              )}
+              {reservation.series_id && (
+                <Badge variant="outline" className="px-2.5 py-1 text-[13px]">
+                  <Repeat aria-hidden="true" />
+                  Fijo
+                </Badge>
+              )}
+            </span>
             {onClose && (
               <Button
                 variant="ghost"
@@ -116,8 +150,20 @@ export function ReservationDetailPanel({
             )}
           </div>
           <h2 className="font-display text-[26px] leading-tight font-extrabold tracking-[-0.02em] text-balance font-stretch-[115%]">
-            {reservation.customer_name}
+            {reservationTitle(reservation)}
           </h2>
+          {(() => {
+            const people = sortedParticipants(reservation).map((p) => p.name);
+            if (reservation.kind === "profe") {
+              const students = people.slice(1);
+              return students.length > 0 ? (
+                <p className="text-[15px] text-muted-foreground">Alumnos: {students.join(", ")}</p>
+              ) : null;
+            }
+            return reservation.kind === "standard" && people.length > 1 ? (
+              <p className="text-[15px] text-muted-foreground">Juegan: {people.join(", ")}</p>
+            ) : null;
+          })()}
         </div>
       )}
 
@@ -351,6 +397,11 @@ export function CancelConfirmDialog({
 }) {
   const { cancelOutcome, wouldBeLate, court } = detail;
   const tone = toneFor(reservation);
+  const profeColors = useProfeColors();
+  const look = reservationLook(
+    reservation,
+    reservation.profe_user_id ? profeColors.get(reservation.profe_user_id) : null
+  );
   return (
     <AlertDialog
       open={detail.cancelConfirmOpen}
@@ -364,10 +415,13 @@ export function CancelConfirmDialog({
           <AlertDialogDescription>{detail.cancelConsequence()}</AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className={cn("flex items-center gap-3 rounded-xl p-3.5", toneClasses(tone), "no-underline")}>
+        <div
+          className={cn("flex items-center gap-3 rounded-xl p-3.5", look.className, "no-underline")}
+          style={look.style}
+        >
           <strong className="font-mono text-xl">{reservation.time}</strong>
           <span className="flex min-w-0 flex-col">
-            <strong className="truncate text-base">{reservation.customer_name}</strong>
+            <strong className="truncate text-base">{reservationTitle(reservation)}</strong>
             <span className="text-[13px] opacity-85">
               {court?.name} · {formatDate(reservation.date)} · {reservation.duration_minutes} min ·{" "}
               {RESERVATION_TONE_LABELS[tone]}

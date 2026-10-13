@@ -12,6 +12,7 @@ export type AuditAction =
   | "member.invited"
   | "member.removed"
   | "member.role_updated"
+  | "member.color_updated"
   | "settings.updated"
   | "club.created"
   | "club.updated"
@@ -78,6 +79,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "reservation.updated",
     "court.updated",
     "member.role_updated",
+    "member.color_updated",
     "settings.updated",
     "club.updated",
     "invitation.regenerated",
@@ -175,6 +177,8 @@ export function describeAuditEntry(
       return `sumó a ${String(p.email ?? "una persona")} como ${ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro")}`;
     case "member.role_updated":
       return `cambió el rol de ${ctx.memberName ?? "un miembro"} a ${ROLE_NAMES[String(p.role)] ?? String(p.role)}`;
+    case "member.color_updated":
+      return `cambió el color de ${ctx.memberName ?? "un profe"} en la planilla`;
     case "member.removed":
       return `quitó a ${ctx.memberName ?? "un miembro"} del club`;
     case "club.created": {

@@ -34,9 +34,13 @@ import {
 } from "@/lib/daily-overview";
 import {
   RESERVATION_TONE_LABELS,
-  toneClasses,
   toneFor,
+  reservationLook,
+  reservationTitle,
 } from "@/lib/reservation-tone";
+import { ReservationMarks } from "@/components/reservations/reservation-marks";
+import { useProfeColors } from "@/hooks/use-profes";
+import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { cn } from "@/lib/utils";
 
 const UPCOMING_LIMIT = 8;
@@ -73,18 +77,33 @@ function KpiCard({
   );
 }
 
-function CourtNowTile({ court, status }: { court: Court; status: CourtNow }) {
-  const tone = status.kind === "busy" ? toneFor(status.reservation) : null;
+function CourtNowTile({
+  court,
+  status,
+  profeColors,
+}: {
+  court: Court;
+  status: CourtNow;
+  profeColors: Map<string, string | null>;
+}) {
+  const look =
+    status.kind === "busy"
+      ? reservationLook(
+          status.reservation,
+          status.reservation.profe_user_id ? profeColors.get(status.reservation.profe_user_id) : null
+        )
+      : null;
   return (
     <div
       className={cn(
         "flex min-h-26 flex-col gap-1.5 rounded-[14px] p-4",
-        tone
-          ? toneClasses(tone)
+        look
+          ? look.className
           : status.kind === "free"
             ? "border-[1.5px] border-dashed border-sidebar-label bg-card"
             : "bg-muted text-muted-foreground"
       )}
+      style={look?.style}
     >
       <div className="flex items-baseline justify-between gap-2">
         <strong className="text-[15px]">{court.name}</strong>
@@ -92,12 +111,15 @@ function CourtNowTile({ court, status }: { court: Court; status: CourtNow }) {
           {COURT_TYPE_LABELS[court.type]}
         </span>
       </div>
-      <span className="min-h-5 truncate text-sm font-semibold">
-        {status.kind === "busy"
-          ? status.reservation.customer_name
-          : status.kind === "free"
-            ? "Libre"
-            : "Cerrada"}
+      <span className="flex min-h-5 items-center gap-1.5 text-sm font-semibold">
+        {status.kind === "busy" && <ReservationMarks reservation={status.reservation} />}
+        <span className="min-w-0 truncate">
+          {status.kind === "busy"
+            ? reservationTitle(status.reservation)
+            : status.kind === "free"
+              ? "Libre"
+              : "Cerrada"}
+        </span>
       </span>
       <span className="font-mono text-[13px]">
         {status.kind === "busy"
@@ -124,6 +146,7 @@ export default function DashboardIndexPage() {
 
   const { courts, isLoading: isLoadingCourts, error: courtsError } = useCourts();
   const { membership } = useMembership();
+  const profeColors = useProfeColors();
   const {
     reservations,
     isLoading: isLoadingReservations,
@@ -312,6 +335,7 @@ export default function DashboardIndexPage() {
                     key={court.id}
                     court={court}
                     status={courtStatusNow(court, visibleReservations, nowMinutes)}
+                    profeColors={profeColors}
                   />
                 ))}
               </div>
@@ -361,7 +385,17 @@ export default function DashboardIndexPage() {
                               <td className="py-2.5 pr-2 pl-4 align-top font-mono font-semibold sm:pl-5 sm:align-middle">{r.time}</td>
                               <td className="hidden px-2 py-2.5 sm:table-cell">{court?.name}</td>
                               <td className="px-2 py-2.5">
-                                <span className="font-medium">{r.customer_name}</span>
+                                <span className="inline-flex items-center gap-1.5 font-medium">
+                                  {r.kind === "profe" && (
+                                    <span
+                                      aria-hidden="true"
+                                      className="size-2.5 rounded-full"
+                                      style={{ backgroundColor: (r.profe_user_id && profeColors.get(r.profe_user_id)) || FALLBACK_PROFE_COLOR }}
+                                    />
+                                  )}
+                                  {reservationTitle(r)}
+                                  <ReservationMarks reservation={r} />
+                                </span>
                                 <span className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground sm:hidden">
                                   {court?.name}
                                   <Badge variant={tone}>{RESERVATION_TONE_LABELS[tone]}</Badge>

@@ -30,6 +30,8 @@ import {
 import type { ClubInvitation, SharedInvitation } from "@/lib/invitations";
 import { InvitationShare } from "@/components/members/invitation-share";
 import { PendingInvitations } from "@/components/members/pending-invitations";
+import { ProfeColorPicker } from "@/components/members/profe-color-picker";
+import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -259,9 +261,10 @@ export default function MiembrosPage() {
                           className={cn(
                             "flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold",
                             member.role === "profesor"
-                              ? "bg-line text-line-foreground"
+                              ? "text-white"
                               : "bg-ink text-primary-foreground"
                           )}
+                          style={member.role === "profesor" ? { backgroundColor: member.color ?? FALLBACK_PROFE_COLOR } : undefined}
                         >
                           {initials(name)}
                         </span>
@@ -311,6 +314,14 @@ export default function MiembrosPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          {member.role === "profesor" && (
+                            <ProfeColorPicker
+                              membershipId={member.id}
+                              name={name}
+                              color={member.color}
+                              onChanged={loadMembers}
+                            />
+                          )}
                           <Button
                             variant="ghost"
                             size="icon-sm"

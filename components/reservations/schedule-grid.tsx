@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Plus } from "lucide-react";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
-import type { Reservation } from "@/lib/reservations";
 import {
   getCourtSlots,
   minutesToTime,
@@ -12,9 +11,13 @@ import {
 } from "@/lib/availability";
 import {
   RESERVATION_TONE_LABELS,
-  toneClasses,
   toneFor,
+  reservationLook,
+  reservationTitle,
 } from "@/lib/reservation-tone";
+import { RESERVATION_KIND_LABELS, type Reservation } from "@/lib/reservations";
+import { ReservationMarks } from "@/components/reservations/reservation-marks";
+import { useProfeColors } from "@/hooks/use-profes";
 import { cn } from "@/lib/utils";
 
 /** Alto de una fila de 30 minutos, en px. */
@@ -44,6 +47,7 @@ export function ScheduleGrid({
   onSelect,
   onCreate,
 }: ScheduleGridProps) {
+  const profeColors = useProfeColors();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const start = Math.min(...courts.map((c) => timeToMinutes(c.open_time)));
@@ -174,6 +178,8 @@ export function ScheduleGrid({
                   }
                   const r = item.r;
                   const tone = toneFor(r);
+                  const look = reservationLook(r, r.profe_user_id ? profeColors.get(r.profe_user_id) : null);
+                  const title = reservationTitle(r);
                   const endTime = minutesToTime(item.start + r.duration_minutes);
                   const selected = r.id === selectedId;
                   return (
@@ -182,23 +188,28 @@ export function ScheduleGrid({
                       type="button"
                       onClick={() => onSelect(r)}
                       aria-pressed={selected}
-                      aria-label={`${r.customer_name}, ${r.time} a ${endTime}, ${RESERVATION_TONE_LABELS[tone]}`}
+                      aria-label={`${r.kind === "standard" ? "" : `${RESERVATION_KIND_LABELS[r.kind]}: `}${title}, ${r.time} a ${endTime}${r.series_id ? ", fijo" : ""}, ${RESERVATION_TONE_LABELS[tone]}`}
                       className={cn(
                         "z-10 m-0.5 flex min-w-0 flex-col items-start gap-0.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
-                        toneClasses(tone),
+                        look.className,
                         selected &&
                           "shadow-[0_6px_16px_rgb(16_20_24/0.18)] outline-3 outline-offset-2 outline-line"
                       )}
                       style={{
+                        ...look.style,
                         gridColumn: col,
                         gridRow: `${rowOf(item.start)} / span ${Math.max(1, Math.round(r.duration_minutes / 30))}`,
                       }}
                     >
-                      <span className="w-full truncate text-sm leading-tight font-semibold">
-                        {r.customer_name}
+                      <span className="flex w-full items-center gap-1.5">
+                        <span className="min-w-0 flex-1 truncate text-sm leading-tight font-semibold">
+                          {title}
+                        </span>
+                        <ReservationMarks reservation={r} />
                       </span>
-                      <span className="font-mono text-xs leading-tight opacity-85">
+                      <span className="w-full truncate font-mono text-xs leading-tight opacity-85">
                         {r.time} – {endTime}
+                        {look.paymentLabel ? ` · ${look.paymentLabel}` : ""}
                       </span>
                     </button>
                   );

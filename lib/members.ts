@@ -20,5 +20,7 @@ export type MemberWithEmail = {
   role: ClubRole;
   full_name: string;
   email: string;
+  /** Color en la planilla (solo profesores). */
+  color: string | null;
   created_at: string;
 };

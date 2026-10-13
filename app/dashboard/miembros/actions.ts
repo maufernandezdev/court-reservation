@@ -11,6 +11,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import type { SharedInvitation } from "@/lib/invitations";
+import { PROFE_COLOR_VALUES } from "@/lib/profe-colors";
 import {
   generateInvitationToken,
   hashInvitationToken,
@@ -354,5 +355,50 @@ export async function removeMemberAction(
       error:
         err instanceof Error ? err.message : "No se pudo eliminar al miembro.",
     };
+  }
+}
+
+/** Color de un profe en la planilla (solo admin, de la paleta del sistema). */
+export async function updateProfeColorAction(
+  membershipId: string,
+  color: string
+): Promise<{ success: boolean; error?: string }> {
+  const parsed = z
+    .object({ membershipId: z.string().uuid(), color: z.enum(PROFE_COLOR_VALUES) })
+    .safeParse({ membershipId, color });
+  if (!parsed.success) {
+    return { success: false, error: "Elegí un color de la paleta." };
+  }
+
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+
+    const { data, error } = await supabase
+      .from("memberships")
+      .update({ color: parsed.data.color })
+      .eq("id", parsed.data.membershipId)
+      .eq("club_id", clubId)
+      .eq("role", "profesor")
+      .select("user_id")
+      .maybeSingle();
+
+    if (error || !data) {
+      return { success: false, error: "No se pudo cambiar el color." };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "member",
+      entityId: data.user_id,
+      action: "member.color_updated",
+      payload: { color: parsed.data.color },
+    });
+
+    revalidatePath("/dashboard/miembros");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo cambiar el color." };
   }
 }

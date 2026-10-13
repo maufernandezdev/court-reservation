@@ -36,3 +36,9 @@ export function useProfes() {
 
   return { profes, isLoading };
 }
+
+/** Color de cada profe del club, por `user_id`. */
+export function useProfeColors(): Map<string, string | null> {
+  const { profes } = useProfes();
+  return new Map(profes.map((p) => [p.user_id, p.color]));
+}
