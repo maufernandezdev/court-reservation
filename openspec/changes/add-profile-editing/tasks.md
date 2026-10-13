@@ -29,8 +29,10 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 4. Foto
 
-- [ ] 4.1 Subida con recorte y reducción en el navegador, `uploadAvatarAction` y `removeAvatarAction`; mensajes para formato y tamaño no permitidos y para R2 sin configurar; verificar subir, cambiar y quitar
-- [ ] 4.2 Ruta `GET /api/avatars/[userId]` con control de club en común y caché privada; fotos en menú, Mi perfil y Equipo con `next/image`; verificar que alguien de otro club recibe 404 y que al cambiar la foto se ve la nueva
+- [x] 4.1 Subida con recorte y reducción en el navegador, `uploadAvatarAction` y `removeAvatarAction`; mensajes para formato y tamaño no permitidos y para R2 sin configurar; verificar subir, cambiar y quitar
+  - `AvatarUploader` (valida con Zod JPG/PNG/WebP ≤ 5 MB, recorta al centro y reduce a 512×512 WebP con canvas) + `uploadAvatarAction` (acepta solo WebP ≤ 1 MB, sube a `avatars/<userId>.webp`, `set_my_avatar`) y `removeAvatarAction` (borra en R2 y limpia la ruta); sin credenciales responde "Las fotos todavía no están configuradas". Verificado contra el bucket real: PDF rechazado; JPG de 1600×1000 queda como WebP 512×512 recortado al centro; cambiar a un PNG cambia la versión de la URL; quitar vuelve a las iniciales y el bucket queda en 0 objetos.
+- [x] 4.2 Ruta `GET /api/avatars/[userId]` con control de club en común y caché privada; fotos en menú, Mi perfil y Equipo con `next/image`; verificar que alguien de otro club recibe 404 y que al cambiar la foto se ve la nueva
+  - `app/api/avatars/[userId]/route.ts` (sesión + RLS de `profiles` = club en común; `Cache-Control: private, max-age=86400`); `UserAvatar` con `next/image` (`unoptimized`, para que el navegador mande sus cookies) en menú, Mi perfil y Equipo. Verificado: `image/webp` con caché privada; el admin del club la ve en Equipo y recibe 200; alguien de otro club y sin sesión reciben 404.
 
 ## 5. Cierre
 

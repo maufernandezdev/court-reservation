@@ -4,6 +4,7 @@ import { CLUB_ROLE_LABELS } from "@/lib/roles";
 import { avatarUrl, type Profile } from "@/lib/profile";
 import { PageHeader } from "@/components/shell/page-header";
 import { UserAvatar } from "@/components/profile/user-avatar";
+import { AvatarUploader } from "@/components/profile/avatar-uploader";
 import {
   EmailForm,
   NameForm,
@@ -75,6 +76,11 @@ export default async function PerfilPage({
         </div>
       </section>
 
+      <AvatarUploader
+        avatarUrl={avatarUrl(profile)}
+        initials={initialsOf(displayName)}
+        name={displayName}
+      />
       <NameForm fullName={fullName} />
       {profeClubs.length > 0 && <ProfeColorSection clubs={profeClubs} />}
       <EmailForm

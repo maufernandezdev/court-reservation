@@ -31,6 +31,8 @@ import type { ClubInvitation, SharedInvitation } from "@/lib/invitations";
 import { InvitationShare } from "@/components/members/invitation-share";
 import { PendingInvitations } from "@/components/members/pending-invitations";
 import { ProfeColorPicker } from "@/components/members/profe-color-picker";
+import { UserAvatar } from "@/components/profile/user-avatar";
+import { avatarUrl, type Profile } from "@/lib/profile";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +88,7 @@ export default function MiembrosPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<ClubInvitation[]>([]);
+  const [avatars, setAvatars] = useState<Map<string, string | null>>(new Map());
   const [shared, setShared] = useState<SharedInvitation | null>(null);
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ClubInvitation | null>(null);
@@ -100,7 +103,17 @@ export default function MiembrosPage() {
       .select("*")
       .eq("club_id", membership.club_id)
       .order("created_at", { ascending: true });
-    setMembers((data ?? []) as MemberWithEmail[]);
+    const loaded = (data ?? []) as MemberWithEmail[];
+    setMembers(loaded);
+
+    // Fotos de perfil del equipo.
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("user_id, full_name, avatar_path, avatar_updated_at")
+      .in("user_id", loaded.map((m) => m.user_id));
+    setAvatars(
+      new Map(((profilesData ?? []) as Profile[]).map((profile) => [profile.user_id, avatarUrl(profile)]))
+    );
 
     // Abiertas = ni aceptadas ni canceladas (las vencidas se muestran para renovarlas).
     const { data: invitationsData } = await supabase
@@ -256,18 +269,13 @@ export default function MiembrosPage() {
                         key={member.id}
                         className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5"
                       >
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            "flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold",
-                            member.role === "profesor"
-                              ? "text-white"
-                              : "bg-ink text-primary-foreground"
-                          )}
+                        <UserAvatar
+                          src={avatars.get(member.user_id) ?? null}
+                          initials={initials(name)}
+                          name={name}
+                          className={member.role === "profesor" ? "text-white" : "bg-ink text-primary-foreground"}
                           style={member.role === "profesor" ? { backgroundColor: member.color ?? FALLBACK_PROFE_COLOR } : undefined}
-                        >
-                          {initials(name)}
-                        </span>
+                        />
                         <span className="flex min-w-0 flex-[1_1_200px] flex-col">
                           <strong className="flex items-center gap-2 truncate text-[15px]">
                             {name}
