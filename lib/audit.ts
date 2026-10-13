@@ -20,6 +20,8 @@ export type AuditAction =
   | "socio.created"
   | "socio.updated"
   | "socio.removed"
+  | "series.created"
+  | "series.ended"
   | "invitation.created"
   | "invitation.regenerated"
   | "invitation.revoked"
@@ -74,6 +76,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "invitation.created",
     "invitation.accepted",
     "socio.created",
+    "series.created",
   ],
   updated: [
     "reservation.updated",
@@ -87,7 +90,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "socio.updated",
   ],
   charged: ["payment.registered", "credit.applied"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "socio.removed"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "socio.removed", "series.ended"],
 };
 
 export function auditKindOf(action: string): AuditKind {
@@ -190,6 +193,12 @@ export function describeAuditEntry(
       const sport = { tenis: "tenis", padel: "pádel", futbol: "fútbol" }[String(p.sport)] ?? String(p.sport ?? "");
       return `cambió los precios de ${sport}: ${money(p.public_price_per_hour)} por hora (profe ${money(p.profe_price_per_hour)})`;
     }
+    case "series.created": {
+      const skipped = Array.isArray(p.skipped) ? p.skipped.length : 0;
+      return `creó un turno fijo${who ? ` para ${who}` : ""}${where ? ` desde el ${where}` : ""}${skipped ? ` (${skipped} ${skipped === 1 ? "fecha salteada" : "fechas salteadas"})` : ""}`;
+    }
+    case "series.ended":
+      return `dio de baja el turno fijo${who ? ` de ${who}` : ""}${typeof p.from === "string" ? ` desde el ${shortDate(p.from)}` : ""}`;
     case "socio.created":
       return `dio de alta al socio ${String(p.full_name ?? "")}`.trim();
     case "socio.updated":

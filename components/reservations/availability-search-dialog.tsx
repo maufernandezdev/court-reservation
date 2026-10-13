@@ -16,6 +16,7 @@ import { useSportPrices } from "@/hooks/use-sport-prices";
 import { createClient } from "@/lib/supabase/client";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useMembership } from "@/hooks/use-membership";
+import { ensureFixedReservations } from "@/lib/series";
 import {
   Dialog,
   DialogContent,
@@ -89,13 +90,16 @@ export function AvailabilitySearchDialog({
     let cancelled = false;
     setIsLoadingOtherDay(true);
 
-    supabase
-      .from("reservations")
-      .select("*")
-      .eq("club_id", clubId)
-      .eq("date", date)
-      .eq("status", "active")
-      .order("time", { ascending: true })
+    ensureFixedReservations(supabase, clubId, date)
+      .then(() =>
+        supabase
+          .from("reservations")
+          .select("*")
+          .eq("club_id", clubId)
+          .eq("date", date)
+          .eq("status", "active")
+          .order("time", { ascending: true })
+      )
       .then(({ data }) => {
         if (!cancelled) {
           setOtherDayReservations((data ?? []) as Reservation[]);

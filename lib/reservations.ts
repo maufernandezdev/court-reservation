@@ -137,8 +137,13 @@ export const reservationInputSchema = z
     /** Solo se usa en torneos (en los demás tipos manda la duración de la cancha). */
     duration_minutes: z.coerce.number().int(),
     people: z.array(personSchema).max(MAX_PEOPLE, `Hasta ${MAX_PEOPLE} personas por turno`),
+    /** Solo en el alta: el turno se repite todas las semanas (no aplica a torneos). */
+    repeat_weekly: z.boolean(),
   })
   .superRefine((data, ctx) => {
+    if (data.repeat_weekly && data.kind === "torneo") {
+      ctx.addIssue({ code: "custom", path: ["repeat_weekly"], message: "Los turnos de torneo no pueden ser fijos" });
+    }
     if (data.kind === "profe") {
       if (!data.profe_user_id) {
         ctx.addIssue({ code: "custom", path: ["profe_user_id"], message: "Elegí qué profe usa la cancha" });

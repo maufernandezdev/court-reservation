@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   cancelReservationSchema,
@@ -31,7 +32,17 @@ type ActionResult = {
   success: boolean;
   error?: string;
   reservation?: Reservation;
+  /** Turno fijo: fechas que se saltearon porque la cancha ya estaba ocupada. */
+  skippedDates?: string[];
 };
+
+/** Semanas que se reservan al crear un turno fijo (las siguientes se generan al consultar). */
+const SERIES_INITIAL_WEEKS = 8;
+
+function addDays(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
 
 function failure(error: unknown, fallback: string): ActionResult {
   return {
@@ -298,6 +309,10 @@ export async function createReservationAction(
 
     const prepared = await prepareReservation(ctx, data, null);
 
+    if (data.repeat_weekly) {
+      return await createSeries(ctx, data, prepared);
+    }
+
     const { data: created, error } = await supabase
       .from("reservations")
       .insert({
@@ -354,6 +369,90 @@ export async function createReservationAction(
   } catch (err) {
     return failure(err, "No se pudo guardar la reserva.");
   }
+}
+
+/**
+ * Turno fijo semanal: crea la serie y materializa las primeras semanas como turnos
+ * comunes (`ensure_series_until`), salteando las fechas en que la cancha está ocupada.
+ */
+async function createSeries(
+  ctx: SessionContext,
+  data: ReservationInput,
+  prepared: PreparedReservation
+): Promise<ActionResult> {
+  const { supabase, user, membership } = ctx;
+  const clubId = membership!.club_id;
+  const [y, m, d] = data.date.split("-").map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+
+  const { data: series, error } = await supabase
+    .from("reservation_series")
+    .insert({
+      club_id: clubId,
+      court_id: prepared.court.id,
+      weekday,
+      start_time: data.time,
+      duration_minutes: prepared.duration,
+      kind: prepared.kind,
+      profe_user_id: prepared.profeUserId,
+      customer_name: prepared.people[0].name,
+      phone: data.phone.trim(),
+      participants: prepared.people,
+      starts_on: data.date,
+      generated_until: addDays(data.date, -1),
+      created_by: user!.id,
+    })
+    .select("id")
+    .single();
+
+  if (error || !series) {
+    return { success: false, error: "No se pudo crear el turno fijo." };
+  }
+
+  const { data: skipped, error: generateError } = await supabase.rpc("ensure_series_until", {
+    p_club_id: clubId,
+    p_until: addDays(data.date, 7 * (SERIES_INITIAL_WEEKS - 1)),
+  });
+
+  if (generateError) {
+    return { success: false, error: "El turno fijo se creó, pero no se pudieron reservar sus fechas." };
+  }
+
+  const skippedDates = ((skipped ?? []) as { series_id: string; skipped_date: string }[])
+    .filter((row) => row.series_id === series.id)
+    .map((row) => row.skipped_date);
+
+  await writeAudit(supabase, {
+    clubId,
+    actorId: user!.id,
+    entity: "series",
+    entityId: series.id,
+    action: "series.created",
+    payload: {
+      customer_name: prepared.people[0].name,
+      court_id: prepared.court.id,
+      date: data.date,
+      time: data.time,
+      kind: prepared.kind,
+      skipped: skippedDates,
+    },
+  });
+
+  revalidatePath("/dashboard/reservas");
+
+  const { data: first } = await supabase
+    .from("reservations")
+    .select(RESERVATION_SELECT)
+    .eq("club_id", clubId)
+    .eq("series_id", series.id)
+    .eq("date", data.date)
+    .maybeSingle();
+
+  return {
+    success: true,
+    reservation: (first as Reservation | null) ?? undefined,
+    skippedDates,
+  };
 }
 
 export async function updateReservationAction(
@@ -828,5 +927,111 @@ export async function applyCreditAction(
     return { success: true, reservation: data as Reservation };
   } catch (err) {
     return failure(err, "No se pudo aplicar el saldo.");
+  }
+}
+
+/**
+ * Baja de un turno fijo desde una fecha: no se generan más semanas y se liberan las
+ * fechas ya reservadas desde ese día que no tengan cobros. Las que tienen cobros (o
+ * que el profe no puede cancelar por la ventana de penalidad) quedan activas y se
+ * devuelven para gestionarlas a mano.
+ */
+export async function endSeriesAction(
+  seriesId: string,
+  fromDate: string
+): Promise<ActionResult & { cancelled?: number; kept?: string[] }> {
+  const parsed = z
+    .object({ seriesId: z.string().uuid(), fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
+    .safeParse({ seriesId, fromDate });
+  if (!parsed.success) {
+    return { success: false, error: "Datos inválidos." };
+  }
+
+  try {
+    const ctx: SessionContext = await requireRole("profesor");
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
+
+    const { data: series } = await supabase
+      .from("reservation_series")
+      .select("id, customer_name, profe_user_id, starts_on, ends_on")
+      .eq("id", parsed.data.seriesId)
+      .eq("club_id", clubId)
+      .maybeSingle();
+
+    if (!series) {
+      return { success: false, error: "No se encontró el turno fijo." };
+    }
+    if (membership!.role === "profesor" && series.profe_user_id !== user!.id) {
+      return { success: false, error: "Solo podés dar de baja tus propios turnos fijos." };
+    }
+
+    const endsOn = addDays(parsed.data.fromDate, -1);
+    const { error: endError } = await supabase
+      .from("reservation_series")
+      .update({ ends_on: series.ends_on && series.ends_on < endsOn ? series.ends_on : endsOn })
+      .eq("id", series.id)
+      .eq("club_id", clubId);
+    if (endError) {
+      return { success: false, error: "No se pudo dar de baja el turno fijo." };
+    }
+
+    const { data: upcoming } = await supabase
+      .from("reservations")
+      .select("id, date")
+      .eq("club_id", clubId)
+      .eq("series_id", series.id)
+      .eq("status", "active")
+      .gte("date", parsed.data.fromDate)
+      .order("date");
+
+    const ids = (upcoming ?? []).map((r) => r.id as string);
+    const { data: paidRows } = ids.length
+      ? await supabase
+          .from("payments")
+          .select("reservation_id")
+          .eq("club_id", clubId)
+          .eq("released", false)
+          .in("reservation_id", ids)
+      : { data: [] };
+    const withPayments = new Set((paidRows ?? []).map((p) => p.reservation_id as string));
+
+    let cancelled = 0;
+    const kept: string[] = [];
+    for (const occurrence of upcoming ?? []) {
+      if (withPayments.has(occurrence.id as string)) {
+        kept.push(occurrence.date as string);
+        continue;
+      }
+      const { error } = await supabase
+        .from("reservations")
+        .update({
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancelled_by: user!.id,
+          cancel_reason: "Baja de turno fijo",
+          late_cancel: false,
+          updated_by: user!.id,
+        })
+        .eq("id", occurrence.id)
+        .eq("club_id", clubId);
+      if (error) kept.push(occurrence.date as string);
+      else cancelled += 1;
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "series",
+      entityId: series.id,
+      action: "series.ended",
+      payload: { customer_name: series.customer_name, from: parsed.data.fromDate, cancelled, kept },
+    });
+
+    revalidatePath("/dashboard/reservas");
+
+    return { success: true, cancelled, kept };
+  } catch (err) {
+    return failure(err, "No se pudo dar de baja el turno fijo.");
   }
 }

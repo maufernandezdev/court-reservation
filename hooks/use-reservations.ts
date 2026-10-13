@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { RESERVATION_SELECT, type Reservation } from "@/lib/reservations";
 import { useMembership } from "@/hooks/use-membership";
+import { ensureFixedReservations } from "@/lib/series";
 
 export function useReservations(date: string) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -14,6 +15,8 @@ export function useReservations(date: string) {
 
   const load = useCallback(async () => {
     setIsLoading(true);
+    // Los turnos fijos se materializan al consultar la fecha.
+    await ensureFixedReservations(supabase, clubId, date);
     const { data, error } = await supabase
       .from("reservations")
       .select(RESERVATION_SELECT)

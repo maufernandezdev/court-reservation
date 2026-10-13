@@ -42,9 +42,12 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 5. Turnos fijos
 
-- [ ] 5.1 Opción "Repetir todas las semanas" en el alta (estándar y profe): crea la serie, materializa 8 semanas y muestra las fechas salteadas; verificar el escenario de semana ocupada
-- [ ] 5.2 Planilla, Hoy y buscador llaman a `ensure_series_until` con la fecha mostrada; verificar que un fijo aparece al navegar seis meses adelante
-- [ ] 5.3 Detalle del turno fijo: ícono y texto "Fijo · todos los lunes 09:00", "Dar de baja desde esta fecha" (staff y profe dueño) que libera fechas sin cobros y lista las que tienen cobros; auditoría `series.created/ended`; verificar los escenarios de baja y de fecha con cobro, y que cancelar una fecha suelta no afecta las demás
+- [x] 5.1 Opción "Repetir todas las semanas" en el alta (estándar y profe): crea la serie, materializa 8 semanas y muestra las fechas salteadas; verificar el escenario de semana ocupada
+  - `repeat_weekly` en el schema (no para torneos) + casilla "Repetir todas las semanas" en el alta; `createSeries` crea la serie, materializa 8 semanas con `ensure_series_until` y devuelve las fechas salteadas (aviso en el toast); auditoría `series.created`. Verificado: fijo de lunes 11:00 desde el 19/10 con el 2/11 ocupado → 7 fechas y aviso "Se saltearon 2/11".
+- [x] 5.2 Planilla, Hoy y buscador llaman a `ensure_series_until` con la fecha mostrada; verificar que un fijo aparece al navegar seis meses adelante
+  - `lib/series.ts` (`ensureFixedReservations`, de hoy a un año) llamado por `useReservations` (planilla y Hoy) y por el buscador antes de leer. Verificado: al abrir el 19/04/2027 el fijo aparece y esa fecha se generó en la base.
+- [x] 5.3 Detalle del turno fijo: ícono y texto "Fijo · todos los lunes 09:00", "Dar de baja desde esta fecha" (staff y profe dueño) que libera fechas sin cobros y lista las que tienen cobros; auditoría `series.created/ended`; verificar los escenarios de baja y de fecha con cobro, y que cancelar una fecha suelta no afecta las demás
+  - Detalle: "Turno fijo · todos los lunes a las 11:00" y "Dar de baja el fijo desde esta fecha" (staff o el profe dueño) con confirmación; `endSeriesAction` fija `ends_on`, libera las fechas sin cobros y devuelve las que quedan activas; auditoría `series.ended`. Verificado: cancelar la semana 2 no afecta al resto; baja desde la semana 4 libera la 4 y la 6, deja activa la 5 (con seña) y avisa "Quedaron activas 16/11", la primera fecha no cambia y no se generan fechas posteriores; Actividad registra alta y baja.
 
 ## 6. Cierre
 

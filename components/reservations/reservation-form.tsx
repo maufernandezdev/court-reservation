@@ -28,6 +28,7 @@ import {
 import { PeopleCombobox } from "@/components/reservations/people-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DialogFooter } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -60,6 +61,19 @@ export type ReservationFormProps = {
   onSaved: (reservation: Reservation) => void;
   onClose: () => void;
 };
+
+/** "sábados" para una fecha YYYY-MM-DD. */
+function weekdayName(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const name = new Date(y, m - 1, d).toLocaleDateString("es-AR", { weekday: "long" });
+  return name.endsWith("s") ? name : `${name}s`;
+}
+
+/** "2/11" para una fecha YYYY-MM-DD. */
+function shortDateKey(dateKey: string): string {
+  const [, m, d] = dateKey.split("-").map(Number);
+  return `${d}/${m}`;
+}
 
 function durationLabel(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -108,6 +122,7 @@ export function ReservationForm({
         duration_minutes: reservation.duration_minutes,
         // En turnos de profe, la persona 1 es el profe: se editan solo los alumnos.
         people: reservation.kind === "profe" ? people.slice(1) : people,
+        repeat_weekly: false,
       };
     }
     return {
@@ -119,6 +134,7 @@ export function ReservationForm({
       profe_user_id: isProfesor ? membership.user_id : null,
       duration_minutes: tournamentDefault,
       people: [],
+      repeat_weekly: false,
     };
   };
 
@@ -127,9 +143,9 @@ export function ReservationForm({
     defaultValues: valuesFor(),
   });
 
-  const [courtId, kind, time, duration, people] = useWatch({
+  const [courtId, kind, time, duration, people, date] = useWatch({
     control: form.control,
-    name: ["court_id", "kind", "time", "duration_minutes", "people"],
+    name: ["court_id", "kind", "time", "duration_minutes", "people", "date"],
   });
   const selectedCourt = courts.find((court) => court.id === courtId) ?? null;
   const effectiveDuration = selectedCourt
@@ -197,6 +213,7 @@ export function ReservationForm({
       form.setValue("duration_minutes", tournamentDefault);
     }
     if (next !== "profe") form.setValue("profe_user_id", null);
+    if (next === "torneo") form.setValue("repeat_weekly", false);
   };
 
   const handlePeopleChange = (next: ReservationInput["people"]) => {
@@ -244,6 +261,16 @@ export function ReservationForm({
     if (mode === "edit") {
       toast.success("Reserva actualizada");
       onSaved(result.reservation!);
+    } else if (values.repeat_weekly) {
+      const skipped = result.skippedDates ?? [];
+      toast.success("Turno fijo creado", {
+        description: skipped.length
+          ? `Se saltearon ${skipped.map(shortDateKey).join(", ")} porque la cancha ya estaba ocupada.`
+          : `Queda reservado todos los ${weekdayName(values.date)} a las ${values.time}.`,
+        duration: skipped.length ? 10000 : 4000,
+      });
+      if (result.reservation) onSaved(result.reservation);
+      onClose();
     } else {
       toast.success("Reserva creada");
       onSaved(result.reservation!);
@@ -476,6 +503,31 @@ export function ReservationForm({
                   <Input placeholder="3415123456" inputMode="tel" disabled={isCancelled} {...field} />
                 </FormControl>
                 <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {mode === "create" && kind !== "torneo" && (
+          <FormField
+            control={form.control}
+            name="repeat_weekly"
+            render={({ field }) => (
+              <FormItem className="flex items-start gap-3 rounded-xl border p-3.5">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                    className="mt-0.5"
+                  />
+                </FormControl>
+                <div className="flex flex-col gap-0.5">
+                  <FormLabel className="text-[15px] font-semibold">Repetir todas las semanas</FormLabel>
+                  <p className="text-[13px] text-pretty text-muted-foreground">
+                    Turno fijo: se reserva todos los {date ? weekdayName(date) : "días"}
+                    {time ? ` a las ${time}` : ""} hasta darlo de baja. Cada fecha se cobra aparte.
+                  </p>
+                </div>
               </FormItem>
             )}
           />

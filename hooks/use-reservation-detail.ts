@@ -18,6 +18,7 @@ import { cancellationOutcome } from "@/lib/cancellation";
 import {
   applyCreditAction,
   cancelReservationAction,
+  endSeriesAction,
   registerPaymentAction,
 } from "@/app/dashboard/reservas/actions";
 
@@ -63,6 +64,8 @@ export function useReservationDetail({
   const [cancelReason, setCancelReason] = useState("");
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [endSeriesOpen, setEndSeriesOpen] = useState(false);
+  const [isEndingSeries, setIsEndingSeries] = useState(false);
 
   const { prices } = useSportPrices();
   const court = reservation
@@ -219,6 +222,31 @@ export function useReservationDetail({
     }
   };
 
+  /** Baja del turno fijo desde la fecha de este turno. */
+  const endSeries = async () => {
+    if (!reservation?.series_id) return;
+    setIsEndingSeries(true);
+    const result = await endSeriesAction(reservation.series_id, reservation.date);
+    setIsEndingSeries(false);
+    setEndSeriesOpen(false);
+
+    if (!result.success) {
+      toast.error(result.error ?? "No se pudo dar de baja el turno fijo");
+      return;
+    }
+    const kept = result.kept ?? [];
+    toast.success("Turno fijo dado de baja", {
+      description: kept.length
+        ? `Quedaron activas ${kept.map((d) => d.split("-").reverse().slice(0, 2).join("/")).join(", ")} porque tienen cobros: cancelalas a mano.`
+        : `Se liberaron ${result.cancelled ?? 0} ${(result.cancelled ?? 0) === 1 ? "fecha" : "fechas"}.`,
+      duration: kept.length ? 12000 : 5000,
+    });
+    if (!kept.includes(reservation.date)) {
+      onCancelled({ ...reservation, status: "cancelled", cancel_reason: "Baja de turno fijo" });
+      onClosed?.();
+    }
+  };
+
   const cancel = async () => {
     if (!reservation) return;
     setIsCancelling(true);
@@ -245,6 +273,10 @@ export function useReservationDetail({
   };
 
   return {
+    endSeries,
+    endSeriesOpen,
+    setEndSeriesOpen,
+    isEndingSeries,
     court,
     payments,
     credit,

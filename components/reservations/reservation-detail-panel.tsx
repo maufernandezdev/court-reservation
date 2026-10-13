@@ -71,6 +71,13 @@ type ReservationDetailPanelProps = {
   showHeader?: boolean;
 };
 
+/** "sábados" para una fecha YYYY-MM-DD. */
+function weekdayPlural(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const name = new Date(y, m - 1, d).toLocaleDateString("es-AR", { weekday: "long" });
+  return name.endsWith("s") ? name : `${name}s`;
+}
+
 /** Detalle del turno: datos, cobros, cancelación según la política e historial. */
 export function ReservationDetailPanel({
   reservation,
@@ -291,6 +298,46 @@ export function ReservationDetailPanel({
               )}
             </div>
           )}
+
+          {reservation.series_id && !isCancelled && (
+            <div className="flex flex-col gap-2.5 rounded-xl border p-3.5">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <Repeat aria-hidden="true" className="size-4" />
+                Turno fijo · todos los {weekdayPlural(reservation.date)} a las {reservation.time}
+              </span>
+              {(membership.role !== "profesor" || reservation.profe_user_id === membership.user_id) && (
+                <Button variant="outline" onClick={() => detail.setEndSeriesOpen(true)}>
+                  Dar de baja el fijo desde esta fecha
+                </Button>
+              )}
+              <p className="text-[13px] leading-snug text-pretty text-muted-foreground">
+                Para liberar solo esta fecha, cancelá el turno como cualquier otro.
+              </p>
+            </div>
+          )}
+
+          <AlertDialog open={detail.endSeriesOpen} onOpenChange={detail.setEndSeriesOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Dar de baja el turno fijo?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Desde el {formatDate(reservation.date)} no se reserva más los {weekdayPlural(reservation.date)} a las{" "}
+                  {reservation.time}. Se liberan las fechas sin cobros; las que ya tienen cobros quedan
+                  activas para que las canceles a mano. Las fechas anteriores no cambian.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Mejor no</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={detail.endSeries}
+                  disabled={detail.isEndingSeries}
+                  variant="destructive"
+                >
+                  {detail.isEndingSeries ? "Dando de baja…" : "Dar de baja"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {!isCancelled && (
             <div className="flex flex-col gap-2">
