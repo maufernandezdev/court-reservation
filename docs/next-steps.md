@@ -75,3 +75,9 @@ Tanto el operador, tanto el administrador como los profesores podrían cambiar s
 ¿Y dónde vamos a guardar la imagen? Porque al final, si le vamos a agregar imagen al perfil de los usuarios, creé un bucket en Cloudflare para que puedas conectar y subir las imágenes de los usuarios, asociadas a ellos. 
 
 Lo que necesites de Cloudflare me decis, el bucket se llama "court-reservation"
+
+> 📝 **Planificado (12/10/2026)** en `openspec/changes/add-profile-editing/`: "Mi perfil" en `/dashboard/perfil` (nombre, contraseña, correo, foto en R2 privado y color del profe).
+
+## Precio de noche (costo de luz)
+
+Las canchas cambian de precio según la hora por el costo de la luz: hasta las 18:00 vale un precio y desde las 18:00, otro, en todas las canchas y tipos de cancha. Plan en `openspec/changes/add-night-pricing/` (precio de noche por deporte para público y profe, horario configurable que arranca en 18:00, se cobra según la hora de inicio del turno).
