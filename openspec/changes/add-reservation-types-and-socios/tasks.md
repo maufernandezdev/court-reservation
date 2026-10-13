@@ -51,7 +51,9 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 6. Cierre
 
-- [ ] 6.1 Recorrido completo en local: precios de tenis y pádel, socios, turno estándar con socio, turno de profe cargado por el operador y por el profe, torneo singles y dobles con duración cambiada, fijo con baja, cobro y cancelación de cada tipo, Caja y Actividad
+- [x] 6.1 Recorrido completo en local: precios de tenis y pádel, socios, turno estándar con socio, turno de profe cargado por el operador y por el profe, torneo singles y dobles con duración cambiada, fijo con baja, cobro y cancelación de cada tipo, Caja y Actividad
+  - Hecho 2026-10-12 en local con los scripts de cada fase (precios, socios, estándar con socio, profe por operador y por el profe, torneo con duración cambiada, fijo con baja) y uno final de cobro y cancelación: turno de profe cobrado ($8.000, sigue con su color y dice Pagada), torneo señado ($4.950) y cancelado; Caja sumó $12.950 y lista ambos movimientos; Actividad registra la cancelación.
 - [x] 6.2 Aplicar `0008` en producción con confirmación del usuario y repetir conteos
   - Aplicada 2026-10-12 antes de la fase 2, con confirmación del usuario, para que su `localhost:3000` (base real) siga funcionando mientras se desarrolla (la migración es aditiva). Verificado: los 24 turnos conservan su valor (`price` = precio de la cancha × duración en todos), 24 personas, precios por deporte desde las canchas. Hay un club nuevo de prueba del usuario (`0a3a89e7…`) con precios en $0.
-- [ ] 6.3 Actualizar README, `docs/PROJECT_DOCUMENTATION.md` y marcar en `docs/next-steps.md` los puntos aplicados; marcar `add-fixed-reservations` como absorbido por este cambio
+- [x] 6.3 Actualizar README, `docs/PROJECT_DOCUMENTATION.md` y marcar en `docs/next-steps.md` los puntos aplicados; marcar `add-fixed-reservations` como absorbido por este cambio
+  - README (tabla de pantallas con Caja, Socios y Productos/Notificaciones ocultas; tipos de turno; precios), `docs/PROJECT_DOCUMENTATION.md` (sección de 0008/0009 y pendiente de aplicar 0009), `docs/next-steps.md` (Socios, Torneos, Tiempo estándar, Profes, Mejora visual y Valor del alquiler marcados ✅) y `add-fixed-reservations` marcado como absorbido.

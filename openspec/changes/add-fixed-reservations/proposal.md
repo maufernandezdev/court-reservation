@@ -1,4 +1,6 @@
-> **Estado:** registrado (2026-10-06) como pendiente del rediseño `apply-saque-visual-design`. Sin specs, diseño ni tareas todavía.
+> **Estado:** registrado (2026-10-06) como pendiente del rediseño `apply-saque-visual-design`.
+>
+> **Absorbido (2026-10-12) por `add-reservation-types-and-socios`**, que implementa los turnos fijos semanales, la liberación de fechas y la baja. Quedan fuera (para un cambio futuro si hacen falta): el abono mensual en lugar del cobro por turno y la alerta por liberaciones.
 
 ## Why
 

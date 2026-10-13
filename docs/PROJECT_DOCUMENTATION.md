@@ -35,6 +35,17 @@ Lugar de notas del proyecto: decisiones, pendientes y configuraciones que no se 
 
 ## Decisiones y semántica
 
+### Socios, tipos de turno, fijos y precios por deporte (migraciones `0008` y `0009`, cambio `add-reservation-types-and-socios`, 2026-10-12)
+
+- **Valor fijado en el turno:** `reservations.price` se calcula en el servidor al crear (precio por hora del tipo de cancha × duración; precio profe en turnos de profe) y solo se recalcula si cambian cancha, tipo o duración. Cobros, saldo, seña, cancelación, Hoy y Caja usan ese valor. El backfill de `0008` dejó a cada turno con el valor que tenía.
+- **Precios por deporte** (`sport_prices`): público, profe y seña (fija o %), uno por tipo de cancha del club; se crea la fila al dar de alta la primera cancha de un deporte. Las columnas de precio y seña de `courts` quedan sin uso (se pueden borrar en un cambio posterior).
+- **Tipos** (`reservations.kind`: `standard` / `profe` / `torneo`, con `profe_user_id`): un profesor solo carga turnos de profe a su nombre. En turnos de profe, la persona 1 es el profe y las demás son alumnos. Torneo: mínimo 2 personas, duración en pasos de 30 min hasta el cierre (default `settings.tournament_duration_minutes`).
+- **Personas** (`reservation_participants`, 1 a 4): la 1 se copia en `customer_name` (saldo a favor, búsqueda y Actividad siguen igual). Se guardan después del turno; si fallan, el alta se compensa borrando el turno.
+- **Socios** (`socios`): baja lógica (`deleted_at`), DNI normalizado sin puntos y único entre activos; los ve todo el club (el profe los busca), los gestionan admin y operador.
+- **Fijos** (`reservation_series`): cada fecha se **materializa** como un turno común con `series_id` (`unique (series_id, date)`). `ensure_series_until(club, fecha)` genera lo que falta hasta la fecha consultada (lo llaman la planilla, Hoy y el buscador, de hoy a un año) y saltea fechas ocupadas. Liberar una fecha = cancelar ese turno (no se vuelve a generar). Baja desde una fecha: `ends_on`, se liberan las fechas sin cobros y quedan activas las que tienen cobros. No se puede editar una serie: se da de baja y se crea otra.
+- **Color de profe** (`memberships.color`): paleta fija (`lib/profe-colors.ts`); el trigger `assign_profe_color` (`0009`) asigna el primer color libre al sumarse o pasar a profesor; el admin lo cambia en Equipo.
+- **Visual** (`reservationLook`, `reservationTitle`, `ReservationMarks` en `lib/reservation-tone.ts` y `components/reservations/`): estándar = relleno por estado de pago; profe = color del profe; torneo = azul de marca con trofeo y "A vs B"; fijo = ícono de repetición. En profe y torneo el estado de pago va como texto.
+
 ### Clubes, invitaciones y club activo (migración `0007_clubs_and_invitations.sql`, cambio `add-club-onboarding`, 2026-10-12)
 
 Reemplaza el modelo "el club es el id del dueño" de `0004` (ver sección siguiente, que queda como historia).
@@ -103,8 +114,9 @@ Reemplaza el modelo "el club es el id del dueño" de `0004` (ver sección siguie
 
 - **(2026-10-01, resuelto 2026-10-05) Aplicar migraciones 0004-0006 a Supabase.** Aplicadas con Supabase CLI (`link` → `migration repair` de 0001–0003 → `db push`). Queda pendiente la verificación manual (tarea 11.2 de `openspec/changes/add-club-operations-foundation/tasks.md`): dos usuarios, invitación de operador, cobro de seña, cancelación tardía, auditoría. Luego marcar las tareas 1.3, 2.2, 3.3 y 11.2 en `tasks.md`.
 - **Iteraciones siguientes (post-migración):** portal público de reservas con Mercado Pago (sandbox primero; el modelo ya tiene `payments.external_ref` listo), turnos fijos/recurrentes para profes (SRS 2.2, fuera de alcance de esta iteración), caja/reportes reales (hoy siguen mock).
-- **Pendientes del diseño (2026-10-06, registrados como cambios OpenSpec sin implementar):** `add-fixed-reservations` (turnos fijos/clases + alerta de liberaciones), `add-court-surface` (superficie de cancha; postergado 2026-10-12 hasta que el producto se instale en otros clubes), `add-cancellation-options` ("cancela el club" sin penalidad + devolución de seña en vez de saldo a favor), `add-public-booking-portal` (portal público + Mercado Pago). Modo oscuro: sin cambio registrado.
+- **Pendientes del diseño (2026-10-06, registrados como cambios OpenSpec sin implementar):** `add-fixed-reservations` (absorbido por `add-reservation-types-and-socios` el 2026-10-12; queda pendiente solo la alerta de liberaciones y el abono mensual), `add-court-surface` (superficie de cancha; postergado 2026-10-12 hasta que el producto se instale en otros clubes), `add-cancellation-options` ("cancela el club" sin penalidad + devolución de seña en vez de saldo a favor), `add-public-booking-portal` (portal público + Mercado Pago). Modo oscuro: sin cambio registrado.
 - **(2026-10-12) `add-club-onboarding`: `0007` aplicada en producción.** Falta agregar `SUPABASE_SECRET_KEY` a `.env.local` y al entorno de despliegue (sin ella, aceptar una invitación sin cuenta falla) y desplegar el código (el viejo no funciona con `0007`). El envío de la invitación por correo desde la app queda para cuando haya SMTP propio o un proveedor como Resend.
+- **(2026-10-12) `add-reservation-types-and-socios`:** `0008` aplicada en producción; falta aplicar `0009` (color automático de profes; mientras tanto los profes nuevos quedan sin color hasta que el admin elija uno) y desplegar el código.
 - Usuarios unconfirmed huérfanos (emails con typo): no se limpian automáticamente. Se puede borrar a mano desde Authentication → Users en el dashboard, o armar una Edge Function con `service_role` que los purgue.
 
 ## Semántica de reservas y ocupación
