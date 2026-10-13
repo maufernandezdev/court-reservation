@@ -101,7 +101,7 @@ export function MobileTabBar({ identity, isAdmin, onLogout }: MobileTabBarProps)
             <ClubBlock identity={identity} />
             <NavGroups onNavigate={() => setMoreOpen(false)} />
             <div className="mt-auto">
-              <UserBlock identity={identity} onLogout={onLogout} />
+              <UserBlock identity={identity} onLogout={onLogout} onNavigate={() => setMoreOpen(false)} />
             </div>
           </SheetContent>
         </Sheet>

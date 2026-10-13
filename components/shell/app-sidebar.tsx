@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CLUB_ROLE_LABELS } from "@/lib/roles";
 import { Logo } from "@/components/brand/logo";
+import { UserAvatar } from "@/components/profile/user-avatar";
 import { isActivePath, visibleGroups } from "@/components/shell/nav-config";
 import { useActiveClub } from "@/components/shell/active-club-provider";
 import { switchClubAction } from "@/app/dashboard/actions";
@@ -27,6 +28,8 @@ export type ShellIdentity = {
   userName: string;
   userEmail: string;
   userInitials: string;
+  /** Foto de perfil (ruta de la app) o null para mostrar las iniciales. */
+  avatarUrl: string | null;
 };
 
 type AppSidebarProps = {
@@ -125,23 +128,36 @@ export function ClubBlock({ identity }: { identity: ShellIdentity }) {
 export function UserBlock({
   identity,
   onLogout,
+  onNavigate,
 }: {
   identity: ShellIdentity;
   onLogout: () => void;
+  onNavigate?: () => void;
 }) {
+  const pathname = usePathname();
+  const active = pathname === "/dashboard/perfil";
   return (
-    <div className="flex items-center gap-2.5 border-t border-sidebar-foreground/12 px-2 pt-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-line text-[13px] font-bold text-line-foreground">
-        {identity.userInitials}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <strong className="truncate text-sm">{identity.userName}</strong>
-        {identity.userName !== identity.userEmail && (
-          <span className="truncate text-[13px] text-sidebar-label">
-            {identity.userEmail}
-          </span>
+    <div className="flex items-center gap-1.5 border-t border-sidebar-foreground/12 px-0.5 pt-3">
+      <Link
+        href="/dashboard/perfil"
+        onClick={onNavigate}
+        aria-current={active ? "page" : undefined}
+        aria-label={`Mi perfil: ${identity.userName}`}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-sidebar-foreground/8 focus-visible:outline-2 focus-visible:outline-ball",
+          active && "bg-sidebar-foreground/8"
         )}
-      </span>
+      >
+        <UserAvatar
+          src={identity.avatarUrl}
+          initials={identity.userInitials}
+          name={identity.userName}
+        />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <strong className="truncate text-sm">{identity.userName}</strong>
+          <span className="truncate text-[13px] text-sidebar-label">Mi perfil</span>
+        </span>
+      </Link>
       <button
         type="button"
         onClick={onLogout}

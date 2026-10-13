@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/shell/dashboard-shell";
 import { getSessionContext } from "@/lib/auth";
+import { avatarUrl, type Profile } from "@/lib/profile";
 
 // Todo el panel depende de la sesión del usuario (cookies/Supabase):
 // no se puede prerenderizar estáticamente en el build.
@@ -11,7 +12,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, membership, memberships } = await getSessionContext();
+  const { supabase, user, membership, memberships } = await getSessionContext();
 
   if (!user) {
     redirect("/login");
@@ -22,8 +23,18 @@ export default async function DashboardLayout({
     redirect("/bienvenida");
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("user_id, full_name, avatar_path, avatar_updated_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   return (
-    <DashboardShell membership={membership} memberships={memberships}>
+    <DashboardShell
+      membership={membership}
+      memberships={memberships}
+      avatarUrl={avatarUrl(profile as Profile | null)}
+    >
       {children}
     </DashboardShell>
   );

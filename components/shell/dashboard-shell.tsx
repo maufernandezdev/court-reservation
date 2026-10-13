@@ -17,10 +17,12 @@ function initialsOf(text: string): string {
 type DashboardShellProps = {
   membership: Membership;
   memberships: Membership[];
+  /** Foto de perfil servida por la app, o null. */
+  avatarUrl: string | null;
   children: React.ReactNode;
 };
 
-export function DashboardShell({ membership, memberships, children }: DashboardShellProps) {
+export function DashboardShell({ membership, memberships, avatarUrl, children }: DashboardShellProps) {
   const { user, logout } = useAuth();
   const email = user?.email ?? membership.email;
   const userName = membership.full_name.trim() || email || "Usuario";
@@ -33,6 +35,7 @@ export function DashboardShell({ membership, memberships, children }: DashboardS
     userName,
     userEmail: email,
     userInitials: initialsOf(userName),
+    avatarUrl,
   };
 
   return (

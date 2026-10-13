@@ -2,8 +2,10 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 1. Preparación
 
-- [ ] 1.1 Pedir al usuario el token de API de R2 (Object Read & Write solo sobre `court-reservation`) y que cargue `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` y `R2_BUCKET` en `.env.local`; verificar sin mostrar valores que están y que `wrangler whoami` apunta a la cuenta del bucket
-- [ ] 1.2 Agregar `aws4fetch` con pnpm y crear `lib/r2.ts` (`server-only`: put, get, delete de objetos); verificar con un objeto de prueba subido, leído y borrado del bucket
+- [x] 1.1 Pedir al usuario el token de API de R2 (Object Read & Write solo sobre `court-reservation`) y que cargue `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` y `R2_BUCKET` en `.env.local`; verificar sin mostrar valores que están y que `wrangler whoami` apunta a la cuenta del bucket
+  - El usuario cargó `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` y **`R2_BUCKET_NAME`** (no `R2_BUCKET`; el código acepta ambos) y `R2_ALLOWED_ORIGINS` (no se usa: la subida es desde el servidor, el bucket no necesita CORS). Verificado sin mostrar valores: largos correctos, sin comillas ni espacios, y el Account ID coincide con la cuenta de `wrangler whoami`.
+- [x] 1.2 Agregar `aws4fetch` con pnpm y crear `lib/r2.ts` (`server-only`: put, get, delete de objetos); verificar con un objeto de prueba subido, leído y borrado del bucket
+  - `aws4fetch` agregado con pnpm; `lib/r2.ts` (`server-only`: `putObject`, `getObject`, `deleteObject`, `isR2Configured`). Verificado contra el bucket real: PUT 200, lectura del mismo objeto con `wrangler r2 object get --remote`, GET 200, DELETE 204 y GET 404 después; el bucket quedó en 0 objetos.
 
 ## 2. Base de datos
 
@@ -14,11 +16,16 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 3. Mi perfil
 
-- [ ] 3.1 `/dashboard/perfil` con datos, clubes y rol; `UserBlock` del menú (escritorio y celular) enlaza a Mi perfil y muestra la foto o iniciales; verificar para admin, operador y profesor a 1440 y 390 px
-- [ ] 3.2 Formulario de nombre (RHF + Zod) con `update_my_name`; verificar que el nombre nuevo aparece en el menú, en Equipo y en Actividad, y el error con nombre vacío
-- [ ] 3.3 Formulario de contraseña (actual, nueva, repetir; toggle de visibilidad); verificar el cambio correcto (ingreso con la nueva) y el rechazo con la actual incorrecta
-- [ ] 3.4 Formulario de correo con aviso de confirmación pendiente y mensaje al volver del link; verificar en local (Mailpit) el pedido, la confirmación, el correo nuevo en Equipo y el rechazo de un correo ya usado
-- [ ] 3.5 Color del profe en su perfil (uno por club donde es profe); verificar que el profe lo cambia, que el turno toma el color en la planilla y que un operador no ve la opción
+- [x] 3.1 `/dashboard/perfil` con datos, clubes y rol; `UserBlock` del menú (escritorio y celular) enlaza a Mi perfil y muestra la foto o iniciales; verificar para admin, operador y profesor a 1440 y 390 px
+  - `/dashboard/perfil` (Server Component: resumen con foto o iniciales, correo y chips de club · rol) y `UserBlock` del menú como enlace "Mi perfil" con `UserAvatar` (escritorio y "Más" del celular); el layout pasa la foto al shell. Verificado para operador (1440) y profesor (390).
+- [x] 3.2 Formulario de nombre (RHF + Zod) con `update_my_name`; verificar que el nombre nuevo aparece en el menú, en Equipo y en Actividad, y el error con nombre vacío
+  - `NameForm` + `updateMyNameAction` (`update_my_name`, revalida el layout). Verificado: error con nombre vacío; "Oscar Operador" aparece en el menú, en todas sus membresías, en Equipo y en Actividad del admin.
+- [x] 3.3 Formulario de contraseña (actual, nueva, repetir; toggle de visibilidad); verificar el cambio correcto (ingreso con la nueva) y el rechazo con la actual incorrecta
+  - `PasswordForm` (actual, nueva, repetir con `PasswordInput`) + `changePasswordAction` (verifica la actual con `signInWithPassword`). Verificado: "La contraseña actual no es correcta." con una incorrecta; cambio correcto e ingreso posterior con la nueva.
+- [x] 3.4 Formulario de correo con aviso de confirmación pendiente y mensaje al volver del link; verificar en local (Mailpit) el pedido, la confirmación, el correo nuevo en Equipo y el rechazo de un correo ya usado
+  - `EmailForm` + `changeEmailAction` (`updateUser({ email })` con regreso a `/dashboard/perfil?correo=confirmado`). Verificado en local con Mailpit: correo de otra cuenta rechazado; aviso de confirmación pendiente y el correo anterior sigue vigente; llegaron 2 links (cambio de correo seguro: al nuevo y al actual) y al abrirlos el correo cambia en la cuenta y en las membresías (trigger); mensaje "Tu correo quedó actualizado.".
+- [x] 3.5 Color del profe en su perfil (uno por club donde es profe); verificar que el profe lo cambia, que el turno toma el color en la planilla y que un operador no ve la opción
+  - `ProfeColorSection` + `setMyProfeColorAction` (`set_my_profe_color`), un selector por club donde es profe. Verificado: el profe elige Verde (#1F7A4D guardado) a 390 px; el operador no ve la sección. (El color en la planilla ya se verificó en `add-reservation-types-and-socios`.)
 
 ## 4. Foto
 
