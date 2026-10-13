@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Reservation } from "@/lib/reservations";
+import { RESERVATION_SELECT, type Reservation } from "@/lib/reservations";
 import { useMembership } from "@/hooks/use-membership";
 
 export function useReservations(date: string) {
@@ -16,7 +16,7 @@ export function useReservations(date: string) {
     setIsLoading(true);
     const { data, error } = await supabase
       .from("reservations")
-      .select("*")
+      .select(RESERVATION_SELECT)
       .eq("club_id", clubId)
       .eq("date", date)
       .order("time", { ascending: true });

@@ -16,6 +16,9 @@ export type AuditAction =
   | "club.created"
   | "club.updated"
   | "prices.updated"
+  | "socio.created"
+  | "socio.updated"
+  | "socio.removed"
   | "invitation.created"
   | "invitation.regenerated"
   | "invitation.revoked"
@@ -69,6 +72,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "club.created",
     "invitation.created",
     "invitation.accepted",
+    "socio.created",
   ],
   updated: [
     "reservation.updated",
@@ -78,9 +82,10 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "club.updated",
     "invitation.regenerated",
     "prices.updated",
+    "socio.updated",
   ],
   charged: ["payment.registered", "credit.applied"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "socio.removed"],
 };
 
 export function auditKindOf(action: string): AuditKind {
@@ -181,6 +186,12 @@ export function describeAuditEntry(
       const sport = { tenis: "tenis", padel: "pádel", futbol: "fútbol" }[String(p.sport)] ?? String(p.sport ?? "");
       return `cambió los precios de ${sport}: ${money(p.public_price_per_hour)} por hora (profe ${money(p.profe_price_per_hour)})`;
     }
+    case "socio.created":
+      return `dio de alta al socio ${String(p.full_name ?? "")}`.trim();
+    case "socio.updated":
+      return `modificó los datos del socio ${String(p.full_name ?? "")}`.trim();
+    case "socio.removed":
+      return `dio de baja al socio ${String(p.full_name ?? "")}`.trim();
     case "club.updated":
       return `cambió los datos del club: ${String(p.name ?? "")}${p.city ? ` (${String(p.city)})` : ""}`;
     case "invitation.created":

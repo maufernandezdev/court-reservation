@@ -7,6 +7,8 @@ import {
   registerPaymentSchema,
   reservationInputSchema,
   type Payment,
+  MAX_PEOPLE,
+  RESERVATION_SELECT,
   type Reservation,
   type ReservationInput,
 } from "@/lib/reservations";
@@ -74,7 +76,7 @@ async function fetchReservation(
 ): Promise<Reservation | null> {
   const { data } = await supabase
     .from("reservations")
-    .select("*")
+    .select(RESERVATION_SELECT)
     .eq("id", id)
     .eq("club_id", clubId)
     .maybeSingle();
@@ -154,67 +156,165 @@ async function adjustCredit(
   }
 }
 
+type PreparedReservation = {
+  court: Court;
+  kind: ReservationInput["kind"];
+  profeUserId: string | null;
+  duration: number;
+  price: number;
+  /** Personas finales (la 1 es quien reserva; en turnos de profe, el profe). */
+  people: { name: string; socio_id: string | null }[];
+};
+
+/**
+ * Valida y completa un turno (alta o edición): tipo según el rol, profe del club,
+ * socios del club, duración (de la cancha o, en torneos, la elegida), franja dentro
+ * del horario, sin superposición, y valor fijado con los precios del tipo de cancha.
+ */
+async function prepareReservation(
+  ctx: SessionContext,
+  input: ReservationInput,
+  existing: Reservation | null
+): Promise<PreparedReservation> {
+  const { supabase, user, membership } = ctx;
+  const clubId = membership!.club_id;
+
+  const court = await fetchCourt(supabase, clubId, input.court_id);
+  if (!court || (!court.active && court.id !== existing?.court_id)) {
+    throw new Error("La cancha seleccionada no está disponible.");
+  }
+
+  // Un profesor solo carga turnos de profe a su nombre.
+  const isProfesor = membership!.role === "profesor";
+  const kind = isProfesor ? "profe" : input.kind;
+  const profeUserId = kind === "profe" ? (isProfesor ? user!.id : input.profe_user_id) : null;
+
+  let people = input.people.map((p) => ({ name: p.name.trim(), socio_id: p.socio_id }));
+
+  if (kind === "profe") {
+    const { data: profe } = await supabase
+      .from("memberships")
+      .select("full_name, email")
+      .eq("club_id", clubId)
+      .eq("user_id", profeUserId ?? "")
+      .eq("role", "profesor")
+      .maybeSingle();
+    if (!profe) {
+      throw new Error("Elegí un profe del club.");
+    }
+    // El profe es quien reserva; las personas cargadas son sus alumnos.
+    people = [{ name: profe.full_name || profe.email, socio_id: null }, ...people].slice(0, MAX_PEOPLE);
+  } else if (people.length === 0) {
+    throw new Error("Indicá quién reserva el turno.");
+  } else if (kind === "torneo" && people.length < 2) {
+    throw new Error("Un torneo necesita al menos 2 jugadores.");
+  }
+
+  const socioIds = [...new Set(people.map((p) => p.socio_id).filter((id): id is string => !!id))];
+  if (socioIds.length > 0) {
+    const { data: socios } = await supabase
+      .from("socios")
+      .select("id")
+      .eq("club_id", clubId)
+      .is("deleted_at", null)
+      .in("id", socioIds);
+    if ((socios ?? []).length !== socioIds.length) {
+      throw new Error("Alguno de los socios ya no está disponible. Volvé a elegirlo.");
+    }
+  }
+
+  // Duración: en torneos la elegida; en los demás, la de la cancha (o la que ya tenía el turno).
+  const duration =
+    kind === "torneo"
+      ? input.duration_minutes
+      : existing && existing.kind !== "torneo"
+        ? existing.duration_minutes
+        : court.slot_duration;
+
+  if (!getCourtSlots(court).includes(input.time)) {
+    throw new Error("El horario no corresponde a una franja válida de la cancha.");
+  }
+  if (timeToMinutes(input.time) + duration > timeToMinutes(court.close_time)) {
+    throw new Error(`Con ${duration} minutos el turno termina después del cierre de la cancha.`);
+  }
+
+  await assertNoOverlap(supabase, clubId, court.id, input.date, input.time, duration, existing?.id);
+
+  // El valor se fija al reservar; en una edición solo cambia si cambian cancha, tipo o duración.
+  const unchanged =
+    existing &&
+    existing.court_id === court.id &&
+    existing.kind === kind &&
+    existing.duration_minutes === duration;
+  const price = unchanged
+    ? Number(existing.price)
+    : quotePrice(await fetchSportPrices(supabase, clubId, court.type), kind, duration);
+
+  return { court, kind, profeUserId, duration, price, people };
+}
+
+/** Reemplaza las personas de un turno. */
+async function saveParticipants(
+  supabase: SupabaseClient,
+  clubId: string,
+  reservationId: string,
+  people: PreparedReservation["people"]
+): Promise<boolean> {
+  const { error: deleteError } = await supabase
+    .from("reservation_participants")
+    .delete()
+    .eq("club_id", clubId)
+    .eq("reservation_id", reservationId);
+  if (deleteError) return false;
+
+  const { error } = await supabase.from("reservation_participants").insert(
+    people.map((person, index) => ({
+      club_id: clubId,
+      reservation_id: reservationId,
+      position: index + 1,
+      socio_id: person.socio_id,
+      name: person.name,
+    }))
+  );
+  return !error;
+}
+
+function validationError(input: ReservationInput): string | null {
+  const parsed = reservationInputSchema.safeParse(input);
+  return parsed.success ? null : (parsed.error.issues[0]?.message ?? "Datos inválidos.");
+}
+
 export async function createReservationAction(
   input: ReservationInput
 ): Promise<ActionResult> {
-  const parsed = reservationInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Datos inválidos.",
-    };
-  }
+  const invalid = validationError(input);
+  if (invalid) return { success: false, error: invalid };
+  const data = reservationInputSchema.parse(input);
 
   try {
     const ctx: SessionContext = await requireRole("profesor");
     const { supabase, user, membership } = ctx;
     const clubId = membership!.club_id;
 
-    const court = await fetchCourt(supabase, clubId, parsed.data.court_id);
-    if (!court || !court.active) {
-      return { success: false, error: "La cancha seleccionada no está disponible." };
-    }
+    const prepared = await prepareReservation(ctx, data, null);
 
-    // La franja debe ser un inicio válido de turno para esa cancha.
-    if (!getCourtSlots(court).includes(parsed.data.time)) {
-      return {
-        success: false,
-        error: "El horario no corresponde a una franja válida de la cancha.",
-      };
-    }
-
-    await assertNoOverlap(
-      supabase,
-      clubId,
-      court.id,
-      parsed.data.date,
-      parsed.data.time,
-      court.slot_duration
-    );
-
-    // El valor queda fijado al reservar (precio del tipo de cancha × duración).
-    const price = quotePrice(
-      await fetchSportPrices(supabase, clubId, court.type),
-      "standard",
-      court.slot_duration
-    );
-
-    const { data, error } = await supabase
+    const { data: created, error } = await supabase
       .from("reservations")
       .insert({
         club_id: clubId,
-        court_id: court.id,
-        price,
-        date: parsed.data.date,
-        time: parsed.data.time,
-        duration_minutes: court.slot_duration,
-        customer_name: parsed.data.customer_name.trim(),
-        phone: parsed.data.phone.trim(),
+        court_id: prepared.court.id,
+        date: data.date,
+        time: data.time,
+        duration_minutes: prepared.duration,
+        customer_name: prepared.people[0].name,
+        phone: data.phone.trim(),
+        kind: prepared.kind,
+        profe_user_id: prepared.profeUserId,
+        price: prepared.price,
         created_by: user!.id,
         updated_by: user!.id,
       })
-      .select()
+      .select("id")
       .single();
 
     if (error) {
@@ -224,23 +324,33 @@ export async function createReservationAction(
       return { success: false, error: "No se pudo guardar la reserva." };
     }
 
+    if (!(await saveParticipants(supabase, clubId, created.id, prepared.people))) {
+      // Compensación: sin personas el turno no queda guardado.
+      await supabase.from("reservations").delete().eq("id", created.id).eq("club_id", clubId);
+      return { success: false, error: "No se pudieron guardar las personas del turno." };
+    }
+
     await writeAudit(supabase, {
       clubId,
       actorId: user!.id,
       entity: "reservation",
-      entityId: data.id,
+      entityId: created.id,
       action: "reservation.created",
       payload: {
-        customer_name: parsed.data.customer_name.trim(),
-        court_id: court.id,
-        date: parsed.data.date,
-        time: parsed.data.time,
+        customer_name: prepared.people[0].name,
+        court_id: prepared.court.id,
+        date: data.date,
+        time: data.time,
+        kind: prepared.kind,
+        people: prepared.people.map((p) => p.name),
+        duration: prepared.duration,
       },
     });
 
     revalidatePath("/dashboard/reservas");
 
-    return { success: true, reservation: data as Reservation };
+    const reservation = await fetchReservation(supabase, clubId, created.id);
+    return { success: true, reservation: reservation ?? undefined };
   } catch (err) {
     return failure(err, "No se pudo guardar la reserva.");
   }
@@ -250,14 +360,9 @@ export async function updateReservationAction(
   id: string,
   input: ReservationInput
 ): Promise<ActionResult> {
-  const parsed = reservationInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Datos inválidos.",
-    };
-  }
+  const invalid = validationError(input);
+  if (invalid) return { success: false, error: invalid };
+  const data = reservationInputSchema.parse(input);
 
   try {
     const ctx: SessionContext = await requireRole("profesor");
@@ -275,60 +380,34 @@ export async function updateReservationAction(
       };
     }
 
-    const court = await fetchCourt(supabase, clubId, parsed.data.court_id);
-    if (!court) {
-      return { success: false, error: "La cancha seleccionada no existe." };
-    }
+    const prepared = await prepareReservation(ctx, data, existing);
 
-    // La franja debe ser un inicio válido de turno para esa cancha.
-    if (!getCourtSlots(court).includes(parsed.data.time)) {
-      return {
-        success: false,
-        error: "El horario no corresponde a una franja válida de la cancha.",
-      };
-    }
-
-    await assertNoOverlap(
-      supabase,
-      clubId,
-      court.id,
-      parsed.data.date,
-      parsed.data.time,
-      existing.duration_minutes,
-      id
-    );
-
-    // Si cambia la cancha, el valor se recalcula con los precios de su tipo.
-    const price =
-      court.id === existing.court_id
-        ? Number(existing.price)
-        : quotePrice(
-            await fetchSportPrices(supabase, clubId, court.type),
-            existing.kind,
-            existing.duration_minutes
-          );
-
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("reservations")
       .update({
-        court_id: court.id,
-        price,
-        date: parsed.data.date,
-        time: parsed.data.time,
-        customer_name: parsed.data.customer_name.trim(),
-        phone: parsed.data.phone.trim(),
+        court_id: prepared.court.id,
+        date: data.date,
+        time: data.time,
+        duration_minutes: prepared.duration,
+        customer_name: prepared.people[0].name,
+        phone: data.phone.trim(),
+        kind: prepared.kind,
+        profe_user_id: prepared.profeUserId,
+        price: prepared.price,
         updated_by: user!.id,
       })
       .eq("id", id)
-      .eq("club_id", clubId)
-      .select()
-      .single();
+      .eq("club_id", clubId);
 
     if (error) {
       if (error.code === "23505") {
         return { success: false, error: DOUBLE_BOOKING_MESSAGE };
       }
       return { success: false, error: "No se pudo actualizar la reserva." };
+    }
+
+    if (!(await saveParticipants(supabase, clubId, id, prepared.people))) {
+      return { success: false, error: "El turno se guardó, pero no se pudieron guardar sus personas." };
     }
 
     await writeAudit(supabase, {
@@ -338,15 +417,19 @@ export async function updateReservationAction(
       entityId: id,
       action: "reservation.updated",
       payload: {
-        customer_name: parsed.data.customer_name.trim(),
-        date: parsed.data.date,
-        time: parsed.data.time,
+        customer_name: prepared.people[0].name,
+        date: data.date,
+        time: data.time,
+        kind: prepared.kind,
+        people: prepared.people.map((p) => p.name),
+        duration: prepared.duration,
       },
     });
 
     revalidatePath("/dashboard/reservas");
 
-    return { success: true, reservation: data as Reservation };
+    const reservation = await fetchReservation(supabase, clubId, id);
+    return { success: true, reservation: reservation ?? undefined };
   } catch (err) {
     return failure(err, "No se pudo actualizar la reserva.");
   }
@@ -437,7 +520,7 @@ export async function cancelReservationAction(
       })
       .eq("id", id)
       .eq("club_id", clubId)
-      .select()
+      .select(RESERVATION_SELECT)
       .single();
 
     if (error) {
@@ -609,7 +692,7 @@ export async function registerPaymentAction(
       .update({ payment_status: nextStatus, updated_by: user!.id })
       .eq("id", reservationId)
       .eq("club_id", clubId)
-      .select()
+      .select(RESERVATION_SELECT)
       .single();
 
     if (error) {
@@ -724,7 +807,7 @@ export async function applyCreditAction(
       .update({ payment_status: nextStatus, updated_by: user!.id })
       .eq("id", reservationId)
       .eq("club_id", clubId)
-      .select()
+      .select(RESERVATION_SELECT)
       .single();
 
     if (error) {

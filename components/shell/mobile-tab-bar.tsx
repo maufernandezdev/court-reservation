@@ -99,7 +99,7 @@ export function MobileTabBar({ identity, isAdmin, onLogout }: MobileTabBarProps)
               Secciones del panel, club y sesión
             </SheetDescription>
             <ClubBlock identity={identity} />
-            <NavGroups isAdmin={isAdmin} onNavigate={() => setMoreOpen(false)} />
+            <NavGroups onNavigate={() => setMoreOpen(false)} />
             <div className="mt-auto">
               <UserBlock identity={identity} onLogout={onLogout} />
             </div>

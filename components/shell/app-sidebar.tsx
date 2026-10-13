@@ -155,18 +155,13 @@ export function UserBlock({
   );
 }
 
-export function NavGroups({
-  isAdmin,
-  onNavigate,
-}: {
-  isAdmin: boolean;
-  onNavigate?: () => void;
-}) {
+export function NavGroups({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { membership } = useActiveClub();
 
   return (
     <nav aria-label="Principal" className="flex flex-col gap-5">
-      {visibleGroups(isAdmin).map((group) => (
+      {visibleGroups(membership.role).map((group) => (
         <div key={group.label} className="flex flex-col gap-0.5">
           <span className="mb-1 px-3 font-mono text-xs tracking-[0.06em] text-sidebar-label uppercase">
             {group.label}
@@ -209,7 +204,7 @@ export function AppSidebar({ identity, isAdmin, onLogout }: AppSidebarProps) {
         <Logo size="sm" />
       </Link>
       <ClubBlock identity={identity} />
-      <NavGroups isAdmin={isAdmin} />
+      <NavGroups />
       <div className="mt-auto">
         <UserBlock identity={identity} onLogout={onLogout} />
       </div>

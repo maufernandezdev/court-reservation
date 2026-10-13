@@ -14,12 +14,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { FEATURES, type Feature } from "@/lib/features";
+import { roleAtLeast, type ClubRole } from "@/lib/roles";
 
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  adminOnly?: boolean;
+  /** Rol mínimo para ver la sección (sin indicar: todos). */
+  minRole?: ClubRole;
   /** Módulo que se puede ocultar con `lib/features.ts`. */
   feature?: Feature;
 };
@@ -39,35 +41,37 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Hoy", icon: LayoutDashboard },
       { href: "/dashboard/reservas", label: "Planilla", icon: Grid3x3 },
-      { href: "/dashboard/caja", label: "Caja", icon: Wallet, adminOnly: true },
+      { href: "/dashboard/caja", label: "Caja", icon: Wallet, minRole: "admin" },
     ],
   },
   {
     label: "Club",
     items: [
-      { href: "/dashboard/canchas", label: "Canchas", icon: LandPlot, adminOnly: true },
-      { href: "/dashboard/socios", label: "Socios", icon: Users, adminOnly: true },
-      { href: "/dashboard/miembros", label: "Equipo", icon: IdCard, adminOnly: true },
-      { href: "/dashboard/productos", label: "Productos", icon: Package, adminOnly: true, feature: "products" },
+      { href: "/dashboard/canchas", label: "Canchas", icon: LandPlot, minRole: "admin" },
+      { href: "/dashboard/socios", label: "Socios", icon: Users, minRole: "operador" },
+      { href: "/dashboard/miembros", label: "Equipo", icon: IdCard, minRole: "admin" },
+      { href: "/dashboard/productos", label: "Productos", icon: Package, minRole: "admin", feature: "products" },
     ],
   },
   {
     label: "Administración",
     items: [
-      { href: "/dashboard/configuracion", label: "Políticas", icon: ShieldCheck, adminOnly: true },
-      { href: "/dashboard/actividad", label: "Actividad", icon: History, adminOnly: true },
-      { href: "/dashboard/reportes", label: "Reportes", icon: ChartColumn, adminOnly: true },
-      { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell, adminOnly: true, feature: "notifications" },
-      { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard, adminOnly: true },
+      { href: "/dashboard/configuracion", label: "Políticas", icon: ShieldCheck, minRole: "admin" },
+      { href: "/dashboard/actividad", label: "Actividad", icon: History, minRole: "admin" },
+      { href: "/dashboard/reportes", label: "Reportes", icon: ChartColumn, minRole: "admin" },
+      { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell, minRole: "admin", feature: "notifications" },
+      { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard, minRole: "admin" },
     ],
   },
 ];
 
-export function visibleGroups(isAdmin: boolean): NavGroup[] {
+export function visibleGroups(role: ClubRole): NavGroup[] {
   return NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter(
-      (item) => (!item.adminOnly || isAdmin) && (!item.feature || FEATURES[item.feature])
+      (item) =>
+        (!item.minRole || roleAtLeast(role, item.minRole)) &&
+        (!item.feature || FEATURES[item.feature])
     ),
   })).filter((group) => group.items.length > 0);
 }

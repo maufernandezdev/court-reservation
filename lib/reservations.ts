@@ -80,26 +80,86 @@ export type Reservation = {
   price: number;
   /** Serie del turno fijo semanal, si es una fecha de un fijo. */
   series_id: string | null;
+  /** Personas del turno (si la consulta las trae embebidas), ordenadas por posición. */
+  participants?: ReservationParticipant[];
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string | null;
 };
 
+/** Persona de un turno: socio del club (`socio_id`) o persona no socia (solo nombre). */
+/** Persona guardada en un turno (`reservation_participants`). */
+export type ReservationParticipant = {
+  position: number;
+  name: string;
+  socio_id: string | null;
+};
+
+/** Select de turnos con sus personas embebidas. */
+export const RESERVATION_SELECT = "*, participants:reservation_participants(position, name, socio_id)";
+
+/** Personas ordenadas por posición (PostgREST no garantiza el orden del embebido). */
+export function sortedParticipants(reservation: Pick<Reservation, "participants">): ReservationParticipant[] {
+  return [...(reservation.participants ?? [])].sort((a, b) => a.position - b.position);
+}
+
+export type ReservationPerson = {
+  name: string;
+  socio_id: string | null;
+  /** Teléfono de la ficha del socio (para completar el del turno). */
+  phone?: string;
+};
+
+export const MAX_PEOPLE = 4;
+
 export const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export const reservationInputSchema = z.object({
-  court_id: z.string().uuid("Seleccioná una cancha válida"),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Ingresá una fecha válida"),
-  time: z.string().regex(timeRegex, "Ingresá un horario válido (HH:MM)"),
-  customer_name: z
-    .string()
-    .trim()
-    .min(1, "Ingresá el nombre del socio o equipo"),
-  phone: z.string().trim(),
+const personSchema = z.object({
+  name: z.string().trim().min(1, "Falta el nombre de una persona").max(120, "Nombre demasiado largo"),
+  socio_id: z.string().uuid().nullable(),
+  phone: z.string().optional(),
 });
+
+/**
+ * Alta y edición de un turno. `people` son las personas que carga el usuario:
+ * en turnos estándar y de torneo la primera es quien reserva; en turnos de profe
+ * son los alumnos (opcionales) y quien reserva es el profe.
+ */
+export const reservationInputSchema = z
+  .object({
+    court_id: z.string().uuid("Seleccioná una cancha válida"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ingresá una fecha válida"),
+    time: z.string().regex(timeRegex, "Ingresá un horario válido (HH:MM)"),
+    phone: z.string().trim().max(40, "El teléfono es demasiado largo"),
+    kind: z.enum(RESERVATION_KINDS, { message: "Elegí el tipo de turno" }),
+    profe_user_id: z.string().uuid().nullable(),
+    /** Solo se usa en torneos (en los demás tipos manda la duración de la cancha). */
+    duration_minutes: z.coerce.number().int(),
+    people: z.array(personSchema).max(MAX_PEOPLE, `Hasta ${MAX_PEOPLE} personas por turno`),
+  })
+  .superRefine((data, ctx) => {
+    if (data.kind === "profe") {
+      if (!data.profe_user_id) {
+        ctx.addIssue({ code: "custom", path: ["profe_user_id"], message: "Elegí qué profe usa la cancha" });
+      }
+      if (data.people.length > MAX_PEOPLE - 1) {
+        ctx.addIssue({ code: "custom", path: ["people"], message: `Hasta ${MAX_PEOPLE - 1} alumnos` });
+      }
+      return;
+    }
+    if (data.people.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["people"], message: "Indicá quién reserva el turno" });
+    }
+    if (data.kind === "torneo") {
+      if (data.people.length < 2) {
+        ctx.addIssue({ code: "custom", path: ["people"], message: "Un torneo necesita al menos 2 jugadores" });
+      }
+      if (data.duration_minutes < 30 || data.duration_minutes > 360 || data.duration_minutes % 30 !== 0) {
+        ctx.addIssue({ code: "custom", path: ["duration_minutes"], message: "La duración va de 30 min a 6 h, en pasos de 30" });
+      }
+    }
+  });
 
 export type ReservationInput = z.infer<typeof reservationInputSchema>;
 
