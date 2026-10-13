@@ -2,11 +2,16 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 
 ## 1. Migración `0008_reservation_types_and_socios.sql`
 
-- [ ] 1.1 Tablas `socios`, `sport_prices`, `reservation_participants` y `reservation_series` con RLS por club (miembros leen; staff escribe socios, personas y series; admin escribe precios) y verificar en local con usuarios de dos clubes que no se ven datos cruzados
-- [ ] 1.2 Columnas nuevas: `reservations.kind`, `profe_user_id`, `price`, `series_id` (con checks y `unique (series_id, date)`), `settings.tournament_duration_minutes` y `memberships.color`; verificar que el código actual sigue funcionando con la migración aplicada (es aditiva)
-- [ ] 1.3 Backfills: `sport_prices` desde las canchas (precio y seña de la cancha activa más cara por deporte, profe = público), `reservations.price` con el valor que tenían y una persona (posición 1) por turno existente; verificar en local que los valores de Hoy y Caja no cambian
-- [ ] 1.4 `create_club` crea las filas de `sport_prices` de los deportes elegidos; función `ensure_series_until(p_club_id, p_until)` idempotente que materializa fechas faltantes salteando superposiciones; verificar desde SQL que dos llamadas seguidas no duplican fechas
-- [ ] 1.5 `supabase/rollback/0008_down.sql` y prueba subir → bajar → subir en local sin perder turnos
+- [x] 1.1 Tablas `socios`, `sport_prices`, `reservation_participants` y `reservation_series` con RLS por club (miembros leen; staff escribe socios, personas y series; admin escribe precios) y verificar en local con usuarios de dos clubes que no se ven datos cruzados
+  - Verificado en local (2026-10-12): el operador crea socios y el profesor no; el profe lee socios (para buscarlos); otro club no ve socios ni precios; DNI repetido → `socios_club_dni_idx`; el operador no cambia precios y el admin sí; el profe crea una serie propia de tipo profe y no una ajena.
+- [x] 1.2 Columnas nuevas: `reservations.kind`, `profe_user_id`, `price`, `series_id` (con checks y `unique (series_id, date)`), `settings.tournament_duration_minutes` y `memberships.color`; verificar que el código actual sigue funcionando con la migración aplicada (es aditiva)
+  - Columnas con defaults (`kind='standard'`, `price=0`) y check `reservations_profe_check`. Verificado: con 0008 aplicada, el build del código anterior pasa el recorrido de la fase 3 de `add-club-onboarding` (crear, cobrar y cancelar turno, permisos, aislamiento). Ojo: mientras no se despliegue el código nuevo, los turnos nuevos quedan con `price = 0` (no afecta al código viejo, que calcula con la cancha).
+- [x] 1.3 Backfills: `sport_prices` desde las canchas (precio y seña de la cancha activa más cara por deporte, profe = público), `reservations.price` con el valor que tenían y una persona (posición 1) por turno existente; verificar en local que los valores de Hoy y Caja no cambian
+  - Verificado: el valor de cada turno después del backfill es idéntico al cálculo anterior (diff vacío); precios por deporte desde las canchas (tenis $10.000 con seña 30 %, pádel $12.000; profe = público); una persona por turno; color asignado al profesor existente.
+- [x] 1.4 `create_club` crea las filas de `sport_prices` de los deportes elegidos; función `ensure_series_until(p_club_id, p_until)` idempotente que materializa fechas faltantes salteando superposiciones; verificar desde SQL que dos llamadas seguidas no duplican fechas
+  - `ensure_series_until` devuelve las fechas salteadas. Verificado: fijo de los lunes 26/10–14/12 con el 9/11 ocupado → 7 turnos con 2 personas cada uno y el 9/11 informado; segunda llamada sin duplicados; alguien de otro club recibe "No sos miembro de este club".
+- [x] 1.5 `supabase/rollback/0008_down.sql` y prueba subir → bajar → subir en local sin perder turnos
+  - `supabase/rollback/0008_down.sql` (incluye `create_club` de 0007). Verificado: subir → bajar → subir con los mismos conteos de turnos, cobros, canchas y clubes.
 
 ## 2. Precios por deporte
 
