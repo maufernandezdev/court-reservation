@@ -68,7 +68,9 @@ Hoy en día, cuando estás en la parte del dashboard principal, que tienes como 
 
 El valor de la caja esta harcodeado parece. Deberia ya ser el real para podes probarlo bien
 
-## Editar perfil
+## ✅ Editar perfil
+> ✅ **Aplicado (12/10/2026).** "Mi perfil" en `/dashboard/perfil` (se abre tocando tu nombre abajo en el menú): nombre (se actualiza en todos tus clubes), foto (se recorta en cuadrado y se guarda en el bucket privado `court-reservation` de Cloudflare R2; la ven solo quienes comparten club con vos), correo (con confirmación por link), contraseña (pidiendo la actual) y, para profes, su color en la planilla.
+
 
 Tanto el operador, tanto el administrador como los profesores podrían cambiar su perfil. Es decir, podrían editar su perfil en algún lado: cambiar su nombre, si quisieran cambiar el mail, la contraseña. Por ahora eso. 
 
@@ -76,7 +78,6 @@ Tanto el operador, tanto el administrador como los profesores podrían cambiar s
 
 Lo que necesites de Cloudflare me decis, el bucket se llama "court-reservation"
 
-> 📝 **Planificado (12/10/2026)** en `openspec/changes/add-profile-editing/`: "Mi perfil" en `/dashboard/perfil` (nombre, contraseña, correo, foto en R2 privado y color del profe).
 
 ## Precio de noche (costo de luz)
 

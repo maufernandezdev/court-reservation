@@ -31,6 +31,12 @@ Plataforma para que un club (tenis, pádel, fútbol y más) gestione su planilla
    # Solo servidor (nunca con prefijo NEXT_PUBLIC_): crea la cuenta del invitado al aceptar
    # una invitación. Supabase → Project Settings → API Keys → Secret keys.
    SUPABASE_SECRET_KEY=sb_secret_...
+   # Solo servidor: fotos de perfil en Cloudflare R2 (token de API de R2 con
+   # Object Read & Write solo sobre el bucket). Sin estas, el resto funciona.
+   R2_ACCOUNT_ID=...
+   R2_ACCESS_KEY_ID=...
+   R2_SECRET_ACCESS_KEY=...
+   R2_BUCKET_NAME=court-reservation
    # Solo para la CLI de Supabase (db push):
    SUPABASE_DB_PASSWORD=<password de la base>
    # Solo para pruebas automáticas (ver "Pruebas"):
@@ -77,6 +83,7 @@ pnpm exec tsc --noEmit  # chequeo de tipos rápido
 | Socios | `/dashboard/socios` | admin y operador | Alta, edición, baja y búsqueda de socios (nombre, DNI, teléfono, correo) |
 | Equipo | `/dashboard/miembros` | admin | Personas del club, roles, color de cada profe, invitaciones por link (WhatsApp o copiar) y matriz de permisos |
 | Políticas | `/dashboard/configuracion` | admin | Ventana de cancelación y penalidad, con ejemplo calculado; duración estándar de torneo; nombre y ciudad del club |
+| Mi perfil | `/dashboard/perfil` | todos (desde el nombre, abajo en el menú) | Nombre, foto, correo (con confirmación), contraseña y, para profes, su color en la planilla |
 | Actividad | `/dashboard/actividad` | admin | Auditoría: quién creó, modificó, cobró o canceló, con filtros |
 | Reportes, Suscripción | `/dashboard/...` | admin | Pantallas de ejemplo (datos mock), todavía sin backend |
 | Productos, Notificaciones | `/dashboard/...` | nadie por ahora | Ocultas con `lib/features.ts` (el código queda); su ruta redirige a Hoy |
@@ -114,6 +121,7 @@ components/
   cash/          selector de día de la Caja
   members/       compartir invitación e invitaciones pendientes (Equipo)
   invitations/   formulario de ingreso por invitación
+  profile/       Mi perfil (formularios, foto y avatar)
   club/          datos del club (Políticas)
   reservations/  grilla, planilla móvil, detalle del turno, formulario, buscador
   courts/        formulario y acciones de canchas

@@ -37,4 +37,5 @@ Cada fase termina con `pnpm exec tsc --noEmit`, `pnpm build`, la recorrida de la
 ## 5. Cierre
 
 - [ ] 5.1 Aplicar `0011` en producción con confirmación del usuario y borrar los objetos de prueba del bucket
-- [ ] 5.2 Actualizar README (variables de R2, Mi perfil), `docs/PROJECT_DOCUMENTATION.md` y marcar "Editar perfil" en `docs/next-steps.md`
+- [x] 5.2 Actualizar README (variables de R2, Mi perfil), `docs/PROJECT_DOCUMENTATION.md` y marcar "Editar perfil" en `docs/next-steps.md`
+  - README (variables de R2 con `R2_BUCKET_NAME`, Mi perfil en la tabla, `components/profile/`), `docs/PROJECT_DOCUMENTATION.md` (sección de 0011 y R2; pendientes de producción 0009 y 0011) y "Editar perfil" marcado ✅ en `docs/next-steps.md`.
