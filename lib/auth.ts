@@ -23,7 +23,7 @@ export async function fetchMemberships(
 ): Promise<Membership[]> {
   const { data } = await supabase
     .from("memberships")
-    .select("*, club:clubs(id, name, city)")
+    .select("*, club:clubs(id, name, city, logo_path, logo_updated_at)")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 

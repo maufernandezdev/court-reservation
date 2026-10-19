@@ -19,36 +19,79 @@ export function minutesToTime(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** Franjas disponibles de una cancha según su horario y duración de turno. */
-export function getCourtSlots(
-  court: Pick<Court, "open_time" | "close_time" | "slot_duration">
-): string[] {
-  const start = timeToMinutes(court.open_time);
-  const end = timeToMinutes(court.close_time);
-  const slots: string[] = [];
-  for (let t = start; t + court.slot_duration <= end; t += court.slot_duration) {
-    slots.push(minutesToTime(t));
+/** Horario de apertura y cierre del club ("HH:MM"): vale para todas sus canchas. */
+export type ClubHours = {
+  open_time: string;
+  close_time: string;
+};
+
+export const DEFAULT_CLUB_HOURS: ClubHours = { open_time: "09:00", close_time: "22:00" };
+
+/** Los turnos empiezan cada 30 minutos y duran de 30 min a 6 h, en pasos de 30. */
+export const START_STEP_MINUTES = 30;
+export const MIN_DURATION_MINUTES = 30;
+export const MAX_DURATION_MINUTES = 360;
+/** Duración con la que arranca un turno nuevo (el torneo usa la de Políticas). */
+export const DEFAULT_DURATION_MINUTES = 60;
+
+/** Horarios en que puede empezar un turno de esa duración: cada 30 min, sin pasar del cierre. */
+export function startTimes(hours: ClubHours, durationMinutes = MIN_DURATION_MINUTES): string[] {
+  const start = timeToMinutes(hours.open_time);
+  const end = timeToMinutes(hours.close_time);
+  const times: string[] = [];
+  for (let t = start; t + durationMinutes <= end; t += START_STEP_MINUTES) {
+    times.push(minutesToTime(t));
   }
-  return slots;
+  return times;
 }
 
-/** Solapamiento entre dos intervalos de tiempo (en minutos desde 00:00). */
-/**
- * Franja por defecto para "Nuevo turno": la primera desde `fromMinutes` (si se
- * indica, p. ej. la hora actual en el día de hoy) o, si no hay, la apertura.
- */
-export function defaultSlot(
-  court: Pick<Court, "open_time" | "close_time" | "slot_duration">,
-  fromMinutes?: number
-): string {
-  const slots = getCourtSlots(court);
+/** ¿Un turno que empieza en `time` y dura `durationMinutes` entra en el horario del club? */
+export function fitsClubHours(hours: ClubHours, time: string, durationMinutes: number): boolean {
+  const start = timeToMinutes(time);
   return (
-    (fromMinutes !== undefined ? slots.find((s) => timeToMinutes(s) >= fromMinutes) : undefined) ??
-    slots[0] ??
-    court.open_time
+    start >= timeToMinutes(hours.open_time) &&
+    start + durationMinutes <= timeToMinutes(hours.close_time) &&
+    (start - timeToMinutes(hours.open_time)) % START_STEP_MINUTES === 0
   );
 }
 
+/**
+ * Primer horario para "Nuevo turno": la próxima media hora desde `fromMinutes` (a las 19:44, las
+ * 20:00; p. ej. la hora actual en el día de hoy) o, si no se indica, la apertura. Siempre dentro
+ * del horario del club.
+ */
+export function firstStartFrom(hours: ClubHours, fromMinutes?: number): string {
+  const open = timeToMinutes(hours.open_time);
+  const lastStart = Math.max(open, timeToMinutes(hours.close_time) - MIN_DURATION_MINUTES);
+  if (fromMinutes === undefined) return minutesToTime(open);
+  const stepped = open + Math.ceil(Math.max(0, fromMinutes - open) / START_STEP_MINUTES) * START_STEP_MINUTES;
+  return minutesToTime(Math.min(Math.max(open, stepped), lastStart));
+}
+
+/**
+ * Duración máxima de un turno que empieza en `time`: hasta 6 h, el cierre del club y el siguiente
+ * turno activo de la cancha (`courtReservations`: los de esa cancha y fecha, sin el que se edita).
+ * 0 si la hora ya está ocupada o no queda lugar para 30 minutos.
+ */
+export function maxDurationAt(
+  hours: ClubHours,
+  courtReservations: Pick<Reservation, "time" | "duration_minutes" | "status">[],
+  time: string
+): number {
+  const start = timeToMinutes(time);
+  let limit = Math.min(MAX_DURATION_MINUTES, timeToMinutes(hours.close_time) - start);
+  for (const r of courtReservations) {
+    if (r.status !== "active") continue;
+    const s = timeToMinutes(r.time);
+    const e = s + r.duration_minutes;
+    if (s <= start && start < e) return 0;
+    if (s > start) limit = Math.min(limit, s - start);
+  }
+  const stepped = Math.floor(limit / MIN_DURATION_MINUTES) * MIN_DURATION_MINUTES;
+  return stepped >= MIN_DURATION_MINUTES ? stepped : 0;
+}
+
+/** Solapamiento entre dos intervalos de tiempo (en minutos desde 00:00). */
 export function rangesOverlap(
   startA: number,
   durationA: number,
@@ -79,45 +122,42 @@ export type FreeSlot = {
 
 export type AvailabilityFilter = {
   from?: string; // "HH:MM" inclusive
-  to?: string; // "HH:MM" exclusive (fin de franja buscada)
+  to?: string; // "HH:MM" exclusive (fin de la franja buscada)
   type?: Court["type"] | "all";
+  /** Duración buscada en minutos (por defecto 1 hora). */
+  duration?: number;
 };
 
 /**
- * Busca franjas libres para una fecha. Solo considera reservas activas.
+ * Busca los horarios en que cabe un turno de la duración pedida, para una fecha. Solo considera
+ * reservas activas.
  */
 export function findFreeSlots(
   courts: Court[],
   activeReservations: Reservation[],
+  hours: ClubHours,
   filter: AvailabilityFilter
 ): FreeSlot[] {
   const from = filter.from ? timeToMinutes(filter.from) : null;
   const to = filter.to ? timeToMinutes(filter.to) : null;
+  const duration = filter.duration ?? DEFAULT_DURATION_MINUTES;
+  const times = startTimes(hours, duration);
 
   const free: FreeSlot[] = [];
 
   for (const court of courts) {
-    if (filter.type && filter.type !== "all" && court.type !== filter.type)
-      continue;
+    if (filter.type && filter.type !== "all" && court.type !== filter.type) continue;
 
-    const courtReservations = activeReservations.filter(
-      (r) => r.court_id === court.id
-    );
+    const courtReservations = activeReservations.filter((r) => r.court_id === court.id);
 
-    for (const time of getCourtSlots(court)) {
+    for (const time of times) {
       const slotStart = timeToMinutes(time);
-      const slotEnd = slotStart + court.slot_duration;
 
       if (from !== null && slotStart < from) continue;
-      if (to !== null && slotEnd > to) continue;
+      if (to !== null && slotStart + duration > to) continue;
 
       const occupied = courtReservations.some((r) =>
-        rangesOverlap(
-          slotStart,
-          court.slot_duration,
-          timeToMinutes(r.time),
-          r.duration_minutes
-        )
+        rangesOverlap(slotStart, duration, timeToMinutes(r.time), r.duration_minutes)
       );
 
       if (!occupied) free.push({ court, time });
@@ -125,6 +165,26 @@ export function findFreeSlots(
   }
 
   return free.sort((a, b) => a.time.localeCompare(b.time));
+}
+
+/**
+ * Primera cancha y horario para "Nuevo turno": desde la próxima media hora (o la apertura), el primer
+ * hueco donde entra una hora libre y, si no hay, uno de al menos media hora. Con varias canchas libres
+ * a esa hora gana la primera de la lista; una cancha ocupada solo aparece al cambiar a un horario en
+ * que tenga hueco. Null si no queda ninguna.
+ */
+export function firstFreeStart(
+  courts: Court[],
+  activeReservations: Reservation[],
+  hours: ClubHours,
+  fromMinutes?: number
+): { court: Court; time: string } | null {
+  const from = firstStartFrom(hours, fromMinutes);
+  for (const duration of [DEFAULT_DURATION_MINUTES, MIN_DURATION_MINUTES]) {
+    const [first] = findFreeSlots(courts, activeReservations, hours, { from, duration });
+    if (first) return { court: first.court, time: first.time };
+  }
+  return null;
 }
 
 export type AvailabilityMessageSlot = {

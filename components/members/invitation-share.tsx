@@ -25,10 +25,8 @@ export function InvitationShare({
 }) {
   const [copied, setCopied] = useState(false);
   const message = invitationMessage({
-    fullName: invitation.fullName,
     clubName,
     roleLabel: CLUB_ROLE_LABELS[invitation.role],
-    email: invitation.email,
     link: invitation.link,
     expiresAt: invitation.expiresAt,
   });
@@ -47,10 +45,10 @@ export function InvitationShare({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <p className="text-[15px] text-pretty wrap-anywhere text-muted-foreground">
-        Mandale el link a <strong className="text-foreground">{invitation.fullName}</strong>.
-        Va a entrar con <strong className="text-foreground">{invitation.email}</strong> como{" "}
-        {CLUB_ROLE_LABELS[invitation.role].toLowerCase()}. Sirve una sola vez y vence el{" "}
-        {shortDate(invitation.expiresAt)}.
+        Mandale el link a {invitation.note ? <strong className="text-foreground">{invitation.note}</strong> : "la persona"}.
+        Va a cargar su nombre y su correo y entra como{" "}
+        <strong className="text-foreground">{CLUB_ROLE_LABELS[invitation.role].toLowerCase()}</strong>. Sirve una
+        sola vez y vence el {shortDate(invitation.expiresAt)}.
       </p>
 
       <div className="flex min-w-0 flex-col gap-2">

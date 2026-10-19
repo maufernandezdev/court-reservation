@@ -7,9 +7,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { setActiveClubCookie } from "@/lib/auth";
 import {
   invitationTokenSchema,
-  joinInvitationSchema,
+  joinExistingAccountSchema,
+  joinNewAccountSchema,
   type InvitationLookup,
-  type JoinInvitationInput,
+  type JoinExistingAccountInput,
+  type JoinNewAccountInput,
 } from "@/lib/invitations";
 
 type ActionResult = { success: false; error: string };
@@ -44,65 +46,34 @@ async function acceptAndEnter(
   return clubId as string;
 }
 
-/**
- * Ingreso desde el link sin sesión: con cuenta, inicia sesión con su contraseña;
- * sin cuenta, la crea ya confirmada con el correo invitado (el link prueba que el
- * admin se la mandó a esa persona) y después inicia sesión.
- */
-export async function joinWithInvitationAction(
-  input: JoinInvitationInput
-): Promise<ActionResult> {
-  const parsed = joinInvitationSchema.safeParse(input);
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
-  }
-
-  const { token, password } = parsed.data;
-  const supabase = await createClient();
+/** El link tiene que estar pendiente: si no, devuelve el mensaje que corresponde. */
+async function requirePending(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  token: string
+): Promise<ActionResult | null> {
   const invitation = await lookup(supabase, token);
-
-  if (!invitation || invitation.status !== "pending" || !invitation.email) {
+  if (!invitation || invitation.status !== "pending") {
     const status = invitation && invitation.status !== "pending" ? invitation.status : "invalid";
     return { success: false, error: STATUS_ERRORS[status] };
   }
+  return null;
+}
 
-  if (!invitation.has_account) {
-    let admin: ReturnType<typeof createAdminClient>;
-    try {
-      admin = createAdminClient();
-    } catch (err) {
-      // Falta SUPABASE_SECRET_KEY: no se pueden crear cuentas desde una invitación.
-      console.error(err);
-      return {
-        success: false,
-        error:
-          "No pudimos crear tu cuenta por un problema de configuración del sistema. Avisale al administrador del club.",
-      };
-    }
-    const { error: createError } = await admin.auth.admin.createUser({
-      email: invitation.email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: invitation.full_name ?? "" },
-    });
-
-    // Si justo se creó la cuenta por otro lado, sigue como "con cuenta".
-    if (createError && createError.code !== "email_exists") {
-      return { success: false, error: "No se pudo crear tu cuenta. Probá de nuevo." };
-    }
-  }
-
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: invitation.email,
-    password,
-  });
+/** Inicia sesión con correo y contraseña, acepta la invitación y entra al panel del club. */
+async function signInAcceptAndEnter(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  token: string,
+  email: string,
+  password: string
+): Promise<ActionResult> {
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
   if (signInError) {
     return {
       success: false,
       error:
         signInError.code === "invalid_credentials"
-          ? "La contraseña no es correcta."
+          ? "El correo o la contraseña no son correctos."
           : "No se pudo iniciar sesión. Probá de nuevo.",
     };
   }
@@ -115,7 +86,74 @@ export async function joinWithInvitationAction(
   redirect("/dashboard");
 }
 
-/** "Unirme al club" cuando ya hay sesión con el correo invitado. */
+/**
+ * Ingreso desde el link sin cuenta: crea la cuenta con el nombre, el correo y la contraseña que
+ * cargó la persona (ya confirmada: el link prueba que el admin se lo mandó) y entra al club.
+ * Si el correo ya tiene cuenta, le pide que ingrese con su contraseña.
+ */
+export async function joinWithNewAccountAction(input: JoinNewAccountInput): Promise<ActionResult> {
+  const parsed = joinNewAccountSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  const { token, full_name, password } = parsed.data;
+  const email = parsed.data.email.toLowerCase();
+  const supabase = await createClient();
+
+  const problem = await requirePending(supabase, token);
+  if (problem) return problem;
+
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    // Falta SUPABASE_SECRET_KEY: no se pueden crear cuentas desde una invitación.
+    console.error(err);
+    return {
+      success: false,
+      error:
+        "No pudimos crear tu cuenta por un problema de configuración del sistema. Avisale al administrador del club.",
+    };
+  }
+
+  const { error: createError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name },
+  });
+
+  if (createError) {
+    return {
+      success: false,
+      error:
+        createError.code === "email_exists"
+          ? "Ese correo ya tiene una cuenta. Elegí \"Ya tengo cuenta\" e ingresá con tu contraseña."
+          : "No se pudo crear tu cuenta. Probá de nuevo.",
+    };
+  }
+
+  return signInAcceptAndEnter(supabase, token, email, password);
+}
+
+/** Ingreso desde el link con una cuenta que ya existe: correo y contraseña. */
+export async function joinWithExistingAccountAction(input: JoinExistingAccountInput): Promise<ActionResult> {
+  const parsed = joinExistingAccountSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  const { token, password } = parsed.data;
+  const supabase = await createClient();
+
+  const problem = await requirePending(supabase, token);
+  if (problem) return problem;
+
+  return signInAcceptAndEnter(supabase, token, parsed.data.email.toLowerCase(), password);
+}
+
+/** "Unirme al club" con la sesión que ya está iniciada. */
 export async function joinWithSessionAction(token: string): Promise<ActionResult> {
   const parsed = invitationTokenSchema.safeParse(token);
   if (!parsed.success) {

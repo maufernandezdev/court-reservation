@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
-import { minutesToTime, timeToMinutes } from "@/lib/availability";
+import { START_STEP_MINUTES, minutesToTime, timeToMinutes, type ClubHours } from "@/lib/availability";
 import {
   RESERVATION_TONE_LABELS,
   toneFor,
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 type Row =
   | { kind: "now" }
-  | { kind: "free"; start: number; length: number }
+  | { kind: "free"; start: number; end: number }
   | { kind: "past"; start: number }
   | { kind: "reservation"; reservation: Reservation };
 
@@ -29,6 +29,8 @@ type MobileScheduleProps = {
   reservations: Reservation[];
   selectedDateKey: string;
   todayKey: string;
+  /** Horario del club. */
+  hours: ClubHours;
   /** Minutos del día actual si la fecha visible es hoy; null si no. */
   nowMinutes: number | null;
   onSelectDate: (key: string) => void;
@@ -63,9 +65,10 @@ function buildRows(
   court: Court,
   reservations: Reservation[],
   from: number,
-  nowMinutes: number | null
+  nowMinutes: number | null,
+  hours: ClubHours
 ): Row[] {
-  const close = timeToMinutes(court.close_time);
+  const close = timeToMinutes(hours.close_time);
   const mine = reservations
     .filter((r) => r.court_id === court.id)
     .map((r) => ({ r, s: timeToMinutes(r.time), e: timeToMinutes(r.time) + r.duration_minutes }))
@@ -80,18 +83,20 @@ function buildRows(
       nowPlaced = true;
     }
   };
+  // Un hueco libre es una sola fila: desde su comienzo (o, hoy, la próxima media hora) hasta el siguiente turno.
   const pushFree = (startAt: number, endAt: number) => {
-    let t = startAt;
-    while (t < endAt) {
-      const length = Math.min(court.slot_duration, endAt - t);
-      placeNow(t);
-      if (nowMinutes !== null && t + length <= nowMinutes) {
-        rows.push({ kind: "past", start: t });
-      } else if (length === court.slot_duration) {
-        rows.push({ kind: "free", start: t, length });
-      }
-      t += length;
+    placeNow(startAt);
+    if (nowMinutes !== null && endAt <= nowMinutes) {
+      rows.push({ kind: "past", start: startAt });
+      return;
     }
+    const start =
+      nowMinutes !== null && startAt < nowMinutes
+        ? Math.ceil(nowMinutes / START_STEP_MINUTES) * START_STEP_MINUTES
+        : startAt;
+    if (endAt - start < START_STEP_MINUTES) return;
+    placeNow(start);
+    rows.push({ kind: "free", start, end: endAt });
   };
 
   let cursor = from;
@@ -111,6 +116,7 @@ export function MobileSchedule({
   reservations,
   selectedDateKey,
   todayKey,
+  hours,
   nowMinutes,
   onSelectDate,
   onSelect,
@@ -123,17 +129,17 @@ export function MobileSchedule({
   const court = courts.find((c) => c.id === courtId) ?? courts[0];
   if (!court) return null;
 
-  const open = timeToMinutes(court.open_time);
-  // Por defecto arranca una hora antes de ahora (alineado al turno de la cancha).
+  const open = timeToMinutes(hours.open_time);
+  // Por defecto arranca una hora antes de ahora (alineado a la media hora).
   const nearNow =
     nowMinutes === null
       ? open
       : Math.max(
           open,
-          open + Math.floor((nowMinutes - 60 - open) / court.slot_duration) * court.slot_duration
+          open + Math.floor((nowMinutes - 60 - open) / START_STEP_MINUTES) * START_STEP_MINUTES
         );
   const from = fromOpening ? open : nearNow;
-  const rows = buildRows(court, reservations, from, nowMinutes);
+  const rows = buildRows(court, reservations, from, nowMinutes, hours);
 
   return (
     // pb-20: que el último turno pueda subir por encima del botón flotante.
@@ -190,7 +196,7 @@ export function MobileSchedule({
       <div className="flex items-baseline justify-between px-0.5">
         <strong className="text-[15px]">{court.name}</strong>
         <span className="font-mono text-xs text-muted-foreground uppercase">
-          {COURT_TYPE_LABELS[court.type]} · {court.slot_duration} min
+          {COURT_TYPE_LABELS[court.type]}
         </span>
       </div>
 
@@ -200,7 +206,7 @@ export function MobileSchedule({
           className="border-dashed font-normal text-muted-foreground"
           onClick={() => setFromOpening(true)}
         >
-          Ver desde las {court.open_time}
+          Ver desde las {hours.open_time}
         </Button>
       )}
 
@@ -241,7 +247,7 @@ export function MobileSchedule({
               >
                 <span className="w-13 font-mono text-[15px] font-semibold">{time}</span>
                 <span className="flex-1 text-sm text-muted-foreground">
-                  Libre · {row.length} min
+                  Libre hasta las {minutesToTime(row.end)}
                 </span>
                 <Button size="sm" className="h-11" onClick={() => onCreate(court.id, time)}>
                   Reservar

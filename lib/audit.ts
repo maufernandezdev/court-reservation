@@ -1,3 +1,4 @@
+import { formatCancelWindow } from "@/lib/reservations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AuditAction =
@@ -17,9 +18,9 @@ export type AuditAction =
   | "club.created"
   | "club.updated"
   | "prices.updated"
-  | "socio.created"
-  | "socio.updated"
-  | "socio.removed"
+  | "player.created"
+  | "player.updated"
+  | "player.removed"
   | "series.created"
   | "series.ended"
   | "invitation.created"
@@ -75,7 +76,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "club.created",
     "invitation.created",
     "invitation.accepted",
-    "socio.created",
+    "player.created",
     "series.created",
   ],
   updated: [
@@ -87,11 +88,17 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "club.updated",
     "invitation.regenerated",
     "prices.updated",
-    "socio.updated",
+    "player.updated",
   ],
   charged: ["payment.registered", "credit.applied"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "socio.removed", "series.ended"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended"],
 };
+
+function depositText(p: Record<string, unknown>, audience: "public" | "profe"): string {
+  if (!p[`${audience}_deposit_enabled`]) return "no pide";
+  const value = p[`${audience}_deposit_value`];
+  return p[`${audience}_deposit_type`] === "fixed" ? money(value) : `${String(value)} %`;
+}
 
 export function auditKindOf(action: string): AuditKind {
   for (const kind of AUDIT_KINDS) {
@@ -190,8 +197,18 @@ export function describeAuditEntry(
       return `creó el club ${String(p.name ?? "")}${total ? ` con ${total} ${total === 1 ? "cancha" : "canchas"}` : ""}`.trim();
     }
     case "prices.updated": {
+      if (p.night_starts_at) {
+        return `cambió el inicio del horario de noche a las ${String(p.night_starts_at)}`;
+      }
       const sport = { tenis: "tenis", padel: "pádel", futbol: "fútbol" }[String(p.sport)] ?? String(p.sport ?? "");
-      return `cambió los precios de ${sport}: ${money(p.public_price_per_hour)} por hora (profe ${money(p.profe_price_per_hour)})`;
+      // Los registros anteriores al precio de noche no traen los valores de noche.
+      if (p.public_night_price_per_hour === undefined) {
+        return `cambió los precios de ${sport}: ${money(p.public_price_per_hour)} por hora (profe ${money(p.profe_price_per_hour)})`;
+      }
+      const prices = `${money(p.public_price_per_hour)} por hora de día y ${money(p.public_night_price_per_hour)} de noche (profe ${money(p.profe_price_per_hour)} y ${money(p.profe_night_price_per_hour)})`;
+      // Los registros anteriores a la seña por audiencia no la traen.
+      if (p.public_deposit_enabled === undefined) return `cambió los precios de ${sport}: ${prices}`;
+      return `cambió los precios de ${sport}: ${prices}; seña del público ${depositText(p, "public")}, seña de profes ${depositText(p, "profe")}`;
     }
     case "series.created": {
       const skipped = Array.isArray(p.skipped) ? p.skipped.length : 0;
@@ -199,24 +216,38 @@ export function describeAuditEntry(
     }
     case "series.ended":
       return `dio de baja el turno fijo${who ? ` de ${who}` : ""}${typeof p.from === "string" ? ` desde el ${shortDate(p.from)}` : ""}`;
-    case "socio.created":
-      return `dio de alta al socio ${String(p.full_name ?? "")}`.trim();
-    case "socio.updated":
-      return `modificó los datos del socio ${String(p.full_name ?? "")}`.trim();
-    case "socio.removed":
-      return `dio de baja al socio ${String(p.full_name ?? "")}`.trim();
+    case "player.created":
+      return `dio de alta al jugador ${String(p.full_name ?? "")}`.trim();
+    case "player.updated":
+      return `modificó los datos del jugador ${String(p.full_name ?? "")}`.trim();
+    case "player.removed":
+      return `dio de baja al jugador ${String(p.full_name ?? "")}`.trim();
     case "club.updated":
+      if (p.logo) {
+        return p.logo === "removed" ? "quitó el logo del club" : "cambió el logo del club";
+      }
+      if (p.open_time) {
+        return `cambió el horario del club: de ${String(p.open_time)} a ${String(p.close_time)}`;
+      }
       return `cambió los datos del club: ${String(p.name ?? "")}${p.city ? ` (${String(p.city)})` : ""}`;
-    case "invitation.created":
-      return `invitó a ${String(p.full_name || p.email || "una persona")} como ${ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro")}`;
-    case "invitation.regenerated":
-      return `generó un link nuevo para la invitación de ${String(p.full_name || p.email || "una persona")}`;
-    case "invitation.revoked":
-      return `canceló la invitación de ${String(p.full_name || p.email || "una persona")}`;
+    case "invitation.created": {
+      const role = ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro");
+      // Las invitaciones anteriores a las de solo rol llevaban nombre y correo.
+      if (p.full_name || p.email) return `invitó a ${String(p.full_name || p.email)} como ${role}`;
+      return `generó una invitación de ${role}${p.note ? ` (${String(p.note)})` : ""}`;
+    }
+    case "invitation.regenerated": {
+      const who = String(p.full_name || p.email || p.note || "");
+      return `generó un link nuevo para la invitación${who ? ` de ${who}` : ""}`;
+    }
+    case "invitation.revoked": {
+      const who = String(p.full_name || p.email || p.note || "");
+      return `canceló la invitación${who ? ` de ${who}` : ""}`;
+    }
     case "invitation.accepted":
       return `se sumó al club como ${ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro")}`;
     case "settings.updated":
-      return `cambió las políticas: ${String(p.cancel_window_hours ?? "?")} h de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%${p.tournament_duration_minutes ? `, torneos de ${String(p.tournament_duration_minutes)} min` : ""}`;
+      return `cambió las políticas: ${typeof p.cancel_window_hours === "number" ? formatCancelWindow(p.cancel_window_hours) : "?"} de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%${p.tournament_duration_minutes ? `, torneos de ${String(p.tournament_duration_minutes)} min` : ""}`;
     default:
       return `hizo "${entry.action}"`;
   }

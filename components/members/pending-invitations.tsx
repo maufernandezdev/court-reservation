@@ -30,7 +30,8 @@ export function PendingInvitations({
       </h2>
       <ul className="divide-y">
         {invitations.map((invitation) => {
-          const name = invitation.full_name || invitation.email;
+          const roleLabel = CLUB_ROLE_LABELS[invitation.role];
+          const name = invitation.note || `Invitación de ${roleLabel.toLowerCase()}`;
           const expired = isExpired(invitation.expires_at);
           return (
             <li
@@ -40,7 +41,7 @@ export function PendingInvitations({
               <span className="flex min-w-0 flex-[1_1_220px] flex-col">
                 <strong className="truncate text-[15px]">{name}</strong>
                 <span className="truncate text-[13px] text-muted-foreground">
-                  {invitation.email} · {CLUB_ROLE_LABELS[invitation.role]}
+                  {roleLabel} · creada el {shortDate(invitation.created_at)}
                 </span>
               </span>
               {expired ? (

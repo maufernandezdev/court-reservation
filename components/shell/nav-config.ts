@@ -1,4 +1,5 @@
 import {
+  CalendarDays,
   ChartColumn,
   Bell,
   CreditCard,
@@ -22,6 +23,8 @@ export type NavItem = {
   icon: LucideIcon;
   /** Rol mínimo para ver la sección (sin indicar: todos). */
   minRole?: ClubRole;
+  /** Roles exactos que la ven (para secciones de un solo rol, como Mis turnos). */
+  roles?: ClubRole[];
   /** Módulo que se puede ocultar con `lib/features.ts`. */
   feature?: Feature;
 };
@@ -41,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Hoy", icon: LayoutDashboard },
       { href: "/dashboard/reservas", label: "Planilla", icon: Grid3x3 },
+      { href: "/dashboard/mis-turnos", label: "Mis turnos", icon: CalendarDays, roles: ["profesor"] },
       { href: "/dashboard/caja", label: "Caja", icon: Wallet, minRole: "admin" },
     ],
   },
@@ -48,8 +52,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Club",
     items: [
       { href: "/dashboard/canchas", label: "Canchas", icon: LandPlot, minRole: "admin" },
-      { href: "/dashboard/socios", label: "Socios", icon: Users, minRole: "operador" },
-      { href: "/dashboard/miembros", label: "Equipo", icon: IdCard, minRole: "admin" },
+      { href: "/dashboard/equipo", label: "Equipo", icon: IdCard, minRole: "admin" },
+      { href: "/dashboard/jugadores", label: "Jugadores", icon: Users },
       { href: "/dashboard/productos", label: "Productos", icon: Package, minRole: "admin", feature: "products" },
     ],
   },
@@ -71,6 +75,7 @@ export function visibleGroups(role: ClubRole): NavGroup[] {
     items: group.items.filter(
       (item) =>
         (!item.minRole || roleAtLeast(role, item.minRole)) &&
+        (!item.roles || item.roles.includes(role)) &&
         (!item.feature || FEATURES[item.feature])
     ),
   })).filter((group) => group.items.length > 0);

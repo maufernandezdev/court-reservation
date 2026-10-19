@@ -26,12 +26,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
+          // Los colores del tema son componentes HSL sin envolver: hay que usar hsl(...) o el fondo queda transparente.
+          "--normal-bg": "hsl(var(--popover))",
+          "--normal-text": "hsl(var(--popover-foreground))",
+          "--normal-border": "hsl(var(--input))",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
+      toastOptions={{ style: { boxShadow: "0 8px 24px rgb(16 20 24 / 0.18)" } }}
       {...props}
     />
   )

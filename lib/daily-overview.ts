@@ -1,6 +1,6 @@
 import type { Court } from "@/lib/courts";
 import type { Payment, Reservation } from "@/lib/reservations";
-import { minutesToTime, timeToMinutes } from "@/lib/availability";
+import { DEFAULT_DURATION_MINUTES, minutesToTime, timeToMinutes, type ClubHours } from "@/lib/availability";
 
 /**
  * Cálculos de la pantalla Hoy (ver specs/daily-overview). Funciones puras:
@@ -43,16 +43,16 @@ export function computeDaySummary(
   courts: Court[],
   reservations: Reservation[],
   payments: DayPayment[],
-  nowMinutes: number
+  nowMinutes: number,
+  hours: ClubHours
 ): DaySummary {
   const courtById = new Map(courts.map((c) => [c.id, c]));
   const active = reservations.filter((r) => r.status === "active" && courtById.has(r.court_id));
   const paid = paidByReservation(payments);
 
-  const openMinutes = courts.reduce(
-    (sum, c) => sum + Math.max(0, timeToMinutes(c.close_time) - timeToMinutes(c.open_time)),
-    0
-  );
+  // Minutos disponibles: el horario del club por cada cancha.
+  const openMinutes =
+    courts.length * Math.max(0, timeToMinutes(hours.close_time) - timeToMinutes(hours.open_time));
   const bookedMinutes = active.reduce((sum, r) => sum + r.duration_minutes, 0);
 
   let pending = 0;
@@ -90,15 +90,16 @@ export type CourtNow =
 export function courtStatusNow(
   court: Court,
   reservations: Reservation[],
-  nowMinutes: number
+  nowMinutes: number,
+  hours: ClubHours
 ): CourtNow {
-  const open = timeToMinutes(court.open_time);
-  const close = timeToMinutes(court.close_time);
+  const open = timeToMinutes(hours.open_time);
+  const close = timeToMinutes(hours.close_time);
   const mine = reservations
     .filter((r) => r.status === "active" && r.court_id === court.id)
     .sort((a, b) => a.time.localeCompare(b.time));
 
-  if (nowMinutes < open) return { kind: "closed", opensAt: court.open_time };
+  if (nowMinutes < open) return { kind: "closed", opensAt: hours.open_time };
   if (nowMinutes >= close) return { kind: "closed", opensAt: null };
 
   const current = mine.find((r) => {
@@ -114,7 +115,7 @@ export function courtStatusNow(
   }
 
   const next = mine.find((r) => timeToMinutes(r.time) > nowMinutes);
-  return { kind: "free", until: next ? next.time : court.close_time };
+  return { kind: "free", until: next ? next.time : hours.close_time };
 }
 
 /** Turnos activos que empiezan después de `nowMinutes`, por horario. */
@@ -140,21 +141,23 @@ export type FreeGap = {
 export function freeGaps(
   courts: Court[],
   reservations: Reservation[],
-  fromMinutes: number
+  fromMinutes: number,
+  hours: ClubHours
 ): FreeGap[] {
   const from = Math.ceil(fromMinutes / 30) * 30;
   const gaps: FreeGap[] = [];
 
   for (const court of courts) {
-    const close = timeToMinutes(court.close_time);
-    let cursor = Math.max(from, timeToMinutes(court.open_time));
+    const close = timeToMinutes(hours.close_time);
+    let cursor = Math.max(from, timeToMinutes(hours.open_time));
     const busy = reservations
       .filter((r) => r.status === "active" && r.court_id === court.id)
       .map((r) => [timeToMinutes(r.time), timeToMinutes(r.time) + r.duration_minutes] as const)
       .sort((a, b) => a[0] - b[0]);
 
     const pushGap = (start: number, end: number) => {
-      if (end - start >= court.slot_duration) {
+      // Un hueco cuenta como libre desde una hora (la duración con la que arranca un turno).
+      if (end - start >= DEFAULT_DURATION_MINUTES) {
         gaps.push({ court, start: minutesToTime(start), end: minutesToTime(end) });
       }
     };

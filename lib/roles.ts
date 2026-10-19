@@ -11,7 +11,17 @@ export type Club = {
   id: string;
   name: string;
   city: string;
+  /** Ruta del logo en R2 (null si el admin no lo subió). */
+  logo_path?: string | null;
+  logo_updated_at?: string | null;
 };
+
+/** URL del logo servida por la app (con versión para no mostrar uno viejo de la caché), o null. */
+export function clubLogoUrl(club: Pick<Club, "id" | "logo_path" | "logo_updated_at">): string | null {
+  if (!club.logo_path) return null;
+  const version = club.logo_updated_at ? new Date(club.logo_updated_at).getTime() : 0;
+  return `/api/clubs/${club.id}/logo?v=${version}`;
+}
 
 export type Membership = {
   id: string;

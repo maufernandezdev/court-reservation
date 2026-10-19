@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { FALLBACK_PROFE_COLOR, PROFE_COLORS } from "@/lib/profe-colors";
-import { updateProfeColorAction } from "@/app/dashboard/miembros/actions";
+import { updateProfeColorAction } from "@/app/dashboard/equipo/actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /** Color del profe en la planilla (Equipo, solo admin). */

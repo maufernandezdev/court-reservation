@@ -6,13 +6,15 @@ import { Loader2, MessageCircle } from "lucide-react";
 import type { Court, CourtType } from "@/lib/courts";
 import { COURT_TYPES, COURT_TYPE_LABELS } from "@/lib/courts";
 import {
+  DEFAULT_DURATION_MINUTES,
   buildAvailabilityMessage,
   findFreeSlots,
   minutesToTime,
 } from "@/lib/availability";
 import type { Reservation } from "@/lib/reservations";
-import { formatMoney, quotePrice } from "@/lib/pricing";
+import { formatMoney, isNight, quotePrice } from "@/lib/pricing";
 import { useSportPrices } from "@/hooks/use-sport-prices";
+import { useClubSettings } from "@/hooks/use-club-settings";
 import { createClient } from "@/lib/supabase/client";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useMembership } from "@/hooks/use-membership";
@@ -39,6 +41,14 @@ type AvailabilitySearchDialogProps = {
 
 const MESSAGE_LIMIT = 8;
 const FROM_OPTIONS = ["18:00", "19:00", "20:00", "21:00"];
+/** Duraciones que se buscan con más frecuencia (en minutos). */
+const DURATION_OPTIONS = [30, 60, 90, 120];
+
+function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m}`;
+}
 
 function addDaysKey(base: Date, days: number): string {
   const d = new Date(base);
@@ -65,6 +75,8 @@ export function AvailabilitySearchDialog({
   const supabase = createClient();
   const clubId = useMembership().membership.club_id;
   const { prices } = useSportPrices();
+  const { night_starts_at: nightStartsAt, open_time, close_time } = useClubSettings();
+  const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const now = useNow();
   const todayKey = dateKey(now);
   const tomorrowKey = addDaysKey(now, 1);
@@ -72,6 +84,7 @@ export function AvailabilitySearchDialog({
   const [date, setDate] = useState(defaultDate);
   const [from, setFrom] = useState<string>("now");
   const [type, setType] = useState<CourtType | "all">("all");
+  const [duration, setDuration] = useState(DEFAULT_DURATION_MINUTES);
   const [otherDayReservations, setOtherDayReservations] = useState<Reservation[] | null>(null);
   const [isLoadingOtherDay, setIsLoadingOtherDay] = useState(false);
 
@@ -123,15 +136,18 @@ export function AvailabilitySearchDialog({
 
   const results = useMemo(
     () =>
-      findFreeSlots(courts, reservationsForSearch, {
+      findFreeSlots(courts, reservationsForSearch, hours, {
         from: effectiveFrom,
         type,
+        duration,
       }),
-    [courts, reservationsForSearch, effectiveFrom, type]
+    [courts, reservationsForSearch, hours, effectiveFrom, type, duration]
   );
 
   const availableTypes = COURT_TYPES.filter((t) => courts.some((c) => c.type === t));
-  const sportLabel = type === "all" ? undefined : COURT_TYPE_LABELS[type].toLowerCase();
+  const sportLabel = [type === "all" ? null : COURT_TYPE_LABELS[type].toLowerCase(), durationLabel(duration)]
+    .filter(Boolean)
+    .join(", ");
   const message = buildAvailabilityMessage({
     dayLabel: dayLabel(date, todayKey, tomorrowKey),
     detail: sportLabel,
@@ -230,6 +246,25 @@ export function AvailabilitySearchDialog({
         )}
 
         <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 font-mono text-xs font-semibold text-muted-foreground">DURACIÓN</legend>
+          <ToggleGroup
+            type="single"
+            variant="chip"
+            spacing={1.5}
+            value={String(duration)}
+            onValueChange={(v) => v && setDuration(Number(v))}
+            aria-label="Duración"
+            className="flex-wrap"
+          >
+            {DURATION_OPTIONS.map((m) => (
+              <ToggleGroupItem key={m} value={String(m)} size="lg">
+                {durationLabel(m)}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 font-mono text-xs font-semibold text-muted-foreground">DESDE</legend>
           <ToggleGroup
             type="single"
@@ -280,8 +315,11 @@ export function AvailabilitySearchDialog({
                   <span className="flex min-w-0 flex-1 flex-col">
                     <strong className="text-[15px]">{slot.court.name}</strong>
                     <span className="text-[13px] text-muted-foreground">
-                      {COURT_TYPE_LABELS[slot.court.type]} · {slot.court.slot_duration} min ·{" "}
-                      {formatMoney(quotePrice(prices[slot.court.type], "standard", slot.court.slot_duration))}
+                      {COURT_TYPE_LABELS[slot.court.type]} · {durationLabel(duration)} ·{" "}
+                      {formatMoney(
+                        quotePrice(prices[slot.court.type], "standard", duration, slot.time, nightStartsAt)
+                      )}
+                      {isNight(slot.time, nightStartsAt) && " (noche)"}
                     </span>
                   </span>
                   <Button

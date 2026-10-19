@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarDays,
   Grid3x3,
   LayoutDashboard,
   Menu,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { Logo } from "@/components/brand/logo";
 import { isActivePath } from "@/components/shell/nav-config";
+import { useActiveClub } from "@/components/shell/active-club-provider";
 import {
   ClubBlock,
   NavGroups,
@@ -43,6 +45,7 @@ const tabClass =
 export function MobileTabBar({ identity, isAdmin, onLogout }: MobileTabBarProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { membership } = useActiveClub();
 
   const tabs: TabItem[] = [
     { href: "/dashboard", label: "Hoy", icon: LayoutDashboard },
@@ -50,7 +53,9 @@ export function MobileTabBar({ identity, isAdmin, onLogout }: MobileTabBarProps)
     { href: "/dashboard/reservas?buscar=1", label: "Buscar", icon: Search, match: "__never__" },
     ...(isAdmin
       ? [{ href: "/dashboard/caja", label: "Caja", icon: Wallet }]
-      : []),
+      : membership.role === "profesor"
+        ? [{ href: "/dashboard/mis-turnos", label: "Mis turnos", icon: CalendarDays }]
+        : []),
   ];
 
   return (

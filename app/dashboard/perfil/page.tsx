@@ -3,7 +3,6 @@ import { getSessionContext } from "@/lib/auth";
 import { CLUB_ROLE_LABELS } from "@/lib/roles";
 import { avatarUrl, type Profile } from "@/lib/profile";
 import { PageHeader } from "@/components/shell/page-header";
-import { UserAvatar } from "@/components/profile/user-avatar";
 import { AvatarUploader } from "@/components/profile/avatar-uploader";
 import {
   EmailForm,
@@ -54,32 +53,12 @@ export default async function PerfilPage({
     <div className="flex max-w-3xl flex-col gap-6">
       <PageHeader title="Mi perfil" description="Tus datos en todos los clubes donde estás." />
 
-      <section aria-label="Resumen" className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-5 sm:p-6">
-        <UserAvatar
-          src={avatarUrl(profile)}
-          initials={initialsOf(displayName)}
-          name={displayName}
-          size={72}
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <strong className="truncate font-display text-2xl font-extrabold tracking-[-0.02em] font-stretch-[115%]">
-            {displayName}
-          </strong>
-          <span className="truncate text-[15px] text-muted-foreground">{email}</span>
-          <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="Tus clubes">
-            {memberships.map((m) => (
-              <li key={m.club_id} className="rounded-full border px-3 py-1 text-[13px]">
-                {m.club.name} · {CLUB_ROLE_LABELS[m.role]}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
       <AvatarUploader
         avatarUrl={avatarUrl(profile)}
         initials={initialsOf(displayName)}
         name={displayName}
+        email={email}
+        clubs={memberships.map((m) => `${m.club.name} · ${CLUB_ROLE_LABELS[m.role]}`)}
       />
       <NameForm fullName={fullName} />
       {profeClubs.length > 0 && <ProfeColorSection clubs={profeClubs} />}

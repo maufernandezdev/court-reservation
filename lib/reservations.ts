@@ -13,6 +13,22 @@ export const RESERVATION_KIND_LABELS: Record<ReservationKind, string> = {
   torneo: "Torneo",
 };
 
+/**
+ * Si quien mira puede editar o cancelar el turno: el personal (admin/operador) puede con todos;
+ * un profesor solo con los que creó él o los que están a su nombre (aunque los haya cargado otro).
+ * Los demás los ve, pero no los toca.
+ */
+export function canManageReservation(
+  membership: { role: string; user_id: string },
+  reservation: { created_by: string | null; profe_user_id: string | null }
+): boolean {
+  return (
+    membership.role !== "profesor" ||
+    reservation.created_by === membership.user_id ||
+    reservation.profe_user_id === membership.user_id
+  );
+}
+
 export const PAYMENT_STATUSES = ["pendiente", "senada", "pagada"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
@@ -88,16 +104,16 @@ export type Reservation = {
   updated_at: string | null;
 };
 
-/** Persona de un turno: socio del club (`socio_id`) o persona no socia (solo nombre). */
+/** Persona de un turno: player del club (`player_id`) o persona sin registrar (solo nombre). */
 /** Persona guardada en un turno (`reservation_participants`). */
 export type ReservationParticipant = {
   position: number;
   name: string;
-  socio_id: string | null;
+  player_id: string | null;
 };
 
 /** Select de turnos con sus personas embebidas. */
-export const RESERVATION_SELECT = "*, participants:reservation_participants(position, name, socio_id)";
+export const RESERVATION_SELECT = "*, participants:reservation_participants(position, name, player_id)";
 
 /** Personas ordenadas por posición (PostgREST no garantiza el orden del embebido). */
 export function sortedParticipants(reservation: Pick<Reservation, "participants">): ReservationParticipant[] {
@@ -106,8 +122,8 @@ export function sortedParticipants(reservation: Pick<Reservation, "participants"
 
 export type ReservationPerson = {
   name: string;
-  socio_id: string | null;
-  /** Teléfono de la ficha del socio (para completar el del turno). */
+  player_id: string | null;
+  /** Teléfono de la ficha del jugador (para completar el del turno). */
   phone?: string;
 };
 
@@ -117,7 +133,7 @@ export const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const personSchema = z.object({
   name: z.string().trim().min(1, "Falta el nombre de una persona").max(120, "Nombre demasiado largo"),
-  socio_id: z.string().uuid().nullable(),
+  player_id: z.string().uuid().nullable(),
   phone: z.string().optional(),
 });
 
@@ -131,16 +147,23 @@ export const reservationInputSchema = z
     court_id: z.string().uuid("Seleccioná una cancha válida"),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ingresá una fecha válida"),
     time: z.string().regex(timeRegex, "Ingresá un horario válido (HH:MM)"),
-    phone: z.string().trim().max(40, "El teléfono es demasiado largo"),
+    phone: z
+      .string()
+      .trim()
+      .max(15, "El teléfono puede tener hasta 15 números")
+      .regex(/^\d*$/, "El teléfono solo puede tener números"),
     kind: z.enum(RESERVATION_KINDS, { message: "Elegí el tipo de turno" }),
     profe_user_id: z.string().uuid().nullable(),
-    /** Solo se usa en torneos (en los demás tipos manda la duración de la cancha). */
+    /** De 30 min a 6 h, en pasos de 30: la elige quien reserva en cualquier tipo de turno. */
     duration_minutes: z.coerce.number().int(),
     people: z.array(personSchema).max(MAX_PEOPLE, `Hasta ${MAX_PEOPLE} personas por turno`),
     /** Solo en el alta: el turno se repite todas las semanas (no aplica a torneos). */
     repeat_weekly: z.boolean(),
   })
   .superRefine((data, ctx) => {
+    if (data.duration_minutes < 30 || data.duration_minutes > 360 || data.duration_minutes % 30 !== 0) {
+      ctx.addIssue({ code: "custom", path: ["duration_minutes"], message: "La duración va de 30 min a 6 h, en pasos de 30" });
+    }
     if (data.repeat_weekly && data.kind === "torneo") {
       ctx.addIssue({ code: "custom", path: ["repeat_weekly"], message: "Los turnos de torneo no pueden ser fijos" });
     }
@@ -159,9 +182,6 @@ export const reservationInputSchema = z
     if (data.kind === "torneo") {
       if (data.people.length < 2) {
         ctx.addIssue({ code: "custom", path: ["people"], message: "Un torneo necesita al menos 2 jugadores" });
-      }
-      if (data.duration_minutes < 30 || data.duration_minutes > 360 || data.duration_minutes % 30 !== 0) {
-        ctx.addIssue({ code: "custom", path: ["duration_minutes"], message: "La duración va de 30 min a 6 h, en pasos de 30" });
       }
     }
   });
@@ -183,15 +203,29 @@ export type ClubSettings = {
   late_penalty_percent: number;
   /** Duración con la que arranca un turno de torneo (editable en cada turno). */
   tournament_duration_minutes: number;
+  /** Hora desde la que rige el precio de noche ("HH:MM:SS" como lo devuelve PostgREST). */
+  night_starts_at: string;
+  /** Horario de apertura y cierre del club ("HH:MM:SS" como lo devuelve PostgREST). */
+  open_time: string;
+  close_time: string;
   updated_at: string;
 };
+
+/** Ventana de cancelación legible: 0.5 → "30 min", 1 → "1 h", 1.5 → "1 h 30 min". */
+export function formatCancelWindow(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
 
 export const clubSettingsSchema = z.object({
   cancel_window_hours: z.coerce
     .number({ message: "Ingresá un número válido" })
-    .int("Ingresá un número entero")
     .min(0, "Las horas de anticipación no pueden ser negativas")
-    .max(24 * 30, "La ventana no puede superar 720 horas"),
+    .max(24 * 30, "La ventana no puede superar 720 horas")
+    .refine((value) => Number.isInteger(value * 2), "Va en pasos de media hora (0,5 / 1 / 1,5…)"),
   late_penalty_percent: z.coerce
     .number({ message: "Ingresá un porcentaje válido" })
     .min(0, "El porcentaje no puede ser negativo")

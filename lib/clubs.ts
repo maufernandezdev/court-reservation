@@ -55,3 +55,15 @@ export function previewCourtNames(
     }))
   );
 }
+
+const clubTime = z.string().regex(/^([01][0-9]|2[0-3]):(00|30)$/, "Elegí un horario válido");
+
+/** Horario de apertura y cierre del club, en pasos de 30 minutos (Políticas y alta del club). */
+export const clubHoursSchema = z
+  .object({ open_time: clubTime, close_time: clubTime })
+  .refine((data) => data.open_time < data.close_time, {
+    message: "El cierre tiene que ser posterior a la apertura",
+    path: ["close_time"],
+  });
+
+export type ClubHoursInput = z.infer<typeof clubHoursSchema>;

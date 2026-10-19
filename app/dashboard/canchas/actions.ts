@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { courtSchema, type CourtInput } from "@/lib/courts";
 import { requireRole } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
-import { sportPricesSchema, type SportPricesInput } from "@/lib/pricing";
+import {
+  nightStartSchema,
+  sportPricesSchema,
+  type NightStartInput,
+  type SportPricesInput,
+} from "@/lib/pricing";
+import { subscriptionMessage } from "@/lib/subscription";
 
 /** Cada tipo de cancha del club tiene su fila de precios (empieza en $0 hasta que el admin la cargue). */
 async function ensureSportPrices(
@@ -39,16 +45,13 @@ export async function createCourtAction(
       .insert({
         name: parsed.data.name.trim(),
         type: parsed.data.type,
-        slot_duration: parsed.data.slot_duration,
-        open_time: parsed.data.open_time,
-        close_time: parsed.data.close_time,
         club_id: clubId,
       })
       .select()
       .single();
 
     if (error) {
-      return { success: false, error: "No se pudo crear la cancha." };
+      return { success: false, error: subscriptionMessage(error, "No se pudo crear la cancha.") };
     }
 
     await writeAudit(supabase, {
@@ -97,15 +100,12 @@ export async function updateCourtAction(
       .update({
         name: parsed.data.name.trim(),
         type: parsed.data.type,
-        slot_duration: parsed.data.slot_duration,
-        open_time: parsed.data.open_time,
-        close_time: parsed.data.close_time,
       })
       .eq("id", id)
       .eq("club_id", clubId);
 
     if (error) {
-      return { success: false, error: "No se pudo actualizar la cancha." };
+      return { success: false, error: subscriptionMessage(error, "No se pudo actualizar la cancha.") };
     }
 
     await writeAudit(supabase, {
@@ -148,7 +148,7 @@ export async function deactivateCourtAction(
       .eq("club_id", clubId);
 
     if (error) {
-      return { success: false, error: "No se pudo eliminar la cancha." };
+      return { success: false, error: subscriptionMessage(error, "No se pudo eliminar la cancha.") };
     }
 
     await writeAudit(supabase, {
@@ -172,7 +172,7 @@ export async function deactivateCourtAction(
   }
 }
 
-/** Precio público, precio profe y seña de un tipo de cancha (solo admin). */
+/** Precios de día y de noche (público y profe) y señas (público y profes) de un tipo de cancha (solo admin). */
 export async function updateSportPricesAction(
   input: SportPricesInput
 ): Promise<{ success: boolean; error?: string }> {
@@ -196,7 +196,7 @@ export async function updateSportPricesAction(
     );
 
     if (error) {
-      return { success: false, error: "No se pudieron guardar los precios." };
+      return { success: false, error: subscriptionMessage(error, "No se pudieron guardar los precios.") };
     }
 
     await writeAudit(supabase, {
@@ -216,6 +216,57 @@ export async function updateSportPricesAction(
     return {
       success: false,
       error: err instanceof Error ? err.message : "No se pudieron guardar los precios.",
+    };
+  }
+}
+
+/** Hora desde la que rige el precio de noche en todo el club (solo admin). */
+export async function updateNightStartAction(
+  input: NightStartInput
+): Promise<{ success: boolean; error?: string }> {
+  const parsed = nightStartSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Datos inválidos.",
+    };
+  }
+
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+
+    const { error } = await supabase.from("settings").upsert(
+      {
+        club_id: clubId,
+        night_starts_at: parsed.data.night_starts_at,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "club_id" }
+    );
+
+    if (error) {
+      return { success: false, error: subscriptionMessage(error, "No se pudo guardar el horario de noche.") };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "prices",
+      entityId: null,
+      action: "prices.updated",
+      payload: parsed.data,
+    });
+
+    revalidatePath("/dashboard/canchas");
+    revalidatePath("/dashboard/reservas");
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "No se pudo guardar el horario de noche.",
     };
   }
 }

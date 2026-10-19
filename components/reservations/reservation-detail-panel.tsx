@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { History, Loader2, MessageCircle, Pencil, Wallet, X, Repeat, Trophy } from "lucide-react";
+import { History, MessageCircle, Pencil, Wallet, X, Repeat, Trophy } from "lucide-react";
 import {
   sortedParticipants,
   RESERVATION_KIND_LABELS,
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
+  canManageReservation,
+  formatCancelWindow,
   type PaymentMethod,
   type Reservation,
 } from "@/lib/reservations";
@@ -27,6 +29,8 @@ import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -103,11 +107,13 @@ export function ReservationDetailPanel({
     cancelWindowHours,
     latePenaltyPercent,
     wouldBeLate,
-    profesorBlocked,
-    profesorMoneyBlocked,
+    requiresPenaltyAcceptance,
+    cancelOutcome,
     audit,
   } = detail;
   const canCharge = membership.role !== "profesor";
+  // Un profesor ve los turnos de otros en modo lectura: sin editar, cancelar ni dar de baja el fijo.
+  const canManage = canManageReservation(membership, reservation);
   const end = minutesToTime(
     timeToMinutes(reservation.time) + reservation.duration_minutes
   );
@@ -218,9 +224,7 @@ export function ReservationDetailPanel({
       </dl>
 
       {isLoadingExtras ? (
-        <div className="flex items-center justify-center py-6">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-        </div>
+        <DetailSkeleton />
       ) : (
         <>
           <div className="flex flex-col gap-2 rounded-xl bg-background p-3.5 text-sm">
@@ -305,7 +309,7 @@ export function ReservationDetailPanel({
                 <Repeat aria-hidden="true" className="size-4" />
                 Turno fijo · todos los {weekdayPlural(reservation.date)} a las {reservation.time}
               </span>
-              {(membership.role !== "profesor" || reservation.profe_user_id === membership.user_id) && (
+              {canManage && (
                 <Button variant="outline" onClick={() => detail.setEndSeriesOpen(true)}>
                   Dar de baja el fijo desde esta fecha
                 </Button>
@@ -339,7 +343,7 @@ export function ReservationDetailPanel({
             </AlertDialogContent>
           </AlertDialog>
 
-          {!isCancelled && (
+          {!isCancelled && canManage && (
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-2 gap-2">
                 {onEdit && (
@@ -354,7 +358,6 @@ export function ReservationDetailPanel({
                     "border-destructive/30 text-destructive hover:bg-danger-soft hover:text-danger-soft-foreground",
                     !onEdit && "col-span-2"
                   )}
-                  disabled={profesorBlocked || profesorMoneyBlocked}
                   onClick={() => detail.setCancelConfirmOpen(true)}
                 >
                   Cancelar turno
@@ -362,27 +365,11 @@ export function ReservationDetailPanel({
               </div>
               <p className="text-[13px] leading-snug text-pretty text-muted-foreground">
                 {wouldBeLate
-                  ? `Faltan menos de ${cancelWindowHours} h: si se cancela ahora es fuera de término (penalidad del ${latePenaltyPercent}% del turno).`
-                  : `Se puede cancelar en término hasta ${cancelWindowHours} h antes del turno.`}
+                  ? requiresPenaltyAcceptance
+                    ? `Faltan menos de ${formatCancelWindow(cancelWindowHours)}: si cancelás ahora es fuera de término y se te cobra una penalidad de ${formatMoney(cancelOutcome.penalty)} (${latePenaltyPercent}% del turno).`
+                    : `Faltan menos de ${formatCancelWindow(cancelWindowHours)}: si se cancela ahora es fuera de término (penalidad del ${latePenaltyPercent}% del turno).`
+                  : `Se puede cancelar en término hasta ${formatCancelWindow(cancelWindowHours)} antes del turno.`}
               </p>
-              {profesorBlocked && (
-                <Alert>
-                  <AlertDescription>
-                    Este turno entra en la ventana de penalidad (menos de{" "}
-                    {cancelWindowHours} h). Como profesor no podés cancelarlo:
-                    consultá con un administrador.
-                  </AlertDescription>
-                </Alert>
-              )}
-              {profesorMoneyBlocked && (
-                <Alert>
-                  <AlertDescription>
-                    Este turno tiene cobros registrados. Como profesor no podés
-                    cancelarlo: la devolución o retención la gestiona un
-                    administrador u operador.
-                  </AlertDescription>
-                </Alert>
-              )}
             </div>
           )}
 
@@ -430,6 +417,48 @@ export function ReservationDetailPanel({
       )}
 
       <CancelConfirmDialog reservation={reservation} detail={detail} />
+    </div>
+  );
+}
+
+/**
+ * Esqueleto de la parte del detalle que se carga aparte (cobros, política de cancelación e historial),
+ * con la forma de lo que va a aparecer para que el panel no salte al terminar de cargar.
+ */
+function DetailSkeleton() {
+  return (
+    <div role="status" aria-label="Cargando el detalle del turno" className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3 rounded-xl bg-background p-3.5">
+        <div className="flex justify-between">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+        <div className="flex justify-between">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-12" />
+        </div>
+        <div className="flex justify-between border-t pt-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-5 w-24" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-11 w-full rounded-lg" />
+        <Skeleton className="h-12 w-full rounded-lg" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2">
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+        </div>
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-2/3" />
+      </div>
+      <div className="flex flex-col gap-2.5 border-t pt-4">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-3.5 w-full" />
+      </div>
     </div>
   );
 }
@@ -498,13 +527,13 @@ export function CancelConfirmDialog({
           )}
           {cancelOutcome.released > 0 && (
             <div className="flex justify-between">
-              <span>Saldo a favor del cliente</span>
+              <span>{detail.isProfesor ? "Saldo a tu favor" : "Saldo a favor del cliente"}</span>
               <strong className="font-mono">{formatMoney(cancelOutcome.released)}</strong>
             </div>
           )}
           {cancelOutcome.debt > 0 && (
             <div className="flex justify-between">
-              <span>El cliente queda debiendo</span>
+              <span>{detail.isProfesor ? "Te queda a pagar" : "El cliente queda debiendo"}</span>
               <strong className="font-mono">{formatMoney(cancelOutcome.debt)}</strong>
             </div>
           )}
@@ -512,6 +541,30 @@ export function CancelConfirmDialog({
             <span>Sin movimientos de dinero.</span>
           )}
         </div>
+
+        {detail.requiresPenaltyAcceptance && (
+          <div className="flex flex-col gap-2 rounded-xl border-[1.5px] border-danger-soft-foreground/40 p-3.5 text-sm">
+            <p className="text-pretty">
+              Este turno está dentro de las {formatCancelWindow(detail.cancelWindowHours)} previas. Si lo cancelás, se te cobra una
+              penalidad de <strong className="font-mono">{formatMoney(detail.cancelOutcome.penalty)}</strong> (
+              {detail.latePenaltyPercent}% del turno).
+              {detail.cancelOutcome.retained > 0 &&
+                ` De eso, ${formatMoney(detail.cancelOutcome.retained)} se descuentan de lo que ya pagaste`}
+              {detail.cancelOutcome.debt > 0 && `${detail.cancelOutcome.retained > 0 ? " y " : " "}quedan ${formatMoney(detail.cancelOutcome.debt)} a pagar`}
+              {detail.cancelOutcome.retained > 0 || detail.cancelOutcome.debt > 0 ? "." : ""}
+            </p>
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <Checkbox
+                checked={detail.acceptPenalty}
+                onCheckedChange={(checked) => detail.setAcceptPenalty(checked === true)}
+                className="mt-0.5"
+              />
+              <span className="font-semibold">
+                Acepto la penalidad de {formatMoney(detail.cancelOutcome.penalty)} y quiero cancelar el turno.
+              </span>
+            </label>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="cancel-reason">Motivo (opcional)</Label>
@@ -531,7 +584,7 @@ export function CancelConfirmDialog({
           <AlertDialogCancel>Mejor no</AlertDialogCancel>
           <AlertDialogAction
             onClick={detail.cancel}
-            disabled={detail.isCancelling}
+            disabled={detail.isCancelling || (detail.requiresPenaltyAcceptance && !detail.acceptPenalty)}
             variant="destructive"
           >
             {detail.isCancelling ? "Cancelando…" : "Confirmar cancelación"}

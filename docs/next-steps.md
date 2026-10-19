@@ -6,26 +6,34 @@ Todo lo implementado se probó con scripts automáticos contra un Supabase local
 **Antes de empezar:** en Canchas → Precios, cargar público, profe y seña de cada deporte (el club nuevo de prueba tiene todo en $0).
 
 - [ ] **Registro y verificación de cuenta:** registrarse con un correo del equipo de Supabase, abrir el link en el mismo navegador (entra solo) y en otro navegador o el celular (dice "¡Cuenta verificada!" y pide ingresar).
-- [ ] **Bienvenida y alta del club:** cuenta nueva → "Crear mi club" → canchas por deporte → paso 3 en Canchas. "Me van a invitar" con y sin invitación pendiente.
-- [ ] **Invitaciones:** desde Equipo, invitar por WhatsApp y con "Copiar link"; entrar desde el link con una cuenta nueva (elige contraseña) y con una existente; link vencido, cancelado y regenerado; sacar a alguien del equipo.
-- [ ] **Socios:** alta, edición, baja y búsqueda (nombre, DNI, teléfono) como admin y como operador; el profe no los ve.
-- [ ] **Turnos:** estándar con socio y con persona no socia (buscador con teclado), turno de profe cargado por el operador y por el profe, torneo singles y dobles con duración cambiada; colores y leyenda en la planilla (escritorio y celular).
+- [ ] **Bienvenida y alta del club:** cuenta nueva → "Crear mi club" → canchas por deporte → paso 3 en Canchas. "Me van a invitar" explica que hay que pedir el link.
+- [ ] **Invitaciones** (Equipo, antes `/dashboard/miembros`): generar un link solo con rol (operador o profesor) y nota opcional, enviarlo por WhatsApp y con "Copiar link"; abrirlo en otro navegador con una cuenta nueva (nombre, correo, contraseña) y con una existente ("Ya tengo cuenta"); el nombre aparece en Equipo (si falta, dice "Sin nombre"); link vencido, cancelado y regenerado; sacar a alguien del equipo.
+- [ ] **Jugadores** (antes Socios, ruta `/dashboard/jugadores`; `/dashboard/socios` redirige): alta, edición, baja y búsqueda (nombre, DNI, teléfono) como admin y como operador; el profe no los ve.
+- [ ] **Turnos:** estándar con jugador registrado y con persona sin registrar (buscador con teclado), turno de profe cargado por el operador y por el profe, torneo singles y dobles con duración cambiada; colores y leyenda en la planilla (escritorio y celular).
+- [ ] **Horario del club y duración:** cambiar el horario en Políticas y ver el rango de la planilla; reservar de 30 min, de 1 h (el fin se completa solo en "Hasta") y de 2 h 30 (cambiando "Hasta"); "Nuevo turno" a las :44 propone la próxima media hora; un turno que no entra (hay otro después o pasa del cierre) baja la duración o se rechaza; buscador "¿Hay cancha?" con duración; alta de un club nuevo: bienvenida → horario → precios.
+- [ ] **Canchas según el horario:** con la Cancha 1 ocupada a las 9, "Nuevo turno" a las 9 no la ofrece (estándar, profe y torneo); al cambiar a un horario en que tiene lugar vuelve a aparecer; al cambiar la fecha a un día en que está ocupada otra cancha, la lista se actualiza.
 - [ ] **Turnos fijos:** crear uno con una semana ocupada (avisa la fecha salteada), navegar meses adelante, cancelar una fecha suelta, dar de baja desde una fecha con una fecha ya señada (queda activa y avisa).
-- [ ] **Precios:** cambiar precios y ver que los turnos ya reservados mantienen su valor; seña fija y por porcentaje.
+- [ ] **Precios** (modal desde el botón "Precios" de Canchas, que queda solo con las tarjetas; con un club recién creado se abre solo la bienvenida y "Siguiente" lleva a los precios iniciales): cambiar precios y ver que los turnos ya reservados mantienen su valor; seña de profes fija y por porcentaje, seña del público apagada (un turno estándar no pide seña y uno de profe sí); precio de noche vacío = se cobra el de día.
 - [ ] **Cobros y cancelaciones por tipo:** cobrar seña y total de estándar, profe y torneo; cancelar en término y fuera de término; revisar Caja del día y Actividad.
 - [ ] **Hoy:** "Nuevo turno" y "Reservar" en huecos libres abren el diálogo; resumen y "Por cobrar" con los valores fijados.
 - [ ] **Mi perfil:** cambiar nombre (se ve en menú, Equipo y Actividad), contraseña (con la actual), correo (llegan dos links; con el SMTP de prueba solo a correos del equipo), subir/cambiar/quitar foto, color del profe; otra persona de otro club no ve tu foto.
+- [ ] **Suscripción:** en Suscripción ver plan Inicial/Club según las canchas, "Prueba gratis", días restantes y canchas usadas contra el límite; botón de pago deshabilitado ("Próximamente"); intentar crear una cancha por encima del plan; registrar un pago con `node scripts/subscription-admin.mjs pay ...` y ver el historial. Para ver el aviso y el solo lectura, cambiar `trial_ends_on` del club en el SQL Editor (a 5 días, a 3 días atrás y a 10 días atrás).
+- [ ] **Reportes:** con turnos y cobros reales, comparar Hoy, Ayer, 7 días y el mes contra Caja y la planilla (ingresos, turnos, ocupación, falta cobrar); el resumen para WhatsApp se copia y se pega bien; "Para revisar" avisa de un deporte sin precio y de turnos pasados sin cobrar.
+- [ ] **Logo del club:** como admin, en Políticas subir un logo (probá uno horizontal) y ver que aparece en el menú; entrar como operador y como profe y verlo también; quitarlo y ver las iniciales. Necesita las variables de R2 cargadas.
+- [ ] **Profesores:** como profe, agregar un alumno en Jugadores y elegirlo al crear un turno (no se puede editar el de otro); abrir un turno de otra persona y ver el detalle sin botones de editar/cancelar (ni aviso de cancelación), y que un turno cargado por el admin a su nombre sí se pueda editar y cancelar; en "Mis turnos" ver Hoy, Semana (con un turno fijo en semanas futuras) e Historial; editar un turno suelto y tildar "Repetir todas las semanas" (queda como Fijo, con las semanas siguientes generadas, y al editarlo de nuevo la opción aparece tildada y deshabilitada); editar un turno propio desde "Mis turnos" (menú de tres puntos con Editar y Cancelar turno en Hoy y Semana; no aparece en el historial ni en cancelados) y ver el cambio al guardar; cancelar desde ese mismo menú, en término y fuera de término; cancelar un turno propio en término (sin penalidad) y fuera de término (el modal muestra la penalidad y pide aceptarla); revisar que el admin y el operador no ven "Mis turnos".
 - [ ] **Permisos por rol:** recorrer el panel como admin, operador y profesor y confirmar qué ve y qué puede hacer cada uno (matriz de Equipo).
 - [ ] **Verificaciones manuales viejas** de `openspec/changes/add-club-operations-foundation/tasks.md` (1.3, 2.2, 3.3 y 11.2): hacerlas y tildarlas para poder archivar ese cambio.
 
-**Todavía sin implementar:** precio de noche (`openspec/changes/add-night-pricing/`, planificado). **Antes de publicar:** cargar `SUPABASE_SECRET_KEY` y las variables de R2 en el hosting, y configurar un SMTP propio para que lleguen los correos a personas reales.
+**Antes de publicar:** cargar `SUPABASE_SECRET_KEY` y las variables de R2 en el hosting, y configurar un SMTP propio para que lleguen los correos a personas reales.
 
 ## ✅ Modulo de productos
 > ✅ **Aplicado (12/10/2026).** Productos ya no aparece en el menú y `/dashboard/productos` redirige a Hoy. El código queda intacto: se vuelve a mostrar poniendo `products: true` en `lib/features.ts`.
 
 Lo que es la parte del kiosco, es decir, de los productos, por ahora será un módulo que no vamos a mostrar. Hagamos algo para que quede el desarrollo ya hecho, pero por ahora no lo mostraremos para no abrumar a mi cliente. Además, no es algo que haya pedido. Después le podemos agregar este módulo. 
 
-## ✅ Modulo socios
+## ✅ Modulo socios (hoy Jugadores)
+> ℹ️ **Renombrado a Jugadores (18/10/2026):** tabla `players`, pantalla `/dashboard/jugadores`; el texto de abajo es el pedido original y conserva el nombre viejo.
+
 > ✅ **Aplicado (12/10/2026).** Socios tiene alta, edición, baja y búsqueda (nombre, DNI, teléfono, correo opcional), sin cuota, para admin y operador. Al cargar un turno, el campo de nombre es un buscador: escribís "Mau", aparece "Mauricio Fernández" y con Enter queda fijado; se pueden fijar hasta 4 personas (socios o no) y la primera es quien reserva.
 
 Este es un módulo que va a seguir estando, pero hay que agregarle algo. No hay ningún botón para agregar un nuevo socio y debería estar. Hoy veo que tiene nombre, DNI, teléfono y está la cuota. En el club donde vamos a iniciar no tienen cuota, así que eso lo vamos a sacar. Pero nombre, DNI, teléfono, mail opcional, esas cosas sí deberían estar. 
@@ -100,6 +108,15 @@ Tanto el operador, tanto el administrador como los profesores podrían cambiar s
 Lo que necesites de Cloudflare me decis, el bucket se llama "court-reservation"
 
 
-## Precio de noche (costo de luz)
+## ✅ Precio de noche (costo de luz)
+> ✅ **Aplicado (18/10/2026), con la migración `0010` ya en producción.** Cada tipo de cancha tiene precio de día y de noche (público y profe) y el club tiene un horario de inicio de la noche (18:00 por defecto, editable en Canchas → Precios). Se cobra según la hora de inicio del turno, también en los turnos fijos. Plan en `openspec/changes/add-night-pricing/`.
 
-Las canchas cambian de precio según la hora por el costo de la luz: hasta las 18:00 vale un precio y desde las 18:00, otro, en todas las canchas y tipos de cancha. Plan en `openspec/changes/add-night-pricing/` (precio de noche por deporte para público y profe, horario configurable que arranca en 18:00, se cobra según la hora de inicio del turno).
+Las canchas cambian de precio según la hora por el costo de la luz: hasta las 18:00 vale un precio y desde las 18:00, otro, en todas las canchas y tipos de cancha.
+
+- [ ] **Prueba manual:** cargar precios de día y noche, cambiar el horario de la noche, reservar a las 17:00 y a las 18:00, un torneo nocturno, un turno de profe y un fijo nocturno; mover un turno de día a la noche; ver el buscador "¿Hay cancha?" desde las 20:00.
+
+
+## 💳 Suscripciones de los clubes
+> ✅ **Aplicado (18/10/2026, migración `0013`).** Modelo, estado, límite de canchas, solo lectura, pantalla y script listos.
+>
+> **Pendiente: integrar Mercado Pago** (checkout de suscripción y webhook que llame a `register_subscription_payment`; la tabla ya guarda `mp_payment_id`, `mp_preapproval_id`, `external_reference` y la respuesta cruda). Hasta entonces el dueño del producto registra cada pago con `scripts/subscription-admin.mjs`, y antes de publicar hay que cargar el primer pago de cada club cuando termine su mes gratis. Sin avisos por correo todavía (se anota para Notificaciones).

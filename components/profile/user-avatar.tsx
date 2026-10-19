@@ -28,6 +28,8 @@ export function UserAvatar({
         width={size}
         height={size}
         unoptimized
+        // Es chica y está arriba de todo (menú, perfil): carga sin demora, como pide Next.js para la imagen más grande.
+        loading="eager"
         className={cn("shrink-0 rounded-full object-cover", className)}
         style={{ width: size, height: size, ...style }}
       />

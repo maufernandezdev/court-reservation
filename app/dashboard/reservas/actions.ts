@@ -10,14 +10,23 @@ import {
   type Payment,
   MAX_PEOPLE,
   RESERVATION_SELECT,
+  canManageReservation,
   type Reservation,
   type ReservationInput,
 } from "@/lib/reservations";
 import type { Court } from "@/lib/courts";
-import { depositFor, quotePrice, type SportPrices } from "@/lib/pricing";
-import { getCourtSlots, rangesOverlap, timeToMinutes } from "@/lib/availability";
+import { DEFAULT_NIGHT_STARTS_AT, depositFor, quotePrice, type SportPrices } from "@/lib/pricing";
+import {
+  DEFAULT_CLUB_HOURS,
+  fitsClubHours,
+  normalizeTime,
+  rangesOverlap,
+  timeToMinutes,
+  type ClubHours,
+} from "@/lib/availability";
 import { requireRole, type SessionContext } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
+import { subscriptionMessage } from "@/lib/subscription";
 
 const DOUBLE_BOOKING_MESSAGE = "Esa cancha ya está reservada en ese horario";
 
@@ -65,7 +74,36 @@ async function fetchCourt(
   return (data as Court | null) ?? null;
 }
 
-/** Precios del tipo de cancha (público, profe y seña). */
+/** Hora desde la que rige el precio de noche en el club. */
+async function fetchNightStartsAt(supabase: SupabaseClient, clubId: string): Promise<string> {
+  const { data } = await supabase
+    .from("settings")
+    .select("night_starts_at")
+    .eq("club_id", clubId)
+    .maybeSingle();
+  return normalizeTime(data?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT);
+}
+
+/** Horario de apertura y cierre del club (09:00–22:00 si todavía no se configuró). */
+async function fetchClubHours(supabase: SupabaseClient, clubId: string): Promise<ClubHours> {
+  const { data } = await supabase
+    .from("settings")
+    .select("open_time, close_time")
+    .eq("club_id", clubId)
+    .maybeSingle();
+  return {
+    open_time: normalizeTime(data?.open_time ?? DEFAULT_CLUB_HOURS.open_time),
+    close_time: normalizeTime(data?.close_time ?? DEFAULT_CLUB_HOURS.close_time),
+  };
+}
+
+function durationText(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+/** Precios del tipo de cancha (público, profe, noche y seña). */
 async function fetchSportPrices(
   supabase: SupabaseClient,
   clubId: string,
@@ -163,7 +201,7 @@ async function adjustCredit(
   });
 
   if (error) {
-    throw new Error("No se pudo actualizar el saldo a favor del cliente.");
+    throw new Error(subscriptionMessage(error, "No se pudo actualizar el saldo a favor del cliente."));
   }
 }
 
@@ -174,12 +212,12 @@ type PreparedReservation = {
   duration: number;
   price: number;
   /** Personas finales (la 1 es quien reserva; en turnos de profe, el profe). */
-  people: { name: string; socio_id: string | null }[];
+  people: { name: string; player_id: string | null }[];
 };
 
 /**
  * Valida y completa un turno (alta o edición): tipo según el rol, profe del club,
- * socios del club, duración (de la cancha o, en torneos, la elegida), franja dentro
+ * jugadores del club, duración (de la cancha o, en torneos, la elegida), franja dentro
  * del horario, sin superposición, y valor fijado con los precios del tipo de cancha.
  */
 async function prepareReservation(
@@ -200,7 +238,7 @@ async function prepareReservation(
   const kind = isProfesor ? "profe" : input.kind;
   const profeUserId = kind === "profe" ? (isProfesor ? user!.id : input.profe_user_id) : null;
 
-  let people = input.people.map((p) => ({ name: p.name.trim(), socio_id: p.socio_id }));
+  let people = input.people.map((p) => ({ name: p.name.trim(), player_id: p.player_id }));
 
   if (kind === "profe") {
     const { data: profe } = await supabase
@@ -214,52 +252,65 @@ async function prepareReservation(
       throw new Error("Elegí un profe del club.");
     }
     // El profe es quien reserva; las personas cargadas son sus alumnos.
-    people = [{ name: profe.full_name || profe.email, socio_id: null }, ...people].slice(0, MAX_PEOPLE);
+    people = [{ name: profe.full_name || profe.email, player_id: null }, ...people].slice(0, MAX_PEOPLE);
   } else if (people.length === 0) {
     throw new Error("Indicá quién reserva el turno.");
   } else if (kind === "torneo" && people.length < 2) {
     throw new Error("Un torneo necesita al menos 2 jugadores.");
   }
 
-  const socioIds = [...new Set(people.map((p) => p.socio_id).filter((id): id is string => !!id))];
-  if (socioIds.length > 0) {
-    const { data: socios } = await supabase
-      .from("socios")
+  const playerIds = [...new Set(people.map((p) => p.player_id).filter((id): id is string => !!id))];
+  if (playerIds.length > 0) {
+    const { data: players } = await supabase
+      .from("players")
       .select("id")
       .eq("club_id", clubId)
       .is("deleted_at", null)
-      .in("id", socioIds);
-    if ((socios ?? []).length !== socioIds.length) {
-      throw new Error("Alguno de los socios ya no está disponible. Volvé a elegirlo.");
+      .in("id", playerIds);
+    if ((players ?? []).length !== playerIds.length) {
+      throw new Error("Alguno de los jugadores ya no está disponible. Volvé a elegirlo.");
     }
   }
 
-  // Duración: en torneos la elegida; en los demás, la de la cancha (o la que ya tenía el turno).
-  const duration =
-    kind === "torneo"
-      ? input.duration_minutes
-      : existing && existing.kind !== "torneo"
-        ? existing.duration_minutes
-        : court.slot_duration;
+  // La duración la elige quien reserva (de 30 min a 6 h, en pasos de 30; el esquema ya la validó).
+  const duration = input.duration_minutes;
 
-  if (!getCourtSlots(court).includes(input.time)) {
-    throw new Error("El horario no corresponde a una franja válida de la cancha.");
-  }
-  if (timeToMinutes(input.time) + duration > timeToMinutes(court.close_time)) {
-    throw new Error(`Con ${duration} minutos el turno termina después del cierre de la cancha.`);
+  // El turno empieza en :00 o :30 y entra en el horario del club.
+  // (Un turno que ya existía y no se movió se acepta aunque el horario del club haya cambiado después.)
+  const hours = await fetchClubHours(supabase, clubId);
+  const slotUnchanged =
+    existing &&
+    existing.court_id === court.id &&
+    existing.duration_minutes === duration &&
+    normalizeTime(existing.time) === normalizeTime(input.time);
+  if (!slotUnchanged && !fitsClubHours(hours, input.time, duration)) {
+    const open = normalizeTime(hours.open_time);
+    const close = normalizeTime(hours.close_time);
+    throw new Error(
+      timeToMinutes(input.time) + duration > timeToMinutes(close)
+        ? `Con ${durationText(duration)} el turno termina después del cierre del club (${close}).`
+        : `El turno tiene que empezar en punto o y media, entre las ${open} y las ${close}.`
+    );
   }
 
   await assertNoOverlap(supabase, clubId, court.id, input.date, input.time, duration, existing?.id);
 
-  // El valor se fija al reservar; en una edición solo cambia si cambian cancha, tipo o duración.
+  // El valor se fija al reservar; en una edición solo cambia si cambian cancha, tipo, duración u hora de inicio.
   const unchanged =
     existing &&
     existing.court_id === court.id &&
     existing.kind === kind &&
-    existing.duration_minutes === duration;
+    existing.duration_minutes === duration &&
+    normalizeTime(existing.time) === normalizeTime(input.time);
   const price = unchanged
     ? Number(existing.price)
-    : quotePrice(await fetchSportPrices(supabase, clubId, court.type), kind, duration);
+    : quotePrice(
+        await fetchSportPrices(supabase, clubId, court.type),
+        kind,
+        duration,
+        input.time,
+        await fetchNightStartsAt(supabase, clubId)
+      );
 
   return { court, kind, profeUserId, duration, price, people };
 }
@@ -283,7 +334,7 @@ async function saveParticipants(
       club_id: clubId,
       reservation_id: reservationId,
       position: index + 1,
-      socio_id: person.socio_id,
+      player_id: person.player_id,
       name: person.name,
     }))
   );
@@ -336,7 +387,7 @@ export async function createReservationAction(
       if (error.code === "23505") {
         return { success: false, error: DOUBLE_BOOKING_MESSAGE };
       }
-      return { success: false, error: "No se pudo guardar la reserva." };
+      return { success: false, error: subscriptionMessage(error, "No se pudo guardar la reserva.") };
     }
 
     if (!(await saveParticipants(supabase, clubId, created.id, prepared.people))) {
@@ -378,7 +429,9 @@ export async function createReservationAction(
 async function createSeries(
   ctx: SessionContext,
   data: ReservationInput,
-  prepared: PreparedReservation
+  prepared: PreparedReservation,
+  /** Turno ya cargado que pasa a ser la primera fecha del fijo (al editar un turno suelto). */
+  existingReservationId?: string
 ): Promise<ActionResult> {
   const { supabase, user, membership } = ctx;
   const clubId = membership!.club_id;
@@ -406,7 +459,20 @@ async function createSeries(
     .single();
 
   if (error || !series) {
-    return { success: false, error: "No se pudo crear el turno fijo." };
+    return { success: false, error: subscriptionMessage(error, "No se pudo crear el turno fijo.") };
+  }
+
+  if (existingReservationId) {
+    // Se vincula antes de generar: así el turno editado cuenta como la primera fecha y no como un choque.
+    const { error: linkError } = await supabase
+      .from("reservations")
+      .update({ series_id: series.id })
+      .eq("id", existingReservationId)
+      .eq("club_id", clubId);
+    if (linkError) {
+      await supabase.from("reservation_series").delete().eq("id", series.id).eq("club_id", clubId);
+      return { success: false, error: "No se pudo convertir el turno en fijo." };
+    }
   }
 
   const { data: skipped, error: generateError } = await supabase.rpc("ensure_series_until", {
@@ -478,6 +544,9 @@ export async function updateReservationAction(
         error: "La reserva ya fue cancelada y no se puede modificar.",
       };
     }
+    if (!canManageReservation(membership!, existing)) {
+      return { success: false, error: "Solo podés editar tus turnos: los que creaste vos o los que están a tu nombre." };
+    }
 
     const prepared = await prepareReservation(ctx, data, existing);
 
@@ -525,6 +594,11 @@ export async function updateReservationAction(
       },
     });
 
+    // Un turno suelto puede pasar a repetirse todas las semanas desde esta fecha.
+    if (data.repeat_weekly && !existing.series_id && prepared.kind !== "torneo") {
+      return await createSeries(ctx, data, prepared, id);
+    }
+
     revalidatePath("/dashboard/reservas");
 
     const reservation = await fetchReservation(supabase, clubId, id);
@@ -536,7 +610,9 @@ export async function updateReservationAction(
 
 export async function cancelReservationAction(
   id: string,
-  reason: string
+  reason: string,
+  /** Solo para profesores: acepta la penalidad cuando la cancelación es fuera de término. */
+  acceptPenalty = false
 ): Promise<ActionResult> {
   const parsed = cancelReservationSchema.safeParse({ reason });
 
@@ -551,6 +627,28 @@ export async function cancelReservationAction(
     const ctx: SessionContext = await requireRole("profesor");
     const { supabase, user, membership } = ctx;
     const clubId = membership!.club_id;
+
+    // Un profesor cancela siempre sus turnos (los que creó o los que están a su nombre); fuera de término tiene que aceptar la penalidad.
+    // Lo hace una función de la base que aplica la misma política (retención, saldo y deuda) con los
+    // permisos justos y solo sobre un turno de profe de quien llama.
+    if (membership!.role === "profesor") {
+      const { error: rpcError } = await supabase.rpc("cancel_own_profe_reservation", {
+        p_reservation_id: id,
+        p_reason: parsed.data.reason.trim(),
+        p_accept_penalty: acceptPenalty,
+      });
+      if (rpcError) {
+        const shown = ["P0001", "P0002", "42501"].includes(rpcError.code ?? "");
+        return {
+          success: false,
+          error: shown ? rpcError.message : subscriptionMessage(rpcError, "No se pudo cancelar la reserva."),
+        };
+      }
+      revalidatePath("/dashboard/reservas");
+      revalidatePath("/dashboard/mis-turnos");
+      const updated = await fetchReservation(supabase, clubId, id);
+      return { success: true, reservation: updated ?? undefined };
+    }
 
     const reservation = await fetchReservation(supabase, clubId, id);
     if (!reservation) {
@@ -580,30 +678,12 @@ export async function cancelReservationAction(
       (startsAt.getTime() - Date.now()) / 3_600_000;
     const isLate = hoursUntilStart < cancelWindowHours;
 
-    // Los profesores no pueden cancelar dentro de la ventana de penalidad.
-    if (isLate && membership!.role === "profesor") {
-      return {
-        success: false,
-        error:
-          "Esta cancelación entra en la ventana de penalidad. Consultá con un administrador para gestionarla.",
-      };
-    }
-
-    // Cobros previos ANTES de mutar nada: los profesores no pueden cancelar
-    // reservas con cobros registrados (la plata la gestiona el personal).
+    // Cobros previos ANTES de mutar nada.
     const payments = await fetchPayments(supabase, clubId, id);
     const pendingPayments = payments.filter((p) => !p.released);
     const paidTotal = round2(
       pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0)
     );
-
-    if (paidTotal > 0 && membership!.role === "profesor") {
-      return {
-        success: false,
-        error:
-          "Esta reserva tiene cobros registrados. Consultá con un administrador para cancelarla y gestionar la devolución.",
-      };
-    }
 
     // 1) Marcar la reserva cancelada: si algo posterior falla,
     //    nunca queda plata movida con el turno todavía activo.
@@ -623,7 +703,7 @@ export async function cancelReservationAction(
       .single();
 
     if (error) {
-      return { success: false, error: "No se pudo cancelar la reserva." };
+      return { success: false, error: subscriptionMessage(error, "No se pudo cancelar la reserva.") };
     }
 
     // 2) Política de cobros: se considera todo lo cobrado (seña, total o saldo).
@@ -657,7 +737,7 @@ export async function cancelReservationAction(
           .eq("id", payment.id)
           .eq("club_id", clubId);
         if (releaseError) {
-          throw new Error("No se pudo liberar los cobros de la reserva.");
+          throw new Error(subscriptionMessage(releaseError, "No se pudo liberar los cobros de la reserva."));
         }
         releaseBudget = round2(releaseBudget - amount);
         releasedActual = round2(releasedActual + amount);
@@ -758,13 +838,16 @@ export async function registerPaymentAction(
     const slotPrice = Number(reservation.price);
     const amount =
       parsed.data.kind === "seña"
-        ? depositFor(await fetchSportPrices(supabase, clubId, court.type), slotPrice)
+        ? depositFor(await fetchSportPrices(supabase, clubId, court.type), reservation.kind, slotPrice)
         : Math.max(0, slotPrice - paidAmount(existingPayments));
 
     if (parsed.data.kind === "seña" && amount <= 0) {
       return {
         success: false,
-        error: "Esta cancha no tiene seña configurada.",
+        error:
+          reservation.kind === "profe"
+            ? "Los turnos de profe de esta cancha no tienen seña configurada."
+            : "Los turnos del público de esta cancha no piden seña.",
       };
     }
 
@@ -780,7 +863,7 @@ export async function registerPaymentAction(
       });
 
       if (paymentError) {
-        return { success: false, error: "No se pudo registrar el cobro." };
+        return { success: false, error: subscriptionMessage(paymentError, "No se pudo registrar el cobro.") };
       }
     }
 
@@ -795,7 +878,7 @@ export async function registerPaymentAction(
       .single();
 
     if (error) {
-      return { success: false, error: "No se pudo actualizar la reserva." };
+      return { success: false, error: subscriptionMessage(error, "No se pudo actualizar la reserva.") };
     }
 
     await writeAudit(supabase, {
@@ -894,7 +977,7 @@ export async function applyCreditAction(
         p_phone: phone,
         p_delta: applied,
       });
-      return { success: false, error: "No se pudo aplicar el saldo." };
+      return { success: false, error: subscriptionMessage(paymentError, "No se pudo aplicar el saldo.") };
     }
 
     const totalPaid = paid + applied;
@@ -910,7 +993,7 @@ export async function applyCreditAction(
       .single();
 
     if (error) {
-      return { success: false, error: "No se pudo actualizar la reserva." };
+      return { success: false, error: subscriptionMessage(error, "No se pudo actualizar la reserva.") };
     }
 
     await writeAudit(supabase, {
@@ -954,7 +1037,7 @@ export async function endSeriesAction(
 
     const { data: series } = await supabase
       .from("reservation_series")
-      .select("id, customer_name, profe_user_id, starts_on, ends_on")
+      .select("id, customer_name, created_by, profe_user_id, starts_on, ends_on")
       .eq("id", parsed.data.seriesId)
       .eq("club_id", clubId)
       .maybeSingle();
@@ -962,8 +1045,8 @@ export async function endSeriesAction(
     if (!series) {
       return { success: false, error: "No se encontró el turno fijo." };
     }
-    if (membership!.role === "profesor" && series.profe_user_id !== user!.id) {
-      return { success: false, error: "Solo podés dar de baja tus propios turnos fijos." };
+    if (!canManageReservation(membership!, series)) {
+      return { success: false, error: "Solo podés dar de baja tus turnos fijos: los que creaste vos o los que están a tu nombre." };
     }
 
     const endsOn = addDays(parsed.data.fromDate, -1);
@@ -973,7 +1056,7 @@ export async function endSeriesAction(
       .eq("id", series.id)
       .eq("club_id", clubId);
     if (endError) {
-      return { success: false, error: "No se pudo dar de baja el turno fijo." };
+      return { success: false, error: subscriptionMessage(endError, "No se pudo dar de baja el turno fijo.") };
     }
 
     const { data: upcoming } = await supabase

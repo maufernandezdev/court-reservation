@@ -50,34 +50,3 @@ export async function createClubAction(input: ClubOnboardingInput): Promise<Acti
   revalidatePath("/dashboard", "layout");
   redirect("/dashboard/canchas?alta=1");
 }
-
-/** "Me van a invitar": acepta una invitación pendiente para el correo de la sesión. */
-export async function acceptPendingInvitationAction(invitationId: string): Promise<ActionResult> {
-  const parsed = z.string().uuid("Invitación inválida.").safeParse(invitationId);
-
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "Invitación inválida." };
-  }
-
-  const { supabase, user } = await getSessionContext();
-  if (!user) {
-    return { success: false, error: "Tu sesión venció. Ingresá de nuevo." };
-  }
-
-  const { data: clubId, error } = await supabase.rpc("accept_invitation_by_id", {
-    p_invitation_id: parsed.data,
-  });
-
-  if (error || !clubId) {
-    return {
-      success: false,
-      error: error
-        ? dbMessage(error, "No se pudo aceptar la invitación.")
-        : "No se pudo aceptar la invitación.",
-    };
-  }
-
-  await setActiveClubCookie(clubId as string);
-  revalidatePath("/dashboard", "layout");
-  redirect("/dashboard");
-}

@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { ChevronsUpDown, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { CLUB_ROLE_LABELS } from "@/lib/roles";
+import { CLUB_ROLE_LABELS, clubInitials, clubLogoUrl } from "@/lib/roles";
+import { ClubLogo } from "@/components/club/club-logo";
 import { Logo } from "@/components/brand/logo";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { isActivePath, visibleGroups } from "@/components/shell/nav-config";
@@ -24,6 +25,8 @@ import {
 export type ShellIdentity = {
   clubName: string;
   clubInitials: string;
+  /** Logo del club (ruta de la app) o null para mostrar las iniciales. */
+  clubLogoUrl: string | null;
   roleLabel: string;
   userName: string;
   userEmail: string;
@@ -44,9 +47,7 @@ const clubBlockClass =
 function ClubBlockContent({ identity, label }: { identity: ShellIdentity; label?: string }) {
   return (
     <>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-foreground font-display text-[11px] font-extrabold text-sidebar font-stretch-[125%]">
-        {identity.clubInitials}
-      </span>
+      <ClubLogo src={identity.clubLogoUrl} initials={identity.clubInitials} name={identity.clubName} size={36} />
       <span className="flex min-w-0 flex-1 flex-col">
         <strong className="truncate text-sm">{label ?? identity.clubName}</strong>
         <span className="text-[13px] text-sidebar-label">{identity.roleLabel}</span>
@@ -113,6 +114,13 @@ export function ClubBlock({ identity }: { identity: ShellIdentity }) {
               disabled={switchingTo !== null}
               className="py-2"
             >
+              <ClubLogo
+                src={clubLogoUrl(m.club)}
+                initials={clubInitials(m.club.name)}
+                name={m.club.name}
+                size={28}
+                className="rounded-md"
+              />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-medium">{m.club.name}</span>
                 <span className="text-xs text-muted-foreground">{CLUB_ROLE_LABELS[m.role]}</span>

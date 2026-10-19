@@ -1,12 +1,18 @@
-import Link from "next/link";
-import { LandPlot, ShieldAlert, Sparkles } from "lucide-react";
+import { LandPlot, ShieldAlert } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionContext } from "@/lib/auth";
-import { normalizeTime } from "@/lib/availability";
+import { DEFAULT_CLUB_HOURS, DEFAULT_DURATION_MINUTES, normalizeTime } from "@/lib/availability";
 import { COURT_TYPE_LABELS, type Court, type CourtType } from "@/lib/courts";
-import { depositFor, formatMoney, pricesBySport, quotePrice, type SportPrices } from "@/lib/pricing";
-import { SportPricesSection } from "@/components/courts/sport-prices-section";
+import {
+  DEFAULT_NIGHT_STARTS_AT,
+  depositFor,
+  formatMoney,
+  pricesBySport,
+  quotePriceFor,
+  type SportPrices,
+} from "@/lib/pricing";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PricesDialog } from "@/components/prices/prices-dialog";
 import { NewCourtDialog } from "@/components/courts/new-court-dialog";
 import { CourtCardActions } from "@/components/courts/court-card-actions";
 import { PageHeader } from "@/components/shell/page-header";
@@ -30,9 +36,8 @@ export default async function CanchasPage({
     );
   }
 
-  // Llega desde el alta del club (paso 3 de 3).
+  // Llega desde el alta del club: se abre la bienvenida y, con "Siguiente", los precios iniciales.
   const { alta } = await searchParams;
-  const isOnboarding = alta === "1";
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -49,35 +54,38 @@ export default async function CanchasPage({
   const priceRows = (pricesData ?? []) as SportPrices[];
   const prices = pricesBySport(priceRows);
 
-  const courts = (data ?? []).map((court) => ({
-    ...(court as Court),
-    open_time: normalizeTime((court as Court).open_time),
-    close_time: normalizeTime((court as Court).close_time),
-  }));
+  const { data: settingsData } = await supabase
+    .from("settings")
+    .select("night_starts_at, open_time, close_time")
+    .eq("club_id", membership.club_id)
+    .maybeSingle();
+  const nightStartsAt = normalizeTime(settingsData?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT);
+  const hours = {
+    open_time: normalizeTime(settingsData?.open_time ?? DEFAULT_CLUB_HOURS.open_time),
+    close_time: normalizeTime(settingsData?.close_time ?? DEFAULT_CLUB_HOURS.close_time),
+  };
+
+  const courts = (data ?? []) as Court[];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Canchas"
-        description="Precios por deporte y, para cada cancha, duración del turno y horario."
-        actions={<NewCourtDialog triggerLabel="Nueva cancha" />}
+        description="Tus canchas de un vistazo. Los precios, el horario de la noche y las señas se ajustan desde el botón Precios."
+        actions={
+          <>
+            <PricesDialog
+              clubName={membership.club.name}
+              sports={[...new Set(courts.map((c) => c.type))]}
+              rows={priceRows}
+              nightStartsAt={nightStartsAt}
+              hours={hours}
+              onboarding={alta === "1"}
+            />
+            <NewCourtDialog triggerLabel="Nueva cancha" />
+          </>
+        }
       />
-
-      {isOnboarding && (
-        <Alert className="border-ball bg-ball text-ball-foreground">
-          <Sparkles className="size-4" />
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-ball-foreground">
-            <span>
-              <strong className="font-mono">PASO 3 DE 3</strong> · Tu club ya está creado.
-              Cargá abajo los precios de cada deporte (público, profe y seña); si alguna cancha
-              tiene otro horario o duración de turno, editala desde su menú ⋮.
-            </span>
-            <Link href="/dashboard" className="font-semibold underline underline-offset-4">
-              Listo, ir a Hoy
-            </Link>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {error && (
         <Alert variant="destructive">
@@ -85,18 +93,6 @@ export default async function CanchasPage({
             No se pudieron cargar las canchas.
           </AlertDescription>
         </Alert>
-      )}
-
-      <SportPricesSection
-        sports={[...new Set(courts.map((c) => c.type))].map((sport) => ({
-          sport,
-          slotDuration: courts.find((c) => c.type === sport)!.slot_duration,
-        }))}
-        rows={priceRows}
-      />
-
-      {courts.length > 0 && (
-        <h2 className="text-lg font-bold">Canchas</h2>
       )}
 
       {courts.length === 0 ? (
@@ -123,7 +119,7 @@ export default async function CanchasPage({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-mono text-xs text-muted-foreground uppercase">
-                    {COURT_TYPE_LABELS[court.type as CourtType]} · {court.slot_duration} min
+                    {COURT_TYPE_LABELS[court.type as CourtType]}
                   </span>
                   <h2
                     id={`court-${court.id}`}
@@ -134,40 +130,58 @@ export default async function CanchasPage({
                 </div>
                 <CourtCardActions court={court} />
               </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
-                <div>
-                  <dt className="text-[13px] text-muted-foreground">Turno público</dt>
-                  <dd className="mt-0.5 font-mono font-semibold">
-                    {quotePrice(prices[court.type], "standard", court.slot_duration) > 0
-                      ? formatMoney(quotePrice(prices[court.type], "standard", court.slot_duration))
-                      : "Sin precio"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[13px] text-muted-foreground">Turno profe</dt>
-                  <dd className="mt-0.5 font-mono font-semibold">
-                    {formatMoney(quotePrice(prices[court.type], "profe", court.slot_duration))}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[13px] text-muted-foreground">Horario</dt>
-                  <dd className="mt-0.5 font-mono font-semibold">
-                    {court.open_time} – {court.close_time}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[13px] text-muted-foreground">Seña</dt>
-                  <dd className="mt-0.5 font-semibold">
-                    {(() => {
-                      const deposit = depositFor(
-                        prices[court.type],
-                        quotePrice(prices[court.type], "standard", court.slot_duration)
-                      );
-                      return deposit > 0 ? formatMoney(deposit) : "No pide";
-                    })()}
-                  </dd>
-                </div>
-              </dl>
+              {(() => {
+                const courtPrices = prices[court.type];
+                const publicDay = quotePriceFor(courtPrices, "standard", DEFAULT_DURATION_MINUTES, false);
+                const publicNight = quotePriceFor(courtPrices, "standard", DEFAULT_DURATION_MINUTES, true);
+                const profeDay = quotePriceFor(courtPrices, "profe", DEFAULT_DURATION_MINUTES, false);
+                const profeNight = quotePriceFor(courtPrices, "profe", DEFAULT_DURATION_MINUTES, true);
+                const publicDeposit = depositFor(courtPrices, "standard", publicDay);
+                const profeDeposit = depositFor(courtPrices, "profe", profeDay);
+                return (
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
+                    <div>
+                      <dt className="text-[13px] text-muted-foreground">Hora de día</dt>
+                      <dd className="mt-0.5 font-mono font-semibold">
+                        {publicDay > 0 ? formatMoney(publicDay) : "Sin precio"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[13px] text-muted-foreground">Hora de noche</dt>
+                      <dd className="mt-0.5 font-mono font-semibold">
+                        {publicNight > 0 ? formatMoney(publicNight) : "Sin precio"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[13px] text-muted-foreground">Hora de profe</dt>
+                      <dd className="mt-0.5 font-mono font-semibold">
+                        {formatMoney(profeDay)}
+                        {profeNight !== profeDay && (
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {formatMoney(profeNight)} de noche
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[13px] text-muted-foreground">Seña</dt>
+                      <dd className="mt-0.5 font-semibold">
+                        {publicDeposit === 0 && profeDeposit === 0 && "No pide"}
+                        {publicDeposit > 0 && (
+                          <span className="block">
+                            <span className="font-mono">{formatMoney(publicDeposit)}</span> público
+                          </span>
+                        )}
+                        {profeDeposit > 0 && (
+                          <span className="block">
+                            <span className="font-mono">{formatMoney(profeDeposit)}</span> profe
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                );
+              })()}
             </article>
           ))}
         </div>

@@ -8,12 +8,13 @@ import { toast } from "sonner";
 import AuthGuard from "@/components/auth-guard";
 import { useMembership } from "@/hooks/use-membership";
 import { useCourts } from "@/hooks/use-courts";
-import { depositFor, formatMoney, hourlyPrice, quotePrice } from "@/lib/pricing";
+import { depositFor, formatMoney, hourlyPrice, quotePriceFor } from "@/lib/pricing";
+import { DEFAULT_DURATION_MINUTES } from "@/lib/availability";
 import { useSportPrices } from "@/hooks/use-sport-prices";
 import { cancellationOutcome } from "@/lib/cancellation";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { createClient } from "@/lib/supabase/client";
-import { clubSettingsSchema, type ClubSettings } from "@/lib/reservations";
+import { clubSettingsSchema, formatCancelWindow, type ClubSettings } from "@/lib/reservations";
 import { saveSettingsAction } from "@/app/dashboard/configuracion/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,10 @@ import {
 } from "@/components/ui/form";
 import { PageHeader } from "@/components/shell/page-header";
 import { ClubDetailsForm } from "@/components/club/club-details-form";
+import { ClubHoursCard } from "@/components/club/club-hours-form";
+import { ClubLogoCard } from "@/components/club/club-logo-card";
+import { clubInitials, clubLogoUrl } from "@/lib/roles";
+import { useClubSettings } from "@/hooks/use-club-settings";
 
 type SettingsFormValues = {
   cancel_window_hours: number;
@@ -35,7 +40,7 @@ type SettingsFormValues = {
   tournament_duration_minutes: number;
 };
 
-const HOUR_OPTIONS = [2, 6, 12, 24, 48];
+const HOUR_OPTIONS = [0.5, 1, 2, 6, 12, 24, 48];
 const PENALTY_OPTIONS = [0, 25, 50, 100];
 const TOURNAMENT_OPTIONS = [60, 90, 120, 150, 180];
 
@@ -50,6 +55,7 @@ export default function ConfiguracionPage() {
   const { membership, isLoading: isLoadingMembership } = useMembership();
   const { courts } = useCourts();
   const { prices } = useSportPrices();
+  const { open_time: clubOpenTime, close_time: clubCloseTime } = useClubSettings();
   const isAdmin = membership?.role === "admin";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -104,16 +110,22 @@ export default function ConfiguracionPage() {
   };
 
   const windowHours = Number(form.watch("cancel_window_hours")) || 0;
+  const windowLabel = formatCancelWindow(windowHours);
   const penaltyPercent = Number(form.watch("late_penalty_percent")) || 0;
 
   // Ejemplo con la primera cancha cuyo tipo tiene precio (o un valor de referencia rotulado).
-  const exampleCourt = courts.find((c) => hourlyPrice(prices[c.type], "standard") > 0);
+  const exampleCourt = courts.find((c) => hourlyPrice(prices[c.type], "standard", false) > 0);
   const example = (() => {
     const examplePrices = exampleCourt ? prices[exampleCourt.type] : undefined;
+    // Para ilustrar la seña se usa un turno de profe si solo ellos la pagan.
+    const exampleKind =
+      examplePrices && !examplePrices.public_deposit_enabled && examplePrices.profe_deposit_enabled
+        ? "profe"
+        : "standard";
     const price = exampleCourt
-      ? quotePrice(examplePrices, "standard", exampleCourt.slot_duration)
+      ? quotePriceFor(examplePrices, exampleKind, DEFAULT_DURATION_MINUTES, false)
       : REFERENCE_PRICE;
-    const deposit = exampleCourt ? depositFor(examplePrices, price) : 0;
+    const deposit = exampleCourt ? depositFor(examplePrices, exampleKind, price) : 0;
     const describe = (late: boolean, paid: number) => {
       const o = cancellationOutcome({ late, slotPrice: price, paid, penaltyPercent });
       const parts = [
@@ -125,7 +137,7 @@ export default function ConfiguracionPage() {
     };
     const rows = [
       {
-        label: `Cancela con ${windowHours} h o más${deposit > 0 ? " (con seña)" : ""}`,
+        label: `Cancela con ${windowLabel} o más${deposit > 0 ? " (con seña)" : ""}`,
         result: describe(false, deposit),
       },
       ...(deposit > 0
@@ -138,7 +150,7 @@ export default function ConfiguracionPage() {
       deposit,
       rows,
       label: exampleCourt
-        ? `${exampleCourt.name}, turno de ${exampleCourt.slot_duration} min`
+        ? `${exampleCourt.name}, turno ${exampleKind === "profe" ? "de profe " : ""}de 1 hora`
         : "Valor de referencia (todavía no hay canchas con precio)",
     };
   })();
@@ -196,7 +208,7 @@ export default function ConfiguracionPage() {
             >
               <div className="flex justify-between gap-3 font-mono text-[13px] text-sidebar-muted">
                 <span>Se reserva</span>
-                <span className="text-ball">{windowHours} h antes</span>
+                <span className="text-ball">{windowLabel} antes</span>
                 <span>Empieza el turno</span>
               </div>
               <div aria-hidden="true" className="flex h-3.5 gap-1 overflow-hidden rounded-full">
@@ -210,14 +222,14 @@ export default function ConfiguracionPage() {
                 <div className="flex flex-col gap-1">
                   <strong className="text-[17px]">En término</strong>
                   <span className="text-[15px] leading-snug text-sidebar-muted">
-                    Cancela con {windowHours} h o más: lo cobrado queda como saldo a
+                    Cancela con {windowLabel} o más: lo cobrado queda como saldo a
                     favor para su próximo turno.
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">
                   <strong className="text-[17px] text-ball">Fuera de término</strong>
                   <span className="text-[15px] leading-snug text-sidebar-muted">
-                    Cancela con menos de {windowHours} h: se cobra el {penaltyPercent}% del
+                    Cancela con menos de {windowLabel}: se cobra el {penaltyPercent}% del
                     turno. Se descuenta de lo cobrado y, si no alcanza, queda como deuda.
                   </span>
                 </div>
@@ -253,7 +265,7 @@ export default function ConfiguracionPage() {
                         >
                           {HOUR_OPTIONS.map((h) => (
                             <ToggleGroupItem key={h} value={String(h)} size="lg">
-                              {h} h
+                              {formatCancelWindow(h)}
                             </ToggleGroupItem>
                           ))}
                         </ToggleGroup>
@@ -261,9 +273,9 @@ export default function ConfiguracionPage() {
                           <FormControl>
                             <Input
                               type="number"
-                              inputMode="numeric"
                               min="0"
-                              step="1"
+                              step="0.5"
+                              inputMode="decimal"
                               aria-label="Otra cantidad de horas"
                               className="pr-8 font-mono"
                               {...field}
@@ -407,6 +419,14 @@ export default function ConfiguracionPage() {
             </section>
           </form>
         </Form>
+
+        <ClubHoursCard openTime={clubOpenTime} closeTime={clubCloseTime} />
+
+        <ClubLogoCard
+          logoUrl={clubLogoUrl(membership!.club)}
+          initials={clubInitials(membership!.club.name)}
+          clubName={membership!.club.name}
+        />
 
         <ClubDetailsForm key={membership!.club.id} club={membership!.club} />
       </div>

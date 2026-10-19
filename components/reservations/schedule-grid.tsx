@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef } from "react";
 import { Plus } from "lucide-react";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
 import {
-  getCourtSlots,
+  START_STEP_MINUTES,
   minutesToTime,
   rangesOverlap,
   timeToMinutes,
+  type ClubHours,
 } from "@/lib/availability";
 import {
   RESERVATION_TONE_LABELS,
@@ -28,6 +29,8 @@ type ScheduleGridProps = {
   courts: Court[];
   /** Turnos activos del día visible. */
   reservations: Reservation[];
+  /** Horario del club: define el rango de la planilla. */
+  hours: ClubHours;
   /** Minutos del día actual si la fecha visible es hoy (línea de "ahora"); null si no. */
   nowMinutes: number | null;
   selectedId: string | null;
@@ -42,6 +45,7 @@ type ScheduleGridProps = {
 export function ScheduleGrid({
   courts,
   reservations,
+  hours,
   nowMinutes,
   selectedId,
   onSelect,
@@ -50,22 +54,37 @@ export function ScheduleGrid({
   const profeColors = useProfeColors();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const start = Math.min(...courts.map((c) => timeToMinutes(c.open_time)));
-  const end = Math.max(...courts.map((c) => timeToMinutes(c.close_time)));
+  const open = timeToMinutes(hours.open_time);
+  const close = timeToMinutes(hours.close_time);
+  // Si quedaron turnos fuera del horario (se acortó después), la planilla se extiende para mostrarlos.
+  const start = Math.min(
+    open,
+    ...reservations.map((r) => Math.floor(timeToMinutes(r.time) / START_STEP_MINUTES) * START_STEP_MINUTES)
+  );
+  const end = Math.max(
+    close,
+    ...reservations.map(
+      (r) => Math.ceil((timeToMinutes(r.time) + r.duration_minutes) / START_STEP_MINUTES) * START_STEP_MINUTES
+    )
+  );
   const rows = Math.max(1, Math.ceil((end - start) / 30));
   const rowOf = (minutes: number) => Math.floor((minutes - start) / 30) + HEADER_ROW + 1;
 
-  const hours = useMemo(() => {
+  const hourMarks = useMemo(() => {
     const list: number[] = [];
     for (let t = Math.ceil(start / 60) * 60; t < end; t += 60) list.push(t);
     return list;
   }, [start, end]);
 
-  // Al abrir, llevar la vista cerca de la hora actual.
+  // Al abrir, llevar la página cerca de la hora actual (la planilla no tiene scroll propio: se mueve la página).
   useEffect(() => {
     if (nowMinutes === null || !scrollRef.current) return;
-    const top = ((nowMinutes - start) / 30) * ROW - ROW * 4;
-    scrollRef.current.scrollTop = Math.max(0, top);
+    const gridTop = scrollRef.current.getBoundingClientRect().top + window.scrollY;
+    const nowTop = gridTop + ((nowMinutes - start) / 30) * ROW;
+    // Solo si la hora actual queda por debajo de lo que se ve; la deja un cuarto de pantalla abajo del borde superior.
+    if (nowTop > window.scrollY + window.innerHeight * 0.75) {
+      window.scrollTo({ top: Math.max(0, nowTop - window.innerHeight * 0.25) });
+    }
     // Solo al montar o cambiar de día.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nowMinutes === null, start]);
@@ -75,7 +94,7 @@ export function ScheduleGrid({
   return (
     <div
       ref={scrollRef}
-      className="max-h-[calc(100vh-15rem)] min-h-[420px] overflow-auto rounded-2xl border bg-card"
+      className="min-h-[420px] overflow-x-auto rounded-2xl border bg-card"
     >
       <div
         className="relative grid pb-2"
@@ -93,21 +112,17 @@ export function ScheduleGrid({
 
         {courts.map((court, i) => {
           const col = i + 2;
-          const open = timeToMinutes(court.open_time);
-          const close = timeToMinutes(court.close_time);
           const mine = reservations.filter((r) => r.court_id === court.id);
-          const freeSlots = getCourtSlots(court).filter(
-            (time) =>
-              !mine.some((r) =>
-                rangesOverlap(
-                  timeToMinutes(time),
-                  court.slot_duration,
-                  timeToMinutes(r.time),
-                  r.duration_minutes
-                )
-              ) &&
-              (nowMinutes === null || timeToMinutes(time) + court.slot_duration > nowMinutes)
-          );
+          // Una celda libre por cada media hora del horario del club sin turno (y todavía no pasada).
+          const freeSlots: string[] = [];
+          for (let t = open; t + START_STEP_MINUTES <= close; t += START_STEP_MINUTES) {
+            const occupied = mine.some((r) =>
+              rangesOverlap(t, START_STEP_MINUTES, timeToMinutes(r.time), r.duration_minutes)
+            );
+            if (!occupied && (nowMinutes === null || t + START_STEP_MINUTES > nowMinutes)) {
+              freeSlots.push(minutesToTime(t));
+            }
+          }
 
           return (
             <div key={court.id} className="contents">
@@ -117,7 +132,7 @@ export function ScheduleGrid({
               >
                 <strong className="text-[15px]">{court.name}</strong>
                 <span className="font-mono text-xs text-muted-foreground uppercase">
-                  {COURT_TYPE_LABELS[court.type]} · {court.slot_duration} min
+                  {COURT_TYPE_LABELS[court.type]}
                 </span>
               </div>
 
@@ -166,7 +181,7 @@ export function ScheduleGrid({
                         className="group z-[1] m-0.5 flex items-start justify-start rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-line"
                         style={{
                           gridColumn: col,
-                          gridRow: `${rowOf(item.start)} / span ${court.slot_duration / 30}`,
+                          gridRow: `${rowOf(item.start)} / span 1`,
                         }}
                       >
                         <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -219,7 +234,7 @@ export function ScheduleGrid({
         })}
 
         {/* Columna de horas */}
-        {hours.map((t) => (
+        {hourMarks.map((t) => (
           <span
             key={t}
             className="sticky left-0 z-[15] bg-card pt-1 pr-2.5 text-right font-mono text-xs text-muted-foreground"

@@ -14,7 +14,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-type SocioHit = { id: string; full_name: string; dni: string; phone: string };
+type PlayerHit = { id: string; full_name: string; dni: string; phone: string };
 
 /** Quita los caracteres que rompen un filtro `or` de PostgREST. */
 function sanitize(query: string): string {
@@ -22,7 +22,7 @@ function sanitize(query: string): string {
 }
 
 /**
- * Personas del turno: escribir sugiere socios del club (nombre o DNI); clic o
+ * Personas del turno: escribir sugiere jugadores del club (nombre o DNI); clic o
  * Enter fija la persona; Enter sobre un texto sin sugerencias la fija como no socia.
  * La primera persona es quien reserva.
  */
@@ -48,7 +48,7 @@ export function PeopleCombobox({
   const clubId = useMembership().membership.club_id;
   const supabase = createClient();
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<SocioHit[]>([]);
+  const [hits, setHits] = useState<PlayerHit[]>([]);
   const [focused, setFocused] = useState(false);
   const listId = useId();
   const requestRef = useRef(0);
@@ -64,23 +64,23 @@ export function PeopleCombobox({
     const request = ++requestRef.current;
     const timer = setTimeout(async () => {
       const { data } = await supabase
-        .from("socios")
+        .from("players")
         .select("id, full_name, dni, phone")
         .eq("club_id", clubId)
         .is("deleted_at", null)
         .or(`full_name.ilike.%${term}%,dni.ilike.%${term.replace(/[.\s]/g, "")}%`)
         .order("full_name")
         .limit(8);
-      if (request === requestRef.current) setHits((data ?? []) as SocioHit[]);
+      if (request === requestRef.current) setHits((data ?? []) as PlayerHit[]);
     }, 200);
     return () => clearTimeout(timer);
   }, [term, clubId, supabase]);
 
-  const selectedIds = new Set(value.map((p) => p.socio_id).filter(Boolean));
+  const selectedIds = new Set(value.map((p) => p.player_id).filter(Boolean));
   const suggestions = hits.filter((hit) => !selectedIds.has(hit.id));
   const alreadyNamed = value.some((p) => p.name.toLowerCase() === term.toLowerCase());
 
-  // Opción resaltada: el primer socio sugerido; si no hay, "agregar sin ser socio".
+  // Opción resaltada: el primer player sugerido; si no hay, "agregar sin registrar".
   // Se recalcula cuando llegan las sugerencias (llegan después de lo escrito).
   const firstOption = suggestions[0]?.id ?? (alreadyNamed ? "" : `libre:${term}`);
   const [highlighted, setHighlighted] = useState("");
@@ -107,7 +107,7 @@ export function PeopleCombobox({
         <ul className="flex flex-wrap gap-1.5" aria-label="Personas del turno">
           {value.map((person, index) => (
             <li
-              key={`${person.socio_id ?? "libre"}-${person.name}-${index}`}
+              key={`${person.player_id ?? "libre"}-${person.name}-${index}`}
               className="flex items-center gap-1.5 rounded-full border bg-card py-1 pr-1 pl-3 text-sm"
             >
               {index === 0 && (
@@ -116,8 +116,8 @@ export function PeopleCombobox({
                 </span>
               )}
               <span className="font-medium">{person.name}</span>
-              {!person.socio_id && (
-                <span className="text-xs text-muted-foreground">(no socio)</span>
+              {!person.player_id && (
+                <span className="text-xs text-muted-foreground">(sin registrar)</span>
               )}
               {!disabled && (
                 <button
@@ -162,18 +162,18 @@ export function PeopleCombobox({
               className="absolute top-full right-0 left-0 z-50 mt-1 max-h-64 rounded-lg border bg-popover shadow-md"
             >
               {suggestions.length > 0 && (
-                <CommandGroup heading="Socios">
+                <CommandGroup heading="Jugadores">
                   {suggestions.map((hit) => (
                     <CommandItem
                       key={hit.id}
                       value={hit.id}
                       onMouseDown={(event) => event.preventDefault()}
-                      onSelect={() => add({ name: hit.full_name, socio_id: hit.id, phone: hit.phone })}
+                      onSelect={() => add({ name: hit.full_name, player_id: hit.id, phone: hit.phone })}
                     >
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate font-medium">{hit.full_name}</span>
                         <span className="font-mono text-xs text-muted-foreground">
-                          {[hit.dni && `DNI ${hit.dni}`, hit.phone].filter(Boolean).join(" · ") || "Socio"}
+                          {[hit.dni && `DNI ${hit.dni}`, hit.phone].filter(Boolean).join(" · ") || "Jugador"}
                         </span>
                       </span>
                     </CommandItem>
@@ -181,14 +181,14 @@ export function PeopleCombobox({
                 </CommandGroup>
               )}
               {!alreadyNamed && (
-                <CommandGroup heading={suggestions.length > 0 ? "No es socio" : undefined}>
+                <CommandGroup heading={suggestions.length > 0 ? "No registrado" : undefined}>
                   <CommandItem
                     value={`libre:${term}`}
                     onMouseDown={(event) => event.preventDefault()}
-                    onSelect={() => add({ name: term, socio_id: null })}
+                    onSelect={() => add({ name: term, player_id: null })}
                   >
                     <UserPlus />
-                    Agregar «{term}» sin ser socio
+                    Agregar «{term}» sin registrar
                   </CommandItem>
                 </CommandGroup>
               )}

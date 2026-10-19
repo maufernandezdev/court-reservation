@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { normalizeTime } from "@/lib/availability";
 import type { Court } from "@/lib/courts";
 import { useMembership } from "@/hooks/use-membership";
 
@@ -25,13 +24,7 @@ export function useCourts() {
       setError("No se pudieron cargar las canchas.");
     } else {
       setError("");
-      setCourts(
-        (data ?? []).map((court) => ({
-          ...(court as Court),
-          open_time: normalizeTime(court.open_time as string),
-          close_time: normalizeTime(court.close_time as string),
-        }))
-      );
+      setCourts((data ?? []) as Court[]);
     }
     setIsLoading(false);
   }, [supabase, clubId]);

@@ -1,10 +1,15 @@
 import { z } from "zod";
 import { CLUB_ROLES, type ClubRole } from "@/lib/roles";
 
+/** Roles con los que se puede invitar por link: un administrador se suma como operador y se asciende después. */
+export const INVITABLE_ROLES = ["operador", "profesor"] as const satisfies readonly ClubRole[];
+
+export const NOTE_MAX_LENGTH = 80;
+
+/** Invitación por link: solo el rol y una nota opcional ("Para quién es") para reconocerla en la lista. */
 export const memberInviteSchema = z.object({
-  email: z.string().trim().email("Ingresá un email válido"),
-  full_name: z.string().trim().min(1, "Ingresá el nombre del miembro"),
-  role: z.enum(CLUB_ROLES, { message: "Seleccioná un rol" }),
+  role: z.enum(INVITABLE_ROLES, { message: "Elegí operador o profesor" }),
+  note: z.string().trim().max(NOTE_MAX_LENGTH, `La nota puede tener hasta ${NOTE_MAX_LENGTH} caracteres`),
 });
 
 export type MemberInviteInput = z.infer<typeof memberInviteSchema>;

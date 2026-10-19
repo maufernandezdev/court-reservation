@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { Court } from "@/lib/courts";
@@ -59,21 +59,28 @@ export function useReservationDetail({
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [members, setMembers] = useState<MemberLite[]>([]);
   const [settings, setSettings] = useState<ClubSettings | null>(null);
-  const [isLoadingExtras, setIsLoadingExtras] = useState(false);
+  // Hasta la primera carga de un turno, el detalle muestra un esqueleto (recargar después de un cobro no lo parpadea).
+  const [isLoadingExtras, setIsLoadingExtras] = useState(() => Boolean(reservation));
+  const loadedFor = useRef<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("efectivo");
   const [cancelReason, setCancelReason] = useState("");
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [acceptPenalty, setAcceptPenalty] = useState(false);
+  // Si el diálogo se cierra sin confirmar, la aceptación de la penalidad se borra.
+  useEffect(() => {
+    if (!cancelConfirmOpen) setAcceptPenalty(false);
+  }, [cancelConfirmOpen]);
   const [isCancelling, setIsCancelling] = useState(false);
   const [endSeriesOpen, setEndSeriesOpen] = useState(false);
   const [isEndingSeries, setIsEndingSeries] = useState(false);
 
-  const { prices } = useSportPrices();
+  const { prices, isLoading: isLoadingPrices } = useSportPrices();
   const court = reservation
     ? (courts.find((c) => c.id === reservation.court_id) ?? null)
     : null;
-  // Valor fijado en el turno; la seña sale de la configuración del tipo de cancha.
+  // Valor fijado en el turno; la seña sale de la configuración del tipo de cancha (público o profes según el turno).
   const slotPrice = reservation ? Number(reservation.price) : 0;
-  const deposit = court ? depositFor(prices[court.type], slotPrice) : 0;
+  const deposit = court && reservation ? depositFor(prices[court.type], reservation.kind, slotPrice) : 0;
 
   const isCancelled = reservation?.status === "cancelled";
   const depositPaid = payments
@@ -86,7 +93,7 @@ export function useReservationDetail({
 
   const loadExtras = useCallback(async () => {
     if (!reservation) return;
-    setIsLoadingExtras(true);
+    if (loadedFor.current !== reservation.id) setIsLoadingExtras(true);
 
     const [{ data: paymentsData }, { data: auditData }, { data: membersData }] =
       await Promise.all([
@@ -133,6 +140,7 @@ export function useReservationDetail({
       setCredit(null);
     }
 
+    loadedFor.current = reservation.id;
     setIsLoadingExtras(false);
   }, [supabase, reservation, membership.club_id]);
 
@@ -167,10 +175,8 @@ export function useReservationDetail({
     : Infinity;
   const wouldBeLate = hoursUntilStart < cancelWindowHours;
 
-  const profesorBlocked =
-    membership.role === "profesor" && wouldBeLate && !isCancelled;
-  const profesorMoneyBlocked =
-    membership.role === "profesor" && !isCancelled && totalPaid > 0;
+  // El profe cancela siempre; fuera de término tiene que aceptar la penalidad antes de confirmar.
+  const requiresPenaltyAcceptance = membership.role === "profesor" && wouldBeLate && !isCancelled;
 
   /** Montos de la cancelación según la política (para mostrarlos antes de confirmar). */
   const cancelOutcome = cancellationOutcome({
@@ -252,10 +258,12 @@ export function useReservationDetail({
     setIsCancelling(true);
     const { success, error, reservation: updated } = await cancelReservationAction(
       reservation.id,
-      cancelReason
+      cancelReason,
+      requiresPenaltyAcceptance && acceptPenalty
     );
     setIsCancelling(false);
     setCancelConfirmOpen(false);
+    setAcceptPenalty(false);
 
     if (success) {
       toast.success("Reserva cancelada");
@@ -282,7 +290,8 @@ export function useReservationDetail({
     credit,
     audit,
     settings,
-    isLoadingExtras,
+    // También espera los precios: de ahí sale si se ofrece cobrar solo la seña.
+    isLoadingExtras: isLoadingExtras || isLoadingPrices,
     reload: loadExtras,
     slotPrice,
     deposit,
@@ -294,8 +303,10 @@ export function useReservationDetail({
     latePenaltyPercent,
     hoursUntilStart,
     wouldBeLate,
-    profesorBlocked,
-    profesorMoneyBlocked,
+    isProfesor: membership.role === "profesor",
+    requiresPenaltyAcceptance,
+    acceptPenalty,
+    setAcceptPenalty,
     cancelOutcome,
     cancelConsequence,
     paymentMethod,

@@ -23,10 +23,8 @@ const INVALID: InvitationLookup = {
   status: "invalid",
   club_name: null,
   role: null,
-  email: null,
-  full_name: null,
+  note: null,
   expires_at: null,
-  has_account: null,
 };
 
 function Problem({
@@ -122,7 +120,6 @@ export default async function InvitacionPage({ params }: PageProps<"/invitacion/
       break;
     case "pending": {
       const roleLabel = invitation.role ? CLUB_ROLE_LABELS[invitation.role] : "";
-      const sameUser = user?.email?.toLowerCase() === invitation.email;
       const intro = (
         <div className="flex flex-col gap-3">
           <span className="flex size-12 items-center justify-center rounded-xl bg-ball text-ball-foreground">
@@ -141,43 +138,22 @@ export default async function InvitacionPage({ params }: PageProps<"/invitacion/
         </div>
       );
 
-      if (user && !sameUser) {
+      if (user) {
         content = (
           <div className="flex flex-col gap-6">
             {intro}
             <p className="rounded-xl bg-muted px-4 py-3 text-[15px] text-pretty text-muted-foreground">
-              Estás con la cuenta <strong className="text-foreground">{user.email}</strong>, pero la
-              invitación es para <strong className="text-foreground">{invitation.email}</strong>.
-              Cerrá sesión para entrar con ese correo.
+              Vas a unirte con la cuenta <strong className="text-foreground">{user.email}</strong>.
             </p>
-            <SignOutButton
-              label="Cerrar sesión y continuar"
-              redirectTo={`/invitacion/${token}`}
-              variant="default"
-            />
-          </div>
-        );
-      } else if (user && sameUser) {
-        content = (
-          <div className="flex flex-col gap-6">
-            {intro}
             <JoinWithSessionButton token={token} />
+            <SignOutButton label="Usar otra cuenta" redirectTo={`/invitacion/${token}`} variant="outline" />
           </div>
         );
       } else {
         content = (
           <div className="flex flex-col gap-6">
             {intro}
-            <JoinInvitationForm
-              token={token}
-              email={invitation.email ?? ""}
-              hasAccount={Boolean(invitation.has_account)}
-            />
-            {!invitation.has_account && (
-              <p className="text-sm text-pretty text-muted-foreground">
-                Con esa contraseña vas a ingresar las próximas veces desde la pantalla de ingreso.
-              </p>
-            )}
+            <JoinInvitationForm token={token} />
           </div>
         );
       }

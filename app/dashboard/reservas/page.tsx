@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, LandPlot, Plus, Search, Repeat, Trophy } from "lucide-react";
 import AuthGuard from "@/components/auth-guard";
@@ -21,7 +22,9 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useReservationDetail } from "@/hooks/use-reservation-detail";
 import { type Court, type CourtType } from "@/lib/courts";
-import { defaultSlot, getCourtSlots } from "@/lib/availability";
+import { firstFreeStart, firstStartFrom, timeToMinutes } from "@/lib/availability";
+import { useSportPrices } from "@/hooks/use-sport-prices";
+import { useClubSettings } from "@/hooks/use-club-settings";
 import { PROFE_COLORS } from "@/lib/profe-colors";
 import type { Reservation } from "@/lib/reservations";
 import type { Membership } from "@/lib/roles";
@@ -52,14 +55,17 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
-/** Leyenda: estados de pago (turnos estándar) y tipos de turno. */
-function StatusLegend() {
+/**
+ * Leyenda: estados de pago (turnos estándar) y tipos de turno. "Señada" solo aparece si el club pide seña
+ * (o hay turnos ya señados) y "Cancelada" no: la planilla no muestra los turnos cancelados.
+ */
+function StatusLegend({ showDeposit }: { showDeposit: boolean }) {
   return (
     <ul
       className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground"
       aria-label="Referencias de la planilla"
     >
-      {RESERVATION_TONES.filter((t) => t !== "fixed").map((tone) => (
+      {RESERVATION_TONES.filter((t) => t !== "fixed" && t !== "cancelled" && (t !== "deposit" || showDeposit)).map((tone) => (
         <li key={tone} className="flex items-center gap-1.5">
           <span aria-hidden="true" className={cn("size-3.5 rounded", toneClasses(tone))} />
           {RESERVATION_TONE_LABELS[tone]}
@@ -118,7 +124,7 @@ function ReservationSidePanel({
   return (
     <aside
       aria-label="Detalle del turno"
-      className="sticky top-6 max-h-[calc(100vh-3rem)] w-[360px] shrink-0 self-start overflow-y-auto rounded-2xl border bg-card p-5"
+      className="w-full rounded-2xl border bg-card p-5"
     >
       <ReservationDetailPanel
         reservation={reservation}
@@ -191,6 +197,8 @@ function ReservationsPageContent() {
   const todayKey = dateKey(now);
 
   const { courts, isLoading: isLoadingCourts } = useCourts();
+  const { open_time, close_time } = useClubSettings();
+  const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const { membership, isLoading: isLoadingMembership } = useMembership();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
@@ -220,6 +228,10 @@ function ReservationsPageContent() {
   const { reservations, isLoading: isLoadingReservations, upsertLocal } =
     useReservations(selectedDateKey);
 
+  // ¿Algún deporte del club pide seña (al público o a profes)?
+  const { rows: priceRows } = useSportPrices();
+  const depositConfigured = priceRows.some((p) => p.public_deposit_enabled || p.profe_deposit_enabled);
+
   const activeReservations = useMemo(
     () => reservations.filter((r) => r.status === "active"),
     [reservations]
@@ -238,16 +250,8 @@ function ReservationsPageContent() {
     : null;
 
   const openCreateDialog = (courtId: string, time: string, date?: string) => {
-    const court = courts.find((c) => c.id === courtId);
-    let slotTime = time;
-
-    if (court) {
-      const slots = getCourtSlots(court);
-      if (!slots.includes(time)) {
-        // Celda fuera de la grilla de la cancha: usa la primera franja disponible desde ahí.
-        slotTime = slots.find((s) => s >= time) ?? slots[slots.length - 1] ?? time;
-      }
-    }
+    // Si el horario no es :00 o :30 o cae fuera del horario del club, usa el primero válido desde ahí.
+    const slotTime = firstStartFrom(hours, timeToMinutes(time));
 
     setDialogMode("create");
     setEditingReservation(null);
@@ -267,11 +271,14 @@ function ReservationsPageContent() {
     setDialogOpen(true);
   };
 
-  /** "Nuevo turno": primera cancha visible, primera franja desde ahora (o desde la apertura). */
+  /** "Nuevo turno": primera cancha con lugar desde la próxima media hora (o desde la apertura). */
   const openNewFromHeader = () => {
-    const court = visibleCourts[0];
-    if (!court) return;
-    openCreateDialog(court.id, defaultSlot(court, isToday ? minutesOfDay(now) : undefined));
+    if (visibleCourts.length === 0) return;
+    const from = isToday ? minutesOfDay(now) : undefined;
+    // La primera cancha con lugar a ese horario (la 1 solo si está libre); si no queda ninguna, la primera.
+    const free = firstFreeStart(visibleCourts, activeReservations, hours, from);
+    if (free) openCreateDialog(free.court.id, free.time);
+    else openCreateDialog(visibleCourts[0].id, firstStartFrom(hours, from));
   };
 
   const handleReservationSaved = (reservation: Reservation) => {
@@ -403,32 +410,54 @@ function ReservationsPageContent() {
       ) : isDesktop ? (
         /* ---------------- Escritorio: grilla + panel de detalle ---------------- */
         <>
-          <StatusLegend />
-          <div className="flex items-start gap-5">
+          <StatusLegend showDeposit={depositConfigured || activeReservations.some((r) => r.payment_status === "senada")} />
+          <div className="flex items-start">
             <div className="min-w-0 flex-1">
               <ScheduleGrid
                 courts={visibleCourts}
                 reservations={activeReservations.filter((r) =>
                   visibleCourts.some((c) => c.id === r.court_id)
                 )}
+                hours={hours}
                 nowMinutes={isToday ? minutesOfDay(now) : null}
                 selectedId={selectedReservation?.id ?? null}
                 onSelect={(r) => setSelectedId(r.id)}
                 onCreate={openCreateDialog}
               />
             </div>
-            {membership && selectedReservation && (
-              <ReservationSidePanel
-                key={selectedReservation.id}
-                reservation={selectedReservation}
-                courts={courts}
-                membership={membership}
-                onSaved={handleReservationSaved}
-                onCancelled={handleCancelled}
-                onEdit={() => openEditDialog(selectedReservation)}
-                onClose={() => setSelectedId(null)}
-              />
-            )}
+            {/* El panel entra de costado (framer-motion): el ancho crece y el contenido se desliza desde la derecha.
+                La envoltura no cambia al elegir otro turno, así que la animación solo corre al abrir y al cerrar. */}
+            <AnimatePresence initial={false}>
+              {membership && selectedReservation && (
+                <motion.div
+                  key="side-panel"
+                  className="shrink-0 self-start overflow-hidden"
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 380, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={{ type: "spring", damping: 34, stiffness: 320, mass: 0.9 }}
+                >
+                  <motion.div
+                    className="w-[380px] pl-5"
+                    initial={{ x: 56 }}
+                    animate={{ x: 0 }}
+                    exit={{ x: 56 }}
+                    transition={{ type: "spring", damping: 34, stiffness: 320, mass: 0.9 }}
+                  >
+                    <ReservationSidePanel
+                      key={selectedReservation.id}
+                      reservation={selectedReservation}
+                      courts={courts}
+                      membership={membership}
+                      onSaved={handleReservationSaved}
+                      onCancelled={handleCancelled}
+                      onEdit={() => openEditDialog(selectedReservation)}
+                      onClose={() => setSelectedId(null)}
+                    />
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </>
       ) : (
@@ -440,6 +469,7 @@ function ReservationsPageContent() {
             reservations={activeReservations}
             selectedDateKey={selectedDateKey}
             todayKey={todayKey}
+            hours={hours}
             nowMinutes={isToday ? minutesOfDay(now) : null}
             onSelectDate={(key) => setSelectedDate(parseDateKey(key))}
             onSelect={(r) => setSelectedId(r.id)}

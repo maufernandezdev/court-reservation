@@ -22,7 +22,8 @@ import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
 import type { Reservation } from "@/lib/reservations";
 import { formatMoney } from "@/lib/pricing";
-import { buildAvailabilityMessage, defaultSlot, timeToMinutes } from "@/lib/availability";
+import { buildAvailabilityMessage, firstFreeStart, firstStartFrom, timeToMinutes } from "@/lib/availability";
+import { useClubSettings } from "@/hooks/use-club-settings";
 import {
   amountDue,
   computeDaySummary,
@@ -145,6 +146,8 @@ export default function DashboardIndexPage() {
   const [creating, setCreating] = useState<{ courtId: string; time: string } | null>(null);
 
   const { courts, isLoading: isLoadingCourts, error: courtsError } = useCourts();
+  const { open_time, close_time } = useClubSettings();
+  const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const { membership } = useMembership();
   const profeColors = useProfeColors();
   const {
@@ -179,14 +182,15 @@ export default function DashboardIndexPage() {
     visibleCourts,
     visibleReservations,
     payments,
-    nowMinutes
+    nowMinutes,
+    hours
   );
   const paid = paidByReservation(payments);
   const upcoming = upcomingReservations(visibleReservations, nowMinutes).slice(
     0,
     UPCOMING_LIMIT
   );
-  const gaps = freeGaps(visibleCourts, visibleReservations, nowMinutes).slice(
+  const gaps = freeGaps(visibleCourts, visibleReservations, nowMinutes, hours).slice(
     0,
     GAPS_LIMIT
   );
@@ -236,8 +240,11 @@ export default function DashboardIndexPage() {
               />
               <Button
                 onClick={() => {
-                  const court = visibleCourts[0];
-                  if (court) setCreating({ courtId: court.id, time: defaultSlot(court, nowMinutes) });
+                  if (visibleCourts.length === 0) return;
+                  // La primera cancha con lugar desde la próxima media hora (la 1 solo si está libre).
+                  const free = firstFreeStart(visibleCourts, visibleReservations, hours, nowMinutes);
+                  if (free) setCreating({ courtId: free.court.id, time: free.time });
+                  else setCreating({ courtId: visibleCourts[0].id, time: firstStartFrom(hours, nowMinutes) });
                 }}
                 disabled={visibleCourts.length === 0}
               >
@@ -334,7 +341,7 @@ export default function DashboardIndexPage() {
                   <CourtNowTile
                     key={court.id}
                     court={court}
-                    status={courtStatusNow(court, visibleReservations, nowMinutes)}
+                    status={courtStatusNow(court, visibleReservations, nowMinutes, hours)}
                     profeColors={profeColors}
                   />
                 ))}
@@ -460,7 +467,7 @@ export default function DashboardIndexPage() {
                           onClick={() =>
                             setCreating({
                               courtId: gap.court.id,
-                              time: defaultSlot(gap.court, timeToMinutes(gap.start)),
+                              time: firstStartFrom(hours, timeToMinutes(gap.start)),
                             })
                           }
                           className="text-sm font-semibold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ball"

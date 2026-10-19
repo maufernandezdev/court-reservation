@@ -5,8 +5,8 @@ import type { ClubRole } from "@/lib/roles";
 /** Invitación abierta tal como la ve el admin en Equipo (sin el hash del token). */
 export type ClubInvitation = {
   id: string;
-  email: string;
-  full_name: string;
+  /** "Para quién es" (opcional): solo para reconocerla en la lista. */
+  note: string;
   role: ClubRole;
   created_at: string;
   expires_at: string;
@@ -17,17 +17,14 @@ export type InvitationLookup = {
   status: "pending" | "expired" | "accepted" | "revoked" | "invalid";
   club_name: string | null;
   role: ClubRole | null;
-  email: string | null;
-  full_name: string | null;
+  note: string | null;
   expires_at: string | null;
-  has_account: boolean | null;
 };
 
 /** Link listo para compartir (el token solo existe en este momento: en la base queda su hash). */
 export type SharedInvitation = {
   link: string;
-  email: string;
-  fullName: string;
+  note: string;
   role: ClubRole;
   expiresAt: string;
 };
@@ -37,13 +34,24 @@ export const invitationTokenSchema = z
   .string()
   .regex(/^[A-Za-z0-9_-]{32,128}$/, "El link de invitación no es válido.");
 
-/** Ingreso desde el link: misma regla de contraseña que el registro. */
-export const joinInvitationSchema = z.object({
+/** Datos de la persona que se suma desde el link (cuenta nueva o existente). */
+const joinFields = {
   token: invitationTokenSchema,
+  email: z.string().trim().email("Ingresá un correo válido").max(254, "El correo es demasiado largo"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+};
+
+/** Cuenta nueva: nombre, correo y contraseña (misma regla de contraseña que el registro). */
+export const joinNewAccountSchema = z.object({
+  ...joinFields,
+  full_name: z.string().trim().min(1, "Ingresá tu nombre").max(120, "El nombre puede tener hasta 120 caracteres"),
 });
 
-export type JoinInvitationInput = z.infer<typeof joinInvitationSchema>;
+/** Cuenta existente: correo y contraseña. */
+export const joinExistingAccountSchema = z.object(joinFields);
+
+export type JoinNewAccountInput = z.infer<typeof joinNewAccountSchema>;
+export type JoinExistingAccountInput = z.infer<typeof joinExistingAccountSchema>;
 
 export function isExpired(expiresAt: string, now: Date = new Date()): boolean {
   return new Date(expiresAt).getTime() < now.getTime();
@@ -58,27 +66,22 @@ export function shortDate(iso: string): string {
   });
 }
 
-/** Texto que se manda por WhatsApp o se pega en un correo. */
+/** Texto que se manda por WhatsApp: no lleva nombre ni correo, quien lo abre los carga. */
 export function invitationMessage({
-  fullName,
   clubName,
   roleLabel,
-  email,
   link,
   expiresAt,
 }: {
-  fullName: string;
   clubName: string;
   roleLabel: string;
-  email: string;
   link: string;
   expiresAt: string;
 }): string {
-  const firstName = fullName.trim().split(/\s+/)[0];
   return [
-    `Hola${firstName ? ` ${firstName}` : ""}, te invito a sumarte a ${clubName} en ${PRODUCT_NAME} como ${roleLabel.toLowerCase()}.`,
-    `Entrá con tu correo ${email} desde este link: ${link}`,
-    `(vence el ${shortDate(expiresAt)})`,
+    `¡Hola! Te invito a sumarte a ${clubName} en ${PRODUCT_NAME} como ${roleLabel.toLowerCase()}.`,
+    `Entrá desde este link y cargá tus datos: ${link}`,
+    `(sirve una sola vez y vence el ${shortDate(expiresAt)})`,
   ].join("\n");
 }
 

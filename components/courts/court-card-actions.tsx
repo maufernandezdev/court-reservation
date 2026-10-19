@@ -49,9 +49,6 @@ function toFormValues(court: Court): CourtInput {
   return {
     name: court.name,
     type: court.type,
-    slot_duration: court.slot_duration,
-    open_time: court.open_time,
-    close_time: court.close_time,
   };
 }
 

@@ -80,7 +80,7 @@ export default function NotificationsPage() {
       <div className="space-y-4">
         <PageHeader
           title="Notificaciones"
-          description="Enviá avisos a socios y guardá un historial de comunicaciones."
+          description="Enviá avisos a jugadores y guardá un historial de comunicaciones."
         />
 
         <Card>

@@ -2,30 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ArrowRight, MailOpen, Plus } from "lucide-react";
 import { getSessionContext } from "@/lib/auth";
-import { CLUB_ROLE_LABELS, type ClubRole } from "@/lib/roles";
 import { AuthHeading, AuthLayout } from "@/components/auth/auth-layout";
 import { OnboardingSteps } from "@/components/onboarding/onboarding-steps";
-import { PendingInvitationCard } from "@/components/onboarding/pending-invitation-card";
 import { SignOutButton } from "@/components/onboarding/sign-out-button";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
-
-type PendingInvitation = {
-  id: string;
-  club_name: string;
-  role: ClubRole;
-  expires_at: string;
-};
-
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-AR", {
-    day: "numeric",
-    month: "numeric",
-    timeZone: "America/Argentina/Buenos_Aires",
-  });
-}
 
 const optionClass =
   "group flex items-start gap-4 rounded-2xl border bg-card p-5 transition-colors hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line";
@@ -35,7 +17,7 @@ export default async function BienvenidaPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { supabase, user, memberships } = await getSessionContext();
+  const { user, memberships } = await getSessionContext();
 
   if (!user) {
     redirect("/login");
@@ -47,8 +29,6 @@ export default async function BienvenidaPage({
   }
 
   const { opcion } = await searchParams;
-  const { data } = await supabase.rpc("my_pending_invitations");
-  const invitations = (data ?? []) as PendingInvitation[];
 
   if (opcion === "invitacion") {
     return (
@@ -56,32 +36,19 @@ export default async function BienvenidaPage({
         <div className="flex flex-col gap-6">
           <AuthHeading
             eyebrow="PASO 2 DE 3"
-            title={invitations.length ? "Tenés invitaciones" : "Esperá la invitación"}
-            description={
-              invitations.length
-                ? "Elegí a qué club querés sumarte."
-                : "Pedile al administrador de tu club que te invite desde Equipo. Te va a llegar un link por WhatsApp o por correo."
-            }
+            title="Pedí el link de invitación"
+            description="El administrador de tu club te invita desde Equipo y te manda un link por WhatsApp."
           />
 
-          <div className="flex flex-col gap-1.5 rounded-xl bg-muted px-4 py-3">
-            <span className="text-sm text-muted-foreground">Tiene que invitarte con este correo:</span>
-            <strong className="font-mono text-[15px] break-all">{user.email}</strong>
-          </div>
-
-          {invitations.length > 0 && (
-            <ul className="flex flex-col gap-3" aria-label="Invitaciones pendientes">
-              {invitations.map((invitation) => (
-                <PendingInvitationCard
-                  key={invitation.id}
-                  id={invitation.id}
-                  clubName={invitation.club_name}
-                  roleLabel={CLUB_ROLE_LABELS[invitation.role]}
-                  expiresLabel={shortDate(invitation.expires_at)}
-                />
-              ))}
-            </ul>
-          )}
+          <ol className="flex flex-col gap-3 rounded-xl bg-muted px-5 py-4 text-[15px] text-pretty">
+            <li>
+              <strong>1.</strong> Pedile al administrador que te genere una invitación con tu rol.
+            </li>
+            <li>
+              <strong>2.</strong> Abrí el link que te manda. Podés entrar con esta cuenta
+              {user.email ? <> (<span className="font-mono break-all">{user.email}</span>)</> : null} o crear una nueva.
+            </li>
+          </ol>
 
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline">
@@ -128,17 +95,10 @@ export default async function BienvenidaPage({
             <span className="flex flex-1 flex-col gap-1">
               <span className="flex flex-wrap items-center gap-2">
                 <strong className="text-lg">Me van a invitar</strong>
-                {invitations.length > 0 && (
-                  <Badge className="bg-line text-line-foreground">
-                    {invitations.length === 1
-                      ? "Tenés 1 invitación"
-                      : `Tenés ${invitations.length} invitaciones`}
-                  </Badge>
-                )}
               </span>
               <span className="text-[15px] text-pretty text-muted-foreground">
                 Trabajás en un club que ya usa saque: el administrador te suma
-                con un link.
+                con un link por WhatsApp.
               </span>
             </span>
             <ArrowRight className="mt-3 size-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

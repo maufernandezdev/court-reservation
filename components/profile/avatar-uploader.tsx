@@ -5,55 +5,34 @@ import { z } from "zod";
 import { Camera, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { removeAvatarAction, uploadAvatarAction } from "@/app/dashboard/perfil/actions";
+import { IMAGE_ACCEPTED_TYPES, IMAGE_MAX_BYTES, toSquareWebp } from "@/lib/image";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp"] as const;
-const MAX_BYTES = 5 * 1024 * 1024;
-const SIZE = 512;
-
 // Validación del archivo elegido (antes de recortarlo).
 const avatarFileSchema = z
   .instanceof(File, { message: "Elegí una imagen." })
-  .refine((file) => (ACCEPTED as readonly string[]).includes(file.type), "La foto tiene que ser JPG, PNG o WebP.")
-  .refine((file) => file.size <= MAX_BYTES, "La foto puede pesar hasta 5 MB.");
+  .refine((file) => (IMAGE_ACCEPTED_TYPES as readonly string[]).includes(file.type), "La foto tiene que ser JPG, PNG o WebP.")
+  .refine((file) => file.size <= IMAGE_MAX_BYTES, "La foto puede pesar hasta 5 MB.");
 
-/** Recorta al centro en cuadrado y reduce a 512×512 en WebP. */
-async function toSquareWebp(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
-  const side = Math.min(bitmap.width, bitmap.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = SIZE;
-  canvas.height = SIZE;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("No se pudo procesar la imagen.");
-  ctx.drawImage(
-    bitmap,
-    (bitmap.width - side) / 2,
-    (bitmap.height - side) / 2,
-    side,
-    side,
-    0,
-    0,
-    SIZE,
-    SIZE
-  );
-  bitmap.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.85));
-  if (!blob) throw new Error("No se pudo procesar la imagen.");
-  return blob;
-}
-
-/** Foto de perfil: subir, cambiar o quitar. */
+/**
+ * Tarjeta de cabecera de Mi perfil: foto (subir, cambiar o quitar), nombre, correo y los clubes
+ * donde está la persona.
+ */
 export function AvatarUploader({
   avatarUrl,
   initials,
   name,
+  email,
+  clubs,
 }: {
   avatarUrl: string | null;
   initials: string;
   name: string;
+  email: string;
+  /** Un texto por club, como "The Garden Tenis · Administrador". */
+  clubs: string[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
@@ -99,27 +78,34 @@ export function AvatarUploader({
   };
 
   return (
-    <section aria-labelledby="perfil-foto" className="flex flex-col gap-4 rounded-2xl border bg-card p-5 sm:p-6">
-      <div className="flex flex-col gap-1">
-        <h2 id="perfil-foto" className="text-lg font-bold">
-          Foto
-        </h2>
-        <p className="text-[15px] text-pretty text-muted-foreground">
-          Se ve en el menú y en Equipo. JPG, PNG o WebP de hasta 5 MB; se recorta en cuadrado.
-        </p>
-      </div>
+    <section aria-label="Resumen y foto" className="flex flex-col gap-4 rounded-2xl border bg-card p-5 sm:p-6">
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <div className="flex flex-wrap items-center gap-4">
-        <UserAvatar src={avatarUrl} initials={initials} name={name} size={80} />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-4">
+        <UserAvatar src={avatarUrl} initials={initials} name={name} size={88} />
+        <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-1">
+          <strong className="truncate font-display text-2xl font-extrabold tracking-[-0.02em] font-stretch-[115%]">
+            {name}
+          </strong>
+          <span className="truncate text-[15px] text-muted-foreground">{email}</span>
+          <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="Tus clubes">
+            {clubs.map((club) => (
+              <li key={club} className="rounded-full border px-3 py-1 text-[13px]">
+                {club}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 border-t pt-4">
         <div className="flex flex-wrap gap-2">
           <input
             ref={inputRef}
             type="file"
-            accept={ACCEPTED.join(",")}
+            accept={IMAGE_ACCEPTED_TYPES.join(",")}
             className="sr-only"
             id="avatar-file"
             aria-label="Elegir foto"
@@ -136,6 +122,9 @@ export function AvatarUploader({
             </Button>
           )}
         </div>
+        <p className="text-[13px] text-pretty text-muted-foreground">
+          La foto se ve en el menú y en Equipo. JPG, PNG o WebP de hasta 5 MB; se recorta en cuadrado.
+        </p>
       </div>
     </section>
   );

@@ -15,9 +15,20 @@ import {
   type Reservation,
   type ReservationInput,
 } from "@/lib/reservations";
-import { getCourtSlots, rangesOverlap, timeToMinutes } from "@/lib/availability";
-import { depositFor, formatMoney, quotePrice } from "@/lib/pricing";
+import {
+  DEFAULT_DURATION_MINUTES,
+  MIN_DURATION_MINUTES,
+  maxDurationAt,
+  minutesToTime,
+  rangesOverlap,
+  startTimes,
+  timeToMinutes,
+} from "@/lib/availability";
+import { digitsOnly } from "@/lib/players";
+import { depositFor, formatMoney, isNight, quotePrice } from "@/lib/pricing";
 import { useSportPrices } from "@/hooks/use-sport-prices";
+import { createClient } from "@/lib/supabase/client";
+import { ensureFixedReservations } from "@/lib/series";
 import { useMembership } from "@/hooks/use-membership";
 import { useProfes } from "@/hooks/use-profes";
 import { useClubSettings } from "@/hooks/use-club-settings";
@@ -101,28 +112,38 @@ export function ReservationForm({
   onClose,
 }: ReservationFormProps) {
   const [formError, setFormError] = useState("");
+  // Si quien reserva ya eligió el fin a mano; si no, el fin se calcula solo (1 hora o lo que entre).
+  const [endTouched, setEndTouched] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { membership } = useMembership();
   const isProfesor = membership.role === "profesor";
   const { profes } = useProfes();
-  const { tournament_duration_minutes: tournamentDefault } = useClubSettings();
+  const {
+    tournament_duration_minutes: tournamentDefault,
+    night_starts_at: nightStartsAt,
+    open_time,
+    close_time,
+    loaded: settingsLoaded,
+  } = useClubSettings();
+  const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const { prices } = useSportPrices();
 
   // El formulario se monta al abrir el diálogo: arranca ya con los valores.
   const valuesFor = (): ReservationInput => {
     if (mode === "edit" && reservation) {
-      const people = sortedParticipants(reservation).map((p) => ({ name: p.name, socio_id: p.socio_id }));
+      const people = sortedParticipants(reservation).map((p) => ({ name: p.name, player_id: p.player_id }));
       return {
         court_id: reservation.court_id,
         date: reservation.date,
         time: reservation.time,
-        phone: reservation.phone,
+        phone: digitsOnly(reservation.phone),
         kind: reservation.kind,
         profe_user_id: reservation.profe_user_id,
         duration_minutes: reservation.duration_minutes,
         // En turnos de profe, la persona 1 es el profe: se editan solo los alumnos.
         people: reservation.kind === "profe" ? people.slice(1) : people,
-        repeat_weekly: false,
+        // Un turno que ya es fijo se muestra tildado.
+        repeat_weekly: !!reservation.series_id,
       };
     }
     return {
@@ -132,7 +153,7 @@ export function ReservationForm({
       phone: "",
       kind: isProfesor ? "profe" : "standard",
       profe_user_id: isProfesor ? membership.user_id : null,
-      duration_minutes: tournamentDefault,
+      duration_minutes: DEFAULT_DURATION_MINUTES,
       people: [],
       repeat_weekly: false,
     };
@@ -148,18 +169,9 @@ export function ReservationForm({
     name: ["court_id", "kind", "time", "duration_minutes", "people", "date"],
   });
   const selectedCourt = courts.find((court) => court.id === courtId) ?? null;
-  const effectiveDuration = selectedCourt
-    ? kind === "torneo"
-      ? Number(duration) || tournamentDefault
-      : mode === "edit" && reservation && reservation.kind !== "torneo"
-        ? reservation.duration_minutes
-        : selectedCourt.slot_duration
-    : 0;
-  const slotPrice = selectedCourt
-    ? quotePrice(prices[selectedCourt.type], kind, effectiveDuration)
-    : 0;
-  const deposit = selectedCourt ? depositFor(prices[selectedCourt.type], slotPrice) : 0;
   const isCancelled = reservation?.status === "cancelled";
+  /** Turno de un fijo semanal: la opción de repetir va tildada y no se cambia desde acá. */
+  const isFixed = mode === "edit" && !!reservation?.series_id;
 
   // Si el formulario queda montado y cambia la reserva o se reabre, se resetea.
   const resetKey = `${open}-${mode}-${reservation?.id ?? ""}-${initialCourtId}-${initialTime}-${initialDate}`;
@@ -168,50 +180,135 @@ export function ReservationForm({
     if (lastResetKey.current === resetKey) return;
     lastResetKey.current = resetKey;
     setFormError("");
+    setEndTouched(false);
     if (open) form.reset(valuesFor());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
-  // La duración estándar de torneo llega después de montar: si todavía no se tocó, se aplica.
-  useEffect(() => {
-    if (mode === "create" && !form.getFieldState("duration_minutes").isDirty) {
-      form.setValue("duration_minutes", tournamentDefault);
-    }
-  }, [tournamentDefault, mode, form]);
-
+  // Horarios de inicio: cada 30 min dentro del horario del club (más el actual si quedó fuera).
   const timeOptions = useMemo(() => {
-    if (!selectedCourt) return [];
-    const slots = getCourtSlots(selectedCourt);
+    const times = startTimes(hours);
     const current = form.getValues("time");
-    if (current && !slots.includes(current)) {
-      return [...slots, current].sort();
+    return current && !times.includes(current) ? [...times, current].sort() : times;
+  }, [hours, form]);
+
+  // Turnos del día elegido: los que ya tiene la planilla, o los de otra fecha si se cambió en el formulario.
+  const supabase = useMemo(() => createClient(), []);
+  const [otherDay, setOtherDay] = useState<{ date: string; list: Reservation[] } | null>(null);
+  useEffect(() => {
+    if (!open || !date || date === initialDate) {
+      setOtherDay(null);
+      return;
     }
-    return slots;
-  }, [selectedCourt, form]);
+    let cancelled = false;
+    ensureFixedReservations(supabase, membership.club_id, date)
+      .then(() =>
+        supabase
+          .from("reservations")
+          .select("*")
+          .eq("club_id", membership.club_id)
+          .eq("date", date)
+          .eq("status", "active")
+      )
+      .then(({ data }) => {
+        if (!cancelled) setOtherDay({ date, list: (data ?? []) as Reservation[] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, date, initialDate, supabase, membership.club_id]);
 
-  // Duraciones de torneo posibles desde el horario elegido hasta el cierre de la cancha.
+  const dayReservations = useMemo(
+    () =>
+      date === initialDate
+        ? activeReservations.filter((r) => r.date === date)
+        : otherDay?.date === date
+          ? otherDay.list
+          : [],
+    [activeReservations, date, initialDate, otherDay]
+  );
+
+  // Turnos de una cancha en el día elegido, sin el que se edita: limitan cuánto puede durar el nuevo.
+  const reservationsOfCourt = (id: string) =>
+    dayReservations.filter((r) => r.court_id === id && r.id !== reservation?.id);
+
+  // Las canchas se habilitan según el horario: solo aparecen las que tienen lugar (al menos 30 min) desde ahí.
+  const courtsFreeAt = (at: string): Court[] => {
+    if (!at || !settingsLoaded) return courts;
+    const originalSlot = mode === "edit" && reservation && reservation.time === at && reservation.date === date;
+    return courts.filter(
+      (c) =>
+        maxDurationAt(hours, reservationsOfCourt(c.id), at) >= MIN_DURATION_MINUTES ||
+        (originalSlot && c.id === reservation.court_id)
+    );
+  };
+  const availableCourts = courtsFreeAt(time);
+
+  // Si al cambiar la fecha o las reservas la cancha elegida ya no tiene lugar a ese horario, pasa a la primera libre.
+  const availableKey = availableCourts.map((c) => c.id).join(",");
+  useEffect(() => {
+    if (isCancelled || !settingsLoaded || !time || availableCourts.length === 0) return;
+    if (!availableCourts.some((c) => c.id === courtId)) {
+      form.setValue("court_id", availableCourts[0].id, { shouldValidate: form.formState.isSubmitted });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableKey, time, courtId]);
+
+  const courtReservations = useMemo(
+    () => dayReservations.filter((r) => r.court_id === courtId && r.id !== reservation?.id),
+    [dayReservations, courtId, reservation?.id]
+  );
+
+  // Duraciones posibles desde el horario elegido: de 30 min hasta el siguiente turno, el cierre o 6 h.
+  const maxDuration = time ? maxDurationAt(hours, courtReservations, time) : 0;
   const durationOptions = useMemo(() => {
-    if (!selectedCourt || !time) return [];
-    const available = timeToMinutes(selectedCourt.close_time) - timeToMinutes(time);
     const options: number[] = [];
-    for (let m = 30; m <= Math.min(360, available); m += 30) options.push(m);
-    return options;
-  }, [selectedCourt, time]);
+    for (let m = MIN_DURATION_MINUTES; m <= maxDuration; m += MIN_DURATION_MINUTES) options.push(m);
+    // En una edición, la duración actual sigue siendo una opción aunque hoy no entre.
+    const current = Number(duration);
+    if (mode === "edit" && current && !options.includes(current)) options.push(current);
+    return options.sort((a, b) => a - b);
+  }, [maxDuration, duration, mode]);
 
-  // Si cambia la cancha y el horario deja de ser válido, se recoloca.
+  // La duración se calcula sin depender de efectos: 1 hora por defecto (un torneo, la de Políticas), o la que
+  // eligió quien reserva; siempre acotada a lo que entra hasta el siguiente turno o el cierre.
+  const defaultDuration = kind === "torneo" ? tournamentDefault : DEFAULT_DURATION_MINUTES;
+  const atOriginalSlot =
+    mode === "edit" &&
+    !!reservation &&
+    reservation.time === time &&
+    reservation.court_id === courtId &&
+    reservation.date === date;
+  const wantedDuration = mode === "create" && !endTouched ? defaultDuration : Number(duration) || defaultDuration;
+  const effectiveDuration = selectedCourt
+    ? settingsLoaded && maxDuration > 0 && wantedDuration > maxDuration && !atOriginalSlot
+      ? maxDuration
+      : wantedDuration
+    : 0;
+  // El precio de día o de noche se elige por la hora de inicio del turno.
+  const slotPrice = selectedCourt
+    ? quotePrice(prices[selectedCourt.type], kind, effectiveDuration, time, nightStartsAt)
+    : 0;
+  const startsAtNight = !!time && isNight(time, nightStartsAt);
+  const deposit = selectedCourt ? depositFor(prices[selectedCourt.type], kind, slotPrice) : 0;
+
+  // Al cambiar el inicio, el fin vuelve a completarse solo (1 hora, o lo que entre) y, si la cancha elegida no
+  // tiene lugar a ese horario, pasa a la primera que sí. En una edición se conserva la duración.
+  const handleTimeChange = (next: string) => {
+    form.setValue("time", next, { shouldValidate: form.formState.isSubmitted });
+    setEndTouched(false);
+    const free = courtsFreeAt(next);
+    const target = free.find((c) => c.id === courtId) ?? free[0];
+    if (target && target.id !== courtId) form.setValue("court_id", target.id);
+  };
+
   const handleCourtChange = (nextCourtId: string) => {
     form.setValue("court_id", nextCourtId);
-    const court = courts.find((c) => c.id === nextCourtId);
-    if (court && !getCourtSlots(court).includes(form.getValues("time"))) {
-      form.setValue("time", "");
-    }
   };
 
   const handleKindChange = (next: ReservationInput["kind"]) => {
     form.setValue("kind", next, { shouldValidate: form.formState.isSubmitted });
-    if (next === "torneo" && (mode === "create" || reservation?.kind !== "torneo")) {
-      form.setValue("duration_minutes", tournamentDefault);
-    }
+    setEndTouched(false);
     if (next !== "profe") form.setValue("profe_user_id", null);
     if (next === "torneo") form.setValue("repeat_weekly", false);
   };
@@ -221,7 +318,7 @@ export function ReservationForm({
     // El teléfono del turno toma el de la ficha de quien reserva, si estaba vacío.
     const first = next[0];
     if (kind !== "profe" && first?.phone && !form.getValues("phone")) {
-      form.setValue("phone", first.phone);
+      form.setValue("phone", digitsOnly(first.phone));
     }
   };
 
@@ -233,7 +330,7 @@ export function ReservationForm({
       return;
     }
 
-    const overlaps = activeReservations.some(
+    const overlaps = dayReservations.some(
       (r) =>
         r.court_id === selectedCourt.id &&
         r.date === values.date &&
@@ -247,10 +344,11 @@ export function ReservationForm({
     }
 
     setIsSubmitting(true);
+    const payload = { ...values, duration_minutes: effectiveDuration };
     const result =
       mode === "edit" && reservation
-        ? await updateReservationAction(reservation.id, values)
-        : await createReservationAction(values);
+        ? await updateReservationAction(reservation.id, payload)
+        : await createReservationAction(payload);
     setIsSubmitting(false);
 
     if (!result.success) {
@@ -258,7 +356,7 @@ export function ReservationForm({
       return;
     }
 
-    if (mode === "edit") {
+    if (mode === "edit" && (isFixed || !values.repeat_weekly)) {
       toast.success("Reserva actualizada");
       onSaved(result.reservation!);
     } else if (values.repeat_weekly) {
@@ -364,15 +462,15 @@ export function ReservationForm({
                 <Select
                   onValueChange={handleCourtChange}
                   value={field.value}
-                  disabled={isCancelled}
+                  disabled={isCancelled || availableCourts.length === 0}
                 >
                   <FormControl>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Cancha" />
+                      <SelectValue placeholder={time && availableCourts.length === 0 ? "Sin canchas libres" : "Cancha"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {courts.map((court) => (
+                    {availableCourts.map((court) => (
                       <SelectItem key={court.id} value={court.id}>
                         {court.name}
                       </SelectItem>
@@ -383,20 +481,36 @@ export function ReservationForm({
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Fecha</FormLabel>
+                <FormControl>
+                  <Input type="date" disabled={isCancelled} {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <Controller
             control={form.control}
             name="time"
             render={({ field, fieldState }) => (
               <FormItem>
-                <FormLabel>Horario</FormLabel>
+                <FormLabel>Desde</FormLabel>
                 <Select
-                  onValueChange={field.onChange}
+                  onValueChange={handleTimeChange}
                   value={field.value}
                   disabled={isCancelled || !selectedCourt}
                 >
                   <FormControl>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Horario" />
+                      <SelectValue placeholder="Inicio" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -411,68 +525,64 @@ export function ReservationForm({
               </FormItem>
             )}
           />
+          <Controller
+            control={form.control}
+            name="duration_minutes"
+            render={({ field, fieldState }) => (
+              <FormItem>
+                <FormLabel>Hasta</FormLabel>
+                <Select
+                  key={`${courtId}-${time}-${durationOptions.join(",")}-${effectiveDuration}`}
+                  onValueChange={(v) => {
+                    setEndTouched(true);
+                    field.onChange(Number(v));
+                  }}
+                  value={settingsLoaded && durationOptions.length ? String(effectiveDuration) : ""}
+                  disabled={isCancelled || !settingsLoaded || durationOptions.length === 0}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={!settingsLoaded ? "…" : time && maxDuration === 0 ? "Horario ocupado" : "Fin"} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {durationOptions.map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        {minutesToTime(timeToMinutes(time) + m)} · {durationLabel(m)}
+                        {kind === "torneo" && m === tournamentDefault ? " (estándar)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+              </FormItem>
+            )}
+          />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {kind !== "torneo" && (
           <FormField
             control={form.control}
-            name="date"
+            name="phone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Fecha</FormLabel>
+                <FormLabel>Teléfono</FormLabel>
                 <FormControl>
-                  <Input type="date" disabled={isCancelled} {...field} />
+                  <Input
+                    placeholder="1155551111"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    disabled={isCancelled}
+                    {...field}
+                    onChange={(event) => field.onChange(digitsOnly(event.target.value))}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          {kind === "torneo" ? (
-            <Controller
-              control={form.control}
-              name="duration_minutes"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormLabel>Duración</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(Number(v))}
-                    value={String(field.value)}
-                    disabled={isCancelled || durationOptions.length === 0}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Duración" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {durationOptions.map((m) => (
-                        <SelectItem key={m} value={String(m)}>
-                          {durationLabel(m)}
-                          {m === tournamentDefault ? " (estándar)" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
-                </FormItem>
-              )}
-            />
-          ) : (
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Teléfono</FormLabel>
-                  <FormControl>
-                    <Input placeholder="3415123456" inputMode="tel" disabled={isCancelled} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-        </div>
+        )}
 
         <FormItem>
           <FormLabel htmlFor="reservation-people">{PEOPLE_LABELS[kind]}</FormLabel>
@@ -500,7 +610,15 @@ export function ReservationForm({
               <FormItem>
                 <FormLabel>Teléfono</FormLabel>
                 <FormControl>
-                  <Input placeholder="3415123456" inputMode="tel" disabled={isCancelled} {...field} />
+                  <Input
+                    placeholder="1155551111"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    disabled={isCancelled}
+                    {...field}
+                    onChange={(event) => field.onChange(digitsOnly(event.target.value))}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -508,7 +626,8 @@ export function ReservationForm({
           />
         )}
 
-        {mode === "create" && kind !== "torneo" && (
+        {/* Al editar, un turno suelto puede pasar a repetirse; uno que ya es fijo va tildado y se da de baja desde el detalle. */}
+        {(mode === "create" || (reservation && !isCancelled)) && kind !== "torneo" && (
           <FormField
             control={form.control}
             name="repeat_weekly"
@@ -518,14 +637,16 @@ export function ReservationForm({
                   <Checkbox
                     checked={field.value}
                     onCheckedChange={(checked) => field.onChange(checked === true)}
+                    disabled={isFixed}
                     className="mt-0.5"
                   />
                 </FormControl>
                 <div className="flex flex-col gap-0.5">
                   <FormLabel className="text-[15px] font-semibold">Repetir todas las semanas</FormLabel>
                   <p className="text-[13px] text-pretty text-muted-foreground">
-                    Turno fijo: se reserva todos los {date ? weekdayName(date) : "días"}
-                    {time ? ` a las ${time}` : ""} hasta darlo de baja. Cada fecha se cobra aparte.
+                    {isFixed
+                      ? `Este turno ya es fijo: se repite todos los ${date ? weekdayName(date) : "días"}. Para darlo de baja, usá "Dar de baja el fijo" en el detalle del turno. Los cambios de acá valen solo para esta fecha.`
+                      : `Turno fijo: se reserva todos los ${date ? weekdayName(date) : "días"}${time ? ` a las ${time}` : ""} hasta darlo de baja. Cada fecha se cobra aparte.`}
                   </p>
                 </div>
               </FormItem>
@@ -539,7 +660,8 @@ export function ReservationForm({
               {RESERVATION_KIND_LABELS[kind]} · {durationLabel(effectiveDuration)}
             </span>
             <span className="font-mono">
-              <strong>{formatMoney(slotPrice)}</strong> · seña{" "}
+              <strong>{formatMoney(slotPrice)}</strong>
+              {startsAtNight && " (noche)"} · seña{" "}
               <strong className="text-ball">
                 {deposit > 0 ? formatMoney(deposit) : "no requiere"}
               </strong>
