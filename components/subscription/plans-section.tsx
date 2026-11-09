@@ -69,6 +69,11 @@ export function PlansSection({
                     {courtsRangeText(plans, plan)}
                     {cycle === "yearly" && " · un solo pago al año, con 10 % de descuento"}
                   </p>
+                  {cycle === "yearly" && (
+                    <p className="mt-1 text-sm font-medium">
+                      Equivale a {formatMoney(Math.round(plan.yearly_price / 12))} por mes
+                    </p>
+                  )}
                 </div>
                 <ul className="space-y-2">
                   <li className="flex items-start gap-2 text-sm">

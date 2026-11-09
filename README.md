@@ -70,7 +70,7 @@ pnpm exec tsc --noEmit  # chequeo de tipos rápido
 
 # Suscripciones (dueño del producto; usa SUPABASE_SECRET_KEY de .env.local)
 node scripts/subscription-admin.mjs status <club>
-node scripts/subscription-admin.mjs pay <club> --amount 15000 --cycle monthly [--mp-payment-id ID]
+node scripts/subscription-admin.mjs pay <club> --amount 20000 --cycle monthly [--mp-payment-id ID]
 node scripts/subscription-admin.mjs plan <club> <inicial|club|gran_club>
 ```
 

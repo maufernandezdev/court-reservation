@@ -1,7 +1,7 @@
 // Herramienta del dueño del producto para la suscripción de los clubes (sin pantalla de superadmin).
 //
 //   node scripts/subscription-admin.mjs status <club>
-//   node scripts/subscription-admin.mjs pay <club> --amount 15000 --cycle monthly [--mp-payment-id 123] [--yes]
+//   node scripts/subscription-admin.mjs pay <club> --amount 20000 --cycle monthly [--mp-payment-id 123] [--yes]
 //   node scripts/subscription-admin.mjs plan <club> <inicial|club|gran_club> [--yes]
 //
 // <club> es el id del club o su nombre exacto. Usa NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SECRET_KEY
