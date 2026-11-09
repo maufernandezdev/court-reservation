@@ -79,7 +79,7 @@ Lugar de notas del proyecto: decisiones, pendientes y configuraciones que no se 
 
 - **Seña separada:** en `sport_prices`, `deposit_*` pasó a `profe_deposit_*` (con la configuración que había) y se agregó `public_deposit_*`, apagada. `depositFor(prices, kind, price)` en `lib/pricing.ts` usa la de profes en los turnos de profe y la del público en los estándar y de torneo; es el único punto de cálculo (formulario, detalle, cobro de seña en el servidor, ejemplo de Políticas y tarjetas de Canchas). Sin seña para el tipo de turno no se ofrece cobrarla.
 - **Modal, no pantalla:** los precios se ajustan solo desde el botón "Precios" de `/dashboard/canchas`, que abre `components/prices/prices-dialog.tsx` (horario de la noche y una tarjeta por deporte con precios y las dos señas; `sport-prices-section.tsx`). No hay ruta ni entrada de menú propias. Canchas queda con las tarjetas y "Nueva cancha"; desde la `0016` la cancha ya no tiene duración ni horario propios.
-- **Bienvenida:** el alta del club redirige a `/dashboard/canchas?alta=1`; el modal se abre solo con "¡Bienvenido a saque!" y "Siguiente" muestra los precios iniciales ("Atrás", "Listo"). Al cerrar se limpia el parámetro, así no reaparece al recargar. Actividad describe la seña de cada audiencia en los cambios de precios.
+- **Bienvenida:** el alta del club redirige a `/dashboard/canchas?alta=1`; el modal se abre solo con "¡Bienvenido a Altenor!" y "Siguiente" muestra los precios iniciales ("Atrás", "Listo"). Al cerrar se limpia el parámetro, así no reaparece al recargar. Actividad describe la seña de cada audiencia en los cambios de precios.
 
 ### Precio de noche (migración `0010`, cambio `add-night-pricing`, 2026-10-18)
 
@@ -159,9 +159,9 @@ Reemplaza el modelo "el club es el id del dueño" de `0004` (ver sección siguie
 - Mobile (`< lg`): tabs por cancha + lista vertical de sus turnos y huecos libres (dentro del horario del club), sin scroll horizontal. Crear/editar/cobrar/cancelar funciona igual en ambas vistas (mismo `ReservationDialog`).
 - Buscador de disponibilidad: dialog con fecha, franja opcional y tipo; lista franjas libres (`findFreeSlots`) y crea la reserva directo.
 
-### Identidad visual "saque" (cambio `apply-saque-visual-design`, 2026-10-06)
+### Identidad visual (cambio `apply-saque-visual-design`, 2026-10-06)
 
-- **Diseño de referencia:** canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (13 pantallas). Nombre de producto de trabajo: **saque**, centralizado en `lib/brand.ts` (cambiarlo ahí renombra login, menú y título del navegador). Desde `0007` el nombre del club sale de `clubs.name` (antes, de la constante `CLUB_NAME`).
+- **Diseño de referencia:** canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF (13 pantallas). Nombre de producto: **Altenor** (desde 2026-11-09; el nombre de trabajo anterior era "saque"), centralizado en `lib/brand.ts` (cambiarlo ahí renombra login, menú y título del navegador). La landing usa el mismo nombre en `src/config.ts`. Desde `0007` el nombre del club sale de `clubs.name` (antes, de la constante `CLUB_NAME`).
 - **Tokens** en `app/globals.css` (HSL, formato shadcn): piso `#F6F7F3`, tinta `#101418`, pelota `#D7F04A` (`bg-ball`), línea `#2C55D1` (`--ring`, `bg-line`), error `#C2361F`, a favor `#1F7A4D`. `--accent` es el **gris de hover** de shadcn, no el amarillo: el amarillo de marca es `ball`. Los estilos globales (`*`, `body`) van dentro de `@layer base`; fuera de la capa pisan todas las utilidades de color de borde. Sin modo oscuro.
 - **Tipografías** (`next/font/google` en `app/layout.tsx`): Archivo con eje `wdth` (`font-display font-stretch-[125%]`, títulos y números), Geist (interfaz), Geist Mono (horarios, montos, registros).
 - **Estados de turno:** una sola fuente en `lib/reservation-tone.ts` (`toneFor`, `toneClasses`) + variantes `paid/deposit/pending/cancelled/fixed` del `Badge`. Se distinguen por luminosidad: pagada = tinta, señada = pelota, pendiente = punteado, cancelada = rayado (`bg-hatch`).

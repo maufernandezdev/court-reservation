@@ -70,7 +70,7 @@ export function PricesDialog({
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="font-display text-2xl font-extrabold tracking-[-0.02em]">
-                ¡Bienvenido a saque!
+                ¡Bienvenido a Altenor!
               </DialogTitle>
               <DialogDescription>
                 Tu club <strong className="text-foreground">{clubName}</strong> ya está creado. Antes de empezar a

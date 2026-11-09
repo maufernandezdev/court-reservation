@@ -1,4 +1,4 @@
-# AGENTS.md — Club Deportivo Central
+# AGENTS.md — Altenor
 
 Instrucciones para agentes de IA que trabajen en este repositorio.
 

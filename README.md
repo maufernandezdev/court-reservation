@@ -1,6 +1,6 @@
-# saque — reservas de canchas para clubes
+# Altenor — reservas de canchas para clubes
 
-Plataforma para que un club (tenis, pádel, fútbol y más) gestione su planilla de turnos, cobros, cancelaciones con penalidad y equipo. "saque" es el nombre de trabajo del producto (se cambia en `lib/brand.ts`); el primer club que la usa es un club de tenis.
+Plataforma para que un club (tenis, pádel, fútbol y más) gestione su planilla de turnos, cobros, cancelaciones con penalidad y equipo. El nombre del producto, **Altenor**, se define en `lib/brand.ts` y coincide con la landing (`court-reservation-landing`); el primer club que la usa es un club de tenis.
 
 - **Diseño de referencia:** canvas https://claude.ai/artifact/HzX1cWWmfHrkUH27QnMidF
 - **Notas, decisiones y pendientes:** [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md)

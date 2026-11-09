@@ -1,8 +1,9 @@
 /**
- * Marca del producto (nombre de trabajo). Cambiar acá renombra login,
- * registro, menú y título del navegador.
+ * Marca del producto. Cambiar acá renombra login, registro, menú y título
+ * del navegador. La landing (`court-reservation-landing/src/config.ts`) usa
+ * el mismo nombre.
  */
-export const PRODUCT_NAME = "saque";
+export const PRODUCT_NAME = "Altenor";
 
 export const PRODUCT_TAGLINE = "Cada turno, en su lugar.";
 

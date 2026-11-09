@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *), &:has(.dark));
 
 /*
- * Identidad visual "saque" (ver openspec/changes/apply-saque-visual-design/design.md §1).
+ * Identidad visual de Altenor (ver openspec/changes/apply-saque-visual-design/design.md §1).
  * Valores HSL sin envolver: se consumen como hsl(var(--x)) en @theme.
  *   piso  #F6F7F3 · tinta #101418 · pelota #D7F04A · línea #2C55D1
  * `--accent` queda como gris de hover (semántica de shadcn); el amarillo de

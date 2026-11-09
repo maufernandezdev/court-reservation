@@ -69,7 +69,7 @@ export default async function BienvenidaPage({
       <div className="flex flex-col gap-6">
         <AuthHeading
           eyebrow="PASO 2 DE 3"
-          title="¿Cómo vas a usar saque?"
+          title="¿Cómo vas a usar Altenor?"
           description="Tu cuenta ya está lista. Ahora elegí si das de alta tu club o si te suman a uno."
         />
 
@@ -97,7 +97,7 @@ export default async function BienvenidaPage({
                 <strong className="text-lg">Me van a invitar</strong>
               </span>
               <span className="text-[15px] text-pretty text-muted-foreground">
-                Trabajás en un club que ya usa saque: el administrador te suma
+                Trabajás en un club que ya usa Altenor: el administrador te suma
                 con un link por WhatsApp.
               </span>
             </span>
