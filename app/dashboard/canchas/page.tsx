@@ -40,25 +40,24 @@ export default async function CanchasPage({
   const { alta } = await searchParams;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("courts")
-    .select("*")
-    .eq("club_id", membership.club_id)
-    .eq("active", true)
-    .order("created_at", { ascending: true });
-
-  const { data: pricesData } = await supabase
-    .from("sport_prices")
-    .select("*")
-    .eq("club_id", membership.club_id);
+  // Canchas, precios y horarios no dependen entre sí: en paralelo.
+  const [{ data, error }, { data: pricesData }, { data: settingsData }] = await Promise.all([
+    supabase
+      .from("courts")
+      .select("*")
+      .eq("club_id", membership.club_id)
+      .eq("active", true)
+      .order("created_at", { ascending: true }),
+    supabase.from("sport_prices").select("*").eq("club_id", membership.club_id),
+    supabase
+      .from("settings")
+      .select("night_starts_at, open_time, close_time")
+      .eq("club_id", membership.club_id)
+      .maybeSingle(),
+  ]);
   const priceRows = (pricesData ?? []) as SportPrices[];
   const prices = pricesBySport(priceRows);
 
-  const { data: settingsData } = await supabase
-    .from("settings")
-    .select("night_starts_at, open_time, close_time")
-    .eq("club_id", membership.club_id)
-    .maybeSingle();
   const nightStartsAt = normalizeTime(settingsData?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT);
   const hours = {
     open_time: normalizeTime(settingsData?.open_time ?? DEFAULT_CLUB_HOURS.open_time),

@@ -15,12 +15,14 @@ function localKey(date: Date): string {
 export async function ensureFixedReservations(
   supabase: SupabaseClient,
   clubId: string,
-  dateKey: string
+  dateKey: string,
+  /** "Hoy" ya calculado (en el servidor, el del club: ver `clubTodayKey`). Sin indicar, el del dispositivo. */
+  todayKey?: string
 ): Promise<void> {
-  const today = new Date();
+  const today = todayKey ? new Date(`${todayKey}T12:00:00`) : new Date();
   const limit = new Date(today);
   limit.setDate(limit.getDate() + MAX_DAYS_AHEAD);
-  if (dateKey < localKey(today) || dateKey > localKey(limit)) return;
+  if (dateKey < (todayKey ?? localKey(today)) || dateKey > localKey(limit)) return;
 
   const { error } = await supabase.rpc("ensure_series_until", {
     p_club_id: clubId,

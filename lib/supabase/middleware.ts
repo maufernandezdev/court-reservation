@@ -23,9 +23,11 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh the auth token on every request. Do not run code between
-  // createServerClient and getUser() — the client auto-refreshes tokens.
-  await supabase.auth.getUser();
+  // Refresca el token si venció. No poner código entre createServerClient y
+  // getClaims(): el cliente renueva los tokens ahí. Con claves de firma
+  // asimétricas (el proyecto usa ES256) getClaims verifica el JWT localmente,
+  // sin ir al servidor de Auth en cada request como hacía getUser().
+  await supabase.auth.getClaims();
 
   return response;
 }

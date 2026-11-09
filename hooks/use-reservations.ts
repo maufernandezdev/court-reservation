@@ -1,41 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { RESERVATION_SELECT, type Reservation } from "@/lib/reservations";
+import type { Reservation } from "@/lib/reservations";
+import { queryReservations } from "@/lib/club-data";
 import { useMembership } from "@/hooks/use-membership";
-import { ensureFixedReservations } from "@/lib/series";
 
-export function useReservations(date: string) {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const supabase = createClient();
+export type InitialReservations = { date: string; reservations: Reservation[]; error?: string };
+
+/**
+ * Turnos del club en una fecha. Con `initial` (traídos por el servidor para esa fecha)
+ * no se vuelven a pedir al montar; al cambiar de fecha se piden desde el cliente.
+ */
+export function useReservations(date: string, initial?: InitialReservations) {
   const clubId = useMembership().membership.club_id;
+  const hasInitial = initial?.date === date;
+  const [reservations, setReservations] = useState<Reservation[]>(
+    hasInitial ? initial.reservations : []
+  );
+  const [isLoading, setIsLoading] = useState(!hasInitial);
+  const [error, setError] = useState(hasInitial ? (initial.error ?? "") : "");
+  // Fecha cuyos datos ya están en el estado (evita pedir de nuevo lo que mandó el servidor).
+  const loadedDate = useRef<string | null>(hasInitial ? date : null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
-    // Los turnos fijos se materializan al consultar la fecha.
-    await ensureFixedReservations(supabase, clubId, date);
-    const { data, error } = await supabase
-      .from("reservations")
-      .select(RESERVATION_SELECT)
-      .eq("club_id", clubId)
-      .eq("date", date)
-      .order("time", { ascending: true });
-
-    if (error) {
-      setError("No se pudieron cargar las reservas.");
-    } else {
-      setError("");
-      setReservations((data ?? []) as Reservation[]);
-    }
+    const result = await queryReservations(createClient(), clubId, date);
+    setError(result.error);
+    if (!result.error) setReservations(result.reservations);
+    loadedDate.current = date;
     setIsLoading(false);
-  }, [supabase, clubId, date]);
+  }, [clubId, date]);
 
   useEffect(() => {
+    if (loadedDate.current === date) return;
     load();
-  }, [load]);
+  }, [date, load]);
 
   const upsertLocal = useCallback(
     (reservation: Reservation) => {

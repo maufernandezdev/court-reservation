@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -32,18 +33,22 @@ export async function fetchMemberships(
 
 /**
  * Contexto de sesión: usuario autenticado + su membresía en el club activo.
+ * Con `cache` se resuelve una sola vez por request aunque lo pidan el layout y la página.
  * El club activo es el de la cookie `club_activo`; si no hay cookie o ya no es
  * miembro de ese club, la membresía más reciente.
  */
-export async function getSessionContext(): Promise<SessionContext> {
+export const getSessionContext = cache(async (): Promise<SessionContext> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims verifica la firma del JWT localmente (claves asimétricas), sin el
+  // viaje al servidor de Auth de getUser(). Los datos igual pasan por RLS.
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
 
-  if (!user) {
+  if (!claims?.sub) {
     return { supabase, user: null, membership: null, memberships: [] };
   }
+
+  const user = { id: claims.sub, email: claims.email };
 
   const memberships = await fetchMemberships(supabase, user.id);
   const activeClubId = (await cookies()).get(ACTIVE_CLUB_COOKIE)?.value;
@@ -56,7 +61,7 @@ export async function getSessionContext(): Promise<SessionContext> {
     membership,
     memberships,
   };
-}
+});
 
 /**
  * Exige sesión activa con rol >= `minimum` en el club activo. Lanza Error con mensaje en español.

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import AuthGuard from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,7 +75,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <AuthGuard>
+    <>
       <div className="space-y-4">
         <PageHeader
           title="Notificaciones"
@@ -155,6 +154,6 @@ export default function NotificationsPage() {
           </CardContent>
         </Card>
       </div>
-    </AuthGuard>
+    </>
   );
 }

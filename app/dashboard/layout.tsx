@@ -24,13 +24,15 @@ export default async function DashboardLayout({
     redirect("/bienvenida");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("user_id, full_name, avatar_path, avatar_updated_at")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const subscription = await fetchSubscriptionInfo(supabase, membership.club_id);
+  // Perfil y suscripción no dependen entre sí: en paralelo.
+  const [{ data: profile }, subscription] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("user_id, full_name, avatar_path, avatar_updated_at")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    fetchSubscriptionInfo(supabase, membership.club_id),
+  ]);
   const notice = subscriptionNotice(subscription, membership.role === "admin");
 
   return (

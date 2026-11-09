@@ -1,37 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Court } from "@/lib/courts";
+import { queryCourts } from "@/lib/club-data";
 import { useMembership } from "@/hooks/use-membership";
+import { useClubDataSeed } from "@/components/club/club-data-provider";
 
+/** Canchas activas del club. Si la página las trajo en el servidor, no se piden de nuevo. */
 export function useCourts() {
-  const [courts, setCourts] = useState<Court[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const supabase = createClient();
   const clubId = useMembership().membership.club_id;
+  const seed = useClubDataSeed(clubId)?.courts;
+  const router = useRouter();
+
+  const [courts, setCourts] = useState<Court[]>([]);
+  const [isLoading, setIsLoading] = useState(!seed);
+  const [error, setError] = useState("");
 
   const loadCourts = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("courts")
-      .select("*")
-      .eq("club_id", clubId)
-      .eq("active", true)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      setError("No se pudieron cargar las canchas.");
-    } else {
-      setError("");
-      setCourts((data ?? []) as Court[]);
-    }
+    const result = await queryCourts(createClient(), clubId);
+    setError(result.error);
+    if (!result.error) setCourts(result.courts);
     setIsLoading(false);
-  }, [supabase, clubId]);
+  }, [clubId]);
 
   useEffect(() => {
-    loadCourts();
-  }, [loadCourts]);
+    if (!seed) loadCourts();
+  }, [seed, loadCourts]);
 
+  if (seed) {
+    return { courts: seed, isLoading: false, error: "", refetch: async () => router.refresh() };
+  }
   return { courts, isLoading, error, refetch: loadCourts };
 }

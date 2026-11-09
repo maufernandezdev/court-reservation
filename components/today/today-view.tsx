@@ -1,24 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { toast } from "sonner";
 import { LandPlot, MessageCircle, Plus } from "lucide-react";
-import AuthGuard from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   CourtTypeFilter,
   type CourtTypeFilterValue,
 } from "@/components/court-type-filter";
-import { ReservationDialog } from "@/components/reservations/reservation-dialog";
 import { useCourts } from "@/hooks/use-courts";
-import { useReservations } from "@/hooks/use-reservations";
+import { useReservations, type InitialReservations } from "@/hooks/use-reservations";
 import { useMembership } from "@/hooks/use-membership";
-import { useDayPayments } from "@/hooks/use-day-payments";
+import { useDayPayments, type InitialDayPayments } from "@/hooks/use-day-payments";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
 import type { Reservation } from "@/lib/reservations";
 import { formatMoney } from "@/lib/pricing";
@@ -43,6 +44,13 @@ import { ReservationMarks } from "@/components/reservations/reservation-marks";
 import { useProfeColors } from "@/hooks/use-profes";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { cn } from "@/lib/utils";
+
+// El formulario del turno (zod, react-hook-form, cmdk) se carga aparte: recién hace
+// falta al tocar "Nuevo turno" o "Cobrar".
+const ReservationDialog = dynamic(
+  () => import("@/components/reservations/reservation-dialog").then((m) => m.ReservationDialog),
+  { ssr: false }
+);
 
 const UPCOMING_LIMIT = 8;
 const GAPS_LIMIT = 5;
@@ -135,8 +143,25 @@ function CourtNowTile({
   );
 }
 
-export default function DashboardIndexPage() {
+/**
+ * Hoy en el club. La página (Server Component) trae los turnos del día y sus cobros, y
+ * las canchas, políticas, precios y profes llegan por `ClubDataProvider`; acá queda
+ * solo lo interactivo (reloj, filtros, alta y cobro de turnos).
+ */
+export function TodayView({
+  initialReservations,
+  initialPayments,
+  courtsError: initialCourtsError,
+}: {
+  initialReservations: InitialReservations;
+  initialPayments: InitialDayPayments;
+  courtsError: string;
+}) {
   const now = useNow();
+  // La fecha y hora del encabezado y el resumen del día dependen de la hora del
+  // dispositivo: no se pintan en el HTML del servidor (otra zona horaria) para no romper
+  // la hidratación.
+  const hydrated = useHydrated();
   const nowMinutes = minutesOfDay(now);
   const todayKey = dateKey(now);
   const [courtTypeFilter, setCourtTypeFilter] =
@@ -145,7 +170,8 @@ export default function DashboardIndexPage() {
   // "Nuevo turno" y "Reservar" abren el alta acá mismo (mismo diálogo que la planilla).
   const [creating, setCreating] = useState<{ courtId: string; time: string } | null>(null);
 
-  const { courts, isLoading: isLoadingCourts, error: courtsError } = useCourts();
+  const { courts, isLoading: isLoadingCourts, error } = useCourts();
+  const courtsError = initialCourtsError || error;
   const { open_time, close_time } = useClubSettings();
   const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const { membership } = useMembership();
@@ -155,9 +181,10 @@ export default function DashboardIndexPage() {
     isLoading: isLoadingReservations,
     error: reservationsError,
     upsertLocal,
-  } = useReservations(todayKey);
+  } = useReservations(todayKey, initialReservations);
   const { payments, refetch: refetchPayments } = useDayPayments(
-    reservations.map((r) => r.id)
+    reservations.map((r) => r.id),
+    initialPayments
   );
 
   const canSeeMoney = membership ? membership.role !== "profesor" : false;
@@ -218,19 +245,22 @@ export default function DashboardIndexPage() {
   const loadError = courtsError || reservationsError;
 
   return (
-    <AuthGuard>
       <div className="flex flex-col gap-7">
         <PageHeader
           title="Hoy en el club"
-          eyebrow={`${now.toLocaleDateString("es-AR", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })} · ${now.toLocaleTimeString("es-AR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          })}`}
+          eyebrow={
+            hydrated
+              ? `${now.toLocaleDateString("es-AR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })} · ${now.toLocaleTimeString("es-AR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                })}`
+              : "\u00a0"
+          }
           actions={
             <>
               <CourtTypeFilter
@@ -261,9 +291,13 @@ export default function DashboardIndexPage() {
           </Alert>
         )}
 
-        {isLoading ? (
-          <div className="flex min-h-[30vh] items-center justify-center">
-            <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        {/* Los datos vienen del servidor; el resumen depende de la hora del dispositivo y se
+            dibuja apenas hidrata (el HTML del servidor muestra el esqueleto). */}
+        {isLoading || !hydrated ? (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-4" aria-hidden="true">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl" />
+            ))}
           </div>
         ) : courts.length === 0 ? (
           <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed bg-card p-8 text-center">
@@ -538,6 +572,5 @@ export default function DashboardIndexPage() {
           />
         )}
       </div>
-    </AuthGuard>
   );
 }

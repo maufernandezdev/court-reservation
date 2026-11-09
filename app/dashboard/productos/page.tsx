@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import AuthGuard from "@/components/auth-guard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +20,7 @@ export default function ProductsPage() {
   const [barcode, setBarcode] = useState("");
 
   return (
-    <AuthGuard>
+    <>
       <div className="space-y-4">
         <PageHeader
           title="Productos"
@@ -69,7 +68,7 @@ export default function ProductsPage() {
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell>{product.category}</TableCell>
                     <TableCell className="text-right">{product.stock}</TableCell>
-                    <TableCell className="text-right">${product.price.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">${product.price.toLocaleString("es-AR")}</TableCell>
                     <TableCell>
                       {isOut ? (
                         <Badge variant="destructive">Sin stock</Badge>
@@ -86,6 +85,6 @@ export default function ProductsPage() {
           </Table>
         </div>
       </div>
-    </AuthGuard>
+    </>
   );
 }

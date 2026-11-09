@@ -1,44 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { queryProfes, type Profe } from "@/lib/club-data";
 import { useMembership } from "@/hooks/use-membership";
+import { useClubDataSeed } from "@/components/club/club-data-provider";
 
-export type Profe = { user_id: string; name: string; color: string | null };
+export type { Profe };
 
-/** Profesores del club activo (para turnos de profe y sus colores en la planilla). */
+/**
+ * Profesores del club activo (para turnos de profe y sus colores en la planilla). Si la
+ * página los trajo en el servidor, todos los componentes usan esos sin pedirlos de nuevo.
+ */
 export function useProfes() {
-  const [profes, setProfes] = useState<Profe[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
   const clubId = useMembership().membership.club_id;
+  const seed = useClubDataSeed(clubId)?.profes;
+  const [profes, setProfes] = useState<Profe[]>([]);
+  const [isLoading, setIsLoading] = useState(!seed);
 
   useEffect(() => {
+    if (seed) return;
     let cancelled = false;
-    supabase
-      .from("memberships")
-      .select("user_id, full_name, email, color")
-      .eq("club_id", clubId)
-      .eq("role", "profesor")
-      .then(({ data }) => {
-        if (cancelled) return;
-        setProfes(
-          ((data ?? []) as { user_id: string; full_name: string; email: string; color: string | null }[])
-            .map((m) => ({ user_id: m.user_id, name: m.full_name || m.email, color: m.color }))
-            .sort((a, b) => a.name.localeCompare(b.name))
-        );
-        setIsLoading(false);
-      });
+    queryProfes(createClient(), clubId).then((next) => {
+      if (cancelled) return;
+      setProfes(next);
+      setIsLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [supabase, clubId]);
+  }, [seed, clubId]);
 
+  if (seed) return { profes: seed, isLoading: false };
   return { profes, isLoading };
 }
 
 /** Color de cada profe del club, por `user_id`. */
 export function useProfeColors(): Map<string, string | null> {
   const { profes } = useProfes();
-  return new Map(profes.map((p) => [p.user_id, p.color]));
+  return useMemo(() => new Map(profes.map((p) => [p.user_id, p.color])), [profes]);
 }

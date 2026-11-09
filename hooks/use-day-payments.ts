@@ -1,39 +1,42 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { DayPayment } from "@/lib/daily-overview";
+import { idsKey, queryDayPayments } from "@/lib/club-data";
 import { useMembership } from "@/hooks/use-membership";
 
-/** Cobros (no liberados) de un conjunto de turnos, para totales de Hoy y la planilla. */
-export function useDayPayments(reservationIds: string[]) {
-  const [payments, setPayments] = useState<DayPayment[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClient();
+export type InitialDayPayments = { idsKey: string; payments: DayPayment[] };
+
+/**
+ * Cobros (no liberados) de un conjunto de turnos, para totales de Hoy y la planilla.
+ * Con `initial` (traídos por el servidor para esos mismos turnos) no se piden al montar.
+ */
+export function useDayPayments(reservationIds: string[], initial?: InitialDayPayments) {
   const clubId = useMembership().membership.club_id;
   // Clave estable para no recargar si llega el mismo conjunto en otro array.
-  const idsKey = [...reservationIds].sort().join(",");
+  const key = idsKey(reservationIds);
+  const hasInitial = initial?.idsKey === key;
+  const [payments, setPayments] = useState<DayPayment[]>(hasInitial ? initial.payments : []);
+  const [isLoading, setIsLoading] = useState(false);
+  const loadedKey = useRef<string | null>(hasInitial ? key : null);
 
   const load = useCallback(async () => {
-    const ids = idsKey ? idsKey.split(",") : [];
+    const ids = key ? key.split(",") : [];
+    loadedKey.current = key;
     if (ids.length === 0) {
       setPayments([]);
       return;
     }
     setIsLoading(true);
-    const { data } = await supabase
-      .from("payments")
-      .select("reservation_id, amount, released")
-      .eq("club_id", clubId)
-      .in("reservation_id", ids)
-      .eq("released", false);
-    setPayments((data ?? []) as DayPayment[]);
+    setPayments(await queryDayPayments(createClient(), clubId, ids));
     setIsLoading(false);
-  }, [supabase, clubId, idsKey]);
+  }, [clubId, key]);
 
   useEffect(() => {
+    if (loadedKey.current === key) return;
     load();
-  }, [load]);
+  }, [key, load]);
 
   return { payments, isLoading, refetch: load };
 }
