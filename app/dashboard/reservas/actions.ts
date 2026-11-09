@@ -19,6 +19,7 @@ import { DEFAULT_NIGHT_STARTS_AT, depositFor, quotePrice, type SportPrices } fro
 import {
   DEFAULT_CLUB_HOURS,
   fitsClubHours,
+  maxDurationForKind,
   normalizeTime,
   rangesOverlap,
   timeToMinutes,
@@ -272,7 +273,11 @@ async function prepareReservation(
     }
   }
 
-  // La duración la elige quien reserva (de 30 min a 6 h, en pasos de 30; el esquema ya la validó).
+  // La duración la elige quien reserva (de 30 min a 6 h, u 8 h en torneos, en pasos de 30).
+  // El esquema la validó con el tipo pedido; un profe siempre carga turnos de profe: tope de 6 h.
+  if (input.duration_minutes > maxDurationForKind(kind)) {
+    throw new Error("Los turnos que no son de torneo pueden durar hasta 6 h.");
+  }
   const duration = input.duration_minutes;
 
   // El turno empieza en :00 o :30 y entra en el horario del club.

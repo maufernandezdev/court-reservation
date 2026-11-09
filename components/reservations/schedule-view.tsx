@@ -19,6 +19,7 @@ import { useCourts } from "@/hooks/use-courts";
 import { useReservations, type InitialReservations } from "@/hooks/use-reservations";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { PageSkeleton } from "@/components/shell/page-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMembership } from "@/hooks/use-membership";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
@@ -309,7 +310,9 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
     setSelectedId(null);
   };
 
-  const isLoading = isLoadingCourts || isLoadingReservations || isLoadingMembership;
+  // Canchas y club vienen del servidor; los turnos se piden de nuevo al cambiar de día, y
+  // mientras tanto queda la planilla con su cabecera y un esqueleto en lugar de los turnos.
+  const isLoading = isLoadingCourts || isLoadingMembership;
   const hydrated = useHydrated();
 
   // Los datos ya vinieron del servidor, pero la planilla depende de la hora y la fecha del
@@ -317,13 +320,7 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
   // ninguna consulta. El HTML del servidor muestra el esqueleto.
   if (!hydrated) return <PageSkeleton variant="schedule" />;
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
-  }
+  if (isLoading) return <PageSkeleton variant="schedule" />;
 
   if (courts.length === 0) {
     return (
@@ -437,6 +434,9 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
           <StatusLegend showDeposit={depositConfigured || activeReservations.some((r) => r.payment_status === "senada")} />
           <div className="flex items-start">
             <div className="min-w-0 flex-1">
+              {isLoadingReservations ? (
+                <ScheduleGridSkeleton courts={visibleCourts.length} />
+              ) : (
               <ScheduleGrid
                 courts={visibleCourts}
                 reservations={activeReservations.filter((r) =>
@@ -448,6 +448,7 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
                 onSelect={(r) => setSelectedId(r.id)}
                 onCreate={openCreateDialog}
               />
+              )}
             </div>
             {/* El panel entra de costado (framer-motion): el ancho crece y el contenido se desliza desde la derecha.
                 La envoltura no cambia al elegir otro turno, así que la animación solo corre al abrir y al cerrar. */}
@@ -499,6 +500,7 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
             hours={hours}
             nowMinutes={isToday ? minutesOfDay(now) : null}
             onSelectDate={(key) => setSelectedDate(parseDateKey(key))}
+            loading={isLoadingReservations}
             onSelect={(r) => setSelectedId(r.id)}
             onCreate={openCreateDialog}
           />
@@ -543,6 +545,29 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
         defaultDate={selectedDateKey}
         onSelect={(courtId, time, date) => openCreateDialog(courtId, time, date)}
       />
+    </div>
+  );
+}
+
+/** Lugar de la grilla mientras llegan los turnos de otro día. */
+function ScheduleGridSkeleton({ courts }: { courts: number }) {
+  return (
+    <div role="status" aria-label="Cargando turnos" className="flex flex-col gap-2 rounded-2xl border bg-card p-3">
+      {/* El hueco de la columna de horas mide lo mismo que en las filas: las columnas quedan alineadas. */}
+      <div className="flex gap-2">
+        <span className="w-12 shrink-0" />
+        {Array.from({ length: courts }, (_, i) => (
+          <Skeleton key={i} className="h-9 flex-1 rounded-lg" />
+        ))}
+      </div>
+      {Array.from({ length: 10 }, (_, row) => (
+        <div key={row} className="flex items-center gap-2">
+          <Skeleton className="h-4 w-12 shrink-0" />
+          {Array.from({ length: courts }, (_, i) => (
+            <Skeleton key={i} className="h-11 flex-1 rounded-lg opacity-60" />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

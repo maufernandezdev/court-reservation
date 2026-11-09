@@ -27,10 +27,19 @@ export type ClubHours = {
 
 export const DEFAULT_CLUB_HOURS: ClubHours = { open_time: "09:00", close_time: "22:00" };
 
-/** Los turnos empiezan cada 30 minutos y duran de 30 min a 6 h, en pasos de 30. */
+/**
+ * Los turnos empiezan cada 30 minutos y duran de 30 min a 6 h, en pasos de 30. Los de torneo,
+ * hasta 8 h (un americano ocupa la cancha casi todo el día).
+ */
 export const START_STEP_MINUTES = 30;
 export const MIN_DURATION_MINUTES = 30;
 export const MAX_DURATION_MINUTES = 360;
+export const MAX_TOURNAMENT_DURATION_MINUTES = 480;
+
+/** Duración máxima según el tipo de turno. */
+export function maxDurationForKind(kind: string): number {
+  return kind === "torneo" ? MAX_TOURNAMENT_DURATION_MINUTES : MAX_DURATION_MINUTES;
+}
 /** Duración con la que arranca un turno nuevo (el torneo usa la de Políticas). */
 export const DEFAULT_DURATION_MINUTES = 60;
 
@@ -69,17 +78,18 @@ export function firstStartFrom(hours: ClubHours, fromMinutes?: number): string {
 }
 
 /**
- * Duración máxima de un turno que empieza en `time`: hasta 6 h, el cierre del club y el siguiente
+ * Duración máxima de un turno que empieza en `time`: hasta `maxMinutes` (6 h; 8 h en torneos), el cierre del club y el siguiente
  * turno activo de la cancha (`courtReservations`: los de esa cancha y fecha, sin el que se edita).
  * 0 si la hora ya está ocupada o no queda lugar para 30 minutos.
  */
 export function maxDurationAt(
   hours: ClubHours,
   courtReservations: Pick<Reservation, "time" | "duration_minutes" | "status">[],
-  time: string
+  time: string,
+  maxMinutes: number = MAX_DURATION_MINUTES
 ): number {
   const start = timeToMinutes(time);
-  let limit = Math.min(MAX_DURATION_MINUTES, timeToMinutes(hours.close_time) - start);
+  let limit = Math.min(maxMinutes, timeToMinutes(hours.close_time) - start);
   for (const r of courtReservations) {
     if (r.status !== "active") continue;
     const s = timeToMinutes(r.time);

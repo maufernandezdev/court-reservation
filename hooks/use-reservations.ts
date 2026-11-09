@@ -8,54 +8,73 @@ import { useMembership } from "@/hooks/use-membership";
 
 export type InitialReservations = { date: string; reservations: Reservation[]; error?: string };
 
+/** Mientras carga otra fecha: siempre el mismo arreglo, para no disparar memos ni efectos. */
+const NO_RESERVATIONS: Reservation[] = [];
+
+type Loaded = { date: string | null; reservations: Reservation[]; error: string };
+
 /**
  * Turnos del club en una fecha. Con `initial` (traídos por el servidor para esa fecha)
  * no se vuelven a pedir al montar; al cambiar de fecha se piden desde el cliente.
+ *
+ * `isLoading` sale de comparar la fecha pedida con la cargada, así que es verdadero en el
+ * mismo render en que cambia la fecha: nunca se muestran los turnos de otro día. Si se
+ * cambia de fecha varias veces seguidas, una respuesta que llega tarde se descarta.
  */
 export function useReservations(date: string, initial?: InitialReservations) {
   const clubId = useMembership().membership.club_id;
-  const hasInitial = initial?.date === date;
-  const [reservations, setReservations] = useState<Reservation[]>(
-    hasInitial ? initial.reservations : []
+  const [loaded, setLoaded] = useState<Loaded>(() =>
+    initial?.date === date
+      ? { date, reservations: initial.reservations, error: initial.error ?? "" }
+      : { date: null, reservations: [], error: "" }
   );
-  const [isLoading, setIsLoading] = useState(!hasInitial);
-  const [error, setError] = useState(hasInitial ? (initial.error ?? "") : "");
-  // Fecha cuyos datos ya están en el estado (evita pedir de nuevo lo que mandó el servidor).
-  const loadedDate = useRef<string | null>(hasInitial ? date : null);
+  // Fecha que se está mirando ahora (para descartar respuestas de una fecha anterior).
+  const currentDate = useRef(date);
+  useEffect(() => {
+    currentDate.current = date;
+  }, [date]);
 
   const load = useCallback(async () => {
-    setIsLoading(true);
     const result = await queryReservations(createClient(), clubId, date);
-    setError(result.error);
-    if (!result.error) setReservations(result.reservations);
-    loadedDate.current = date;
-    setIsLoading(false);
+    if (currentDate.current !== date) return;
+    setLoaded((prev) => ({
+      date,
+      // Si falla, se conserva lo que ya había de esa fecha.
+      reservations: result.error ? (prev.date === date ? prev.reservations : []) : result.reservations,
+      error: result.error,
+    }));
   }, [clubId, date]);
 
   useEffect(() => {
-    if (loadedDate.current === date) return;
+    if (loaded.date === date) return;
     load();
+    // Solo cuando cambia la fecha (o el club): `loaded` cambia como resultado de esta carga.
   }, [date, load]);
 
   const upsertLocal = useCallback(
     (reservation: Reservation) => {
-      setReservations((prev) =>
-        reservation.date === date
-          ? [
-              ...prev.filter((r) => r.id !== reservation.id),
-              reservation,
-            ]
-              .sort((a, b) => a.time.localeCompare(b.time))
-          : prev.filter((r) => r.id !== reservation.id)
+      setLoaded((prev) =>
+        prev.date !== date
+          ? prev
+          : {
+              ...prev,
+              reservations:
+                reservation.date === date
+                  ? [...prev.reservations.filter((r) => r.id !== reservation.id), reservation].sort((a, b) =>
+                      a.time.localeCompare(b.time)
+                    )
+                  : prev.reservations.filter((r) => r.id !== reservation.id),
+            }
       );
     },
     [date]
   );
 
+  const isCurrent = loaded.date === date;
   return {
-    reservations,
-    isLoading,
-    error,
+    reservations: isCurrent ? loaded.reservations : NO_RESERVATIONS,
+    isLoading: !isCurrent,
+    error: isCurrent ? loaded.error : "",
     refetch: load,
     upsertLocal,
   };

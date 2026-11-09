@@ -19,6 +19,7 @@ import {
   DEFAULT_DURATION_MINUTES,
   MIN_DURATION_MINUTES,
   maxDurationAt,
+  maxDurationForKind,
   minutesToTime,
   rangesOverlap,
   startTimes,
@@ -85,6 +86,16 @@ function shortDateKey(dateKey: string): string {
   const [, m, d] = dateKey.split("-").map(Number);
   return `${d}/${m}`;
 }
+
+/** Los campos de a dos no pasan del ancho de su columna, aunque el texto sea largo. */
+const HALF_TRIGGER = "w-full min-w-0";
+/** Filas de a dos campos; en pantallas de menos de 360 px van uno abajo del otro. */
+const HALF_ROW = "grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4";
+/**
+ * Chrome deja ~24 px antes del ícono del calendario: en celular la fecha quedaba cortada
+ * ("11/09/202"). Se achica ese espacio y el relleno lateral.
+ */
+const DATE_INPUT = "px-3 [&::-webkit-calendar-picker-indicator]:ms-1 [&::-webkit-calendar-picker-indicator]:p-0";
 
 function durationLabel(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -259,8 +270,9 @@ export function ReservationForm({
     [dayReservations, courtId, reservation?.id]
   );
 
-  // Duraciones posibles desde el horario elegido: de 30 min hasta el siguiente turno, el cierre o 6 h.
-  const maxDuration = time ? maxDurationAt(hours, courtReservations, time) : 0;
+  // Duraciones posibles desde el horario elegido: de 30 min hasta el siguiente turno, el cierre o
+  // 6 h (8 h en torneos).
+  const maxDuration = time ? maxDurationAt(hours, courtReservations, time, maxDurationForKind(kind)) : 0;
   const durationOptions = useMemo(() => {
     const options: number[] = [];
     for (let m = MIN_DURATION_MINUTES; m <= maxDuration; m += MIN_DURATION_MINUTES) options.push(m);
@@ -452,7 +464,7 @@ export function ReservationForm({
           />
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={HALF_ROW}>
           <FormField
             control={form.control}
             name="court_id"
@@ -465,7 +477,7 @@ export function ReservationForm({
                   disabled={isCancelled || availableCourts.length === 0}
                 >
                   <FormControl>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className={HALF_TRIGGER}>
                       <SelectValue placeholder={time && availableCourts.length === 0 ? "Sin canchas libres" : "Cancha"} />
                     </SelectTrigger>
                   </FormControl>
@@ -488,7 +500,7 @@ export function ReservationForm({
               <FormItem>
                 <FormLabel>Fecha</FormLabel>
                 <FormControl>
-                  <Input type="date" disabled={isCancelled} {...field} />
+                  <Input type="date" disabled={isCancelled} className={DATE_INPUT} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -496,7 +508,7 @@ export function ReservationForm({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={HALF_ROW}>
           <Controller
             control={form.control}
             name="time"
@@ -509,7 +521,7 @@ export function ReservationForm({
                   disabled={isCancelled || !selectedCourt}
                 >
                   <FormControl>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className={HALF_TRIGGER}>
                       <SelectValue placeholder="Inicio" />
                     </SelectTrigger>
                   </FormControl>
@@ -541,8 +553,15 @@ export function ReservationForm({
                   disabled={isCancelled || !settingsLoaded || durationOptions.length === 0}
                 >
                   <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={!settingsLoaded ? "…" : time && maxDuration === 0 ? "Horario ocupado" : "Fin"} />
+                    <SelectTrigger className={HALF_TRIGGER}>
+                      <SelectValue placeholder={!settingsLoaded ? "…" : time && maxDuration === 0 ? "Horario ocupado" : "Fin"}>
+                        {/* En el campo va la versión corta; "(estándar)" queda en la lista de opciones. */}
+                        {settingsLoaded && durationOptions.length > 0 && (
+                          <span className="truncate">
+                            {minutesToTime(timeToMinutes(time) + effectiveDuration)} · {durationLabel(effectiveDuration)}
+                          </span>
+                        )}
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>

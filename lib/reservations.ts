@@ -154,15 +154,20 @@ export const reservationInputSchema = z
       .regex(/^\d*$/, "El teléfono solo puede tener números"),
     kind: z.enum(RESERVATION_KINDS, { message: "Elegí el tipo de turno" }),
     profe_user_id: z.string().uuid().nullable(),
-    /** De 30 min a 6 h, en pasos de 30: la elige quien reserva en cualquier tipo de turno. */
+    /** De 30 min a 6 h (8 h en torneos), en pasos de 30: la elige quien reserva en cualquier tipo de turno. */
     duration_minutes: z.coerce.number().int(),
     people: z.array(personSchema).max(MAX_PEOPLE, `Hasta ${MAX_PEOPLE} personas por turno`),
     /** Solo en el alta: el turno se repite todas las semanas (no aplica a torneos). */
     repeat_weekly: z.boolean(),
   })
   .superRefine((data, ctx) => {
-    if (data.duration_minutes < 30 || data.duration_minutes > 360 || data.duration_minutes % 30 !== 0) {
-      ctx.addIssue({ code: "custom", path: ["duration_minutes"], message: "La duración va de 30 min a 6 h, en pasos de 30" });
+    const maxHours = data.kind === "torneo" ? 8 : 6;
+    if (data.duration_minutes < 30 || data.duration_minutes > maxHours * 60 || data.duration_minutes % 30 !== 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["duration_minutes"],
+        message: `La duración va de 30 min a ${maxHours} h, en pasos de 30`,
+      });
     }
     if (data.repeat_weekly && data.kind === "torneo") {
       ctx.addIssue({ code: "custom", path: ["repeat_weekly"], message: "Los turnos de torneo no pueden ser fijos" });

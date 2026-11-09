@@ -63,7 +63,8 @@ export function ReservationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      {/* En celular, menos margen y relleno: los campos van de a dos y necesitan el ancho. */}
+      <DialogContent className="max-h-[90vh] max-w-[calc(100%-1rem)] overflow-y-auto p-4 sm:max-w-lg sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {mode === "edit" ? "Editar reserva" : "Nueva reserva"}

@@ -14,6 +14,7 @@ import { RESERVATION_KIND_LABELS, type Reservation } from "@/lib/reservations";
 import { ReservationMarks } from "@/components/reservations/reservation-marks";
 import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,8 @@ type MobileScheduleProps = {
   onSelectDate: (key: string) => void;
   onSelect: (reservation: Reservation) => void;
   onCreate: (courtId: string, time: string) => void;
+  /** Llegan los turnos de otro día: esqueleto en lugar de la lista (fechas y canchas siguen a mano). */
+  loading?: boolean;
 };
 
 function keyToDate(key: string): Date {
@@ -121,6 +124,7 @@ export function MobileSchedule({
   onSelectDate,
   onSelect,
   onCreate,
+  loading = false,
 }: MobileScheduleProps) {
   const profeColors = useProfeColors();
   const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
@@ -200,6 +204,16 @@ export function MobileSchedule({
         </span>
       </div>
 
+      {loading ? (
+        <ol role="status" aria-label="Cargando turnos" className="flex flex-col gap-2">
+          {Array.from({ length: 6 }, (_, i) => (
+            <li key={i}>
+              <Skeleton className="h-[60px] w-full rounded-xl" />
+            </li>
+          ))}
+        </ol>
+      ) : (
+      <>
       {!fromOpening && from > open && (
         <Button
           variant="outline"
@@ -288,6 +302,8 @@ export function MobileSchedule({
           );
         })}
       </ol>
+      </>
+      )}
     </div>
   );
 }
