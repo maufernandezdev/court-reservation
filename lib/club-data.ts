@@ -111,7 +111,7 @@ export async function queryDayPayments(
   if (reservationIds.length === 0) return [];
   const { data } = await supabase
     .from("payments")
-    .select("reservation_id, amount, released")
+    .select("reservation_id, amount, released, method, created_at")
     .eq("club_id", clubId)
     .in("reservation_id", reservationIds)
     .eq("released", false);

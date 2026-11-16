@@ -1,5 +1,11 @@
 import type { CSSProperties } from "react";
-import { sortedParticipants, type Reservation } from "@/lib/reservations";
+import {
+  PAYMENT_METHOD_SHORT,
+  sortedParticipants,
+  type PaymentMethod,
+  type Reservation,
+} from "@/lib/reservations";
+import { formatMoney } from "@/lib/pricing";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 
 /**
@@ -32,6 +38,41 @@ export function toneFor(
   if (reservation.payment_status === "pagada") return "paid";
   if (reservation.payment_status === "senada") return "deposit";
   return "pending";
+}
+
+/** Estado del cobro en masculino ("el turno"): "Pendiente", "Señado", "Pagado". */
+const PAYMENT_STATE_SHORT: Record<Reservation["payment_status"], string> = {
+  pendiente: "Pendiente",
+  senada: "Señado",
+  pagada: "Pagado",
+};
+
+/** Medio del último cobro (no liberado) de cada turno. */
+export function lastMethodByReservation(
+  payments: { reservation_id: string; released: boolean; method?: PaymentMethod; created_at?: string }[]
+): Map<string, PaymentMethod> {
+  const latest = new Map<string, { at: string; method: PaymentMethod }>();
+  for (const p of payments) {
+    if (p.released || !p.method) continue;
+    const at = p.created_at ?? "";
+    const prev = latest.get(p.reservation_id);
+    if (!prev || at >= prev.at) latest.set(p.reservation_id, { at, method: p.method });
+  }
+  return new Map([...latest].map(([id, v]) => [id, v.method]));
+}
+
+/**
+ * Resumen del cobro de un turno para la planilla: "$18.000 · Pagado · MP".
+ * Sin precio a la vista (organizador de torneos) solo queda el texto vacío.
+ */
+export function paymentSummary(
+  reservation: Pick<Reservation, "payment_status"> & { price?: number | null },
+  lastMethod?: PaymentMethod | null
+): string {
+  if (reservation.price === undefined || reservation.price === null) return "";
+  const parts = [formatMoney(Number(reservation.price)), PAYMENT_STATE_SHORT[reservation.payment_status]];
+  if (lastMethod && reservation.payment_status !== "pendiente") parts.push(PAYMENT_METHOD_SHORT[lastMethod]);
+  return parts.join(" · ");
 }
 
 /** Clases de fondo, borde y texto para bloques y tarjetas de turno. */

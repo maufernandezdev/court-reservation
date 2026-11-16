@@ -9,8 +9,9 @@ import {
   toneFor,
   reservationLook,
   reservationTitle,
+  paymentSummary,
 } from "@/lib/reservation-tone";
-import { RESERVATION_KIND_LABELS, type Reservation } from "@/lib/reservations";
+import { RESERVATION_KIND_LABELS, type PaymentMethod, type Reservation } from "@/lib/reservations";
 import { ReservationMarks } from "@/components/reservations/reservation-marks";
 import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,8 @@ type MobileScheduleProps = {
   onCreate: (courtId: string, time: string) => void;
   /** Llegan los turnos de otro día: esqueleto en lugar de la lista (fechas y canchas siguen a mano). */
   loading?: boolean;
+  /** Medio del último cobro de cada turno (para "$18.000 · Pagado · MP"). */
+  paymentMethods?: Map<string, PaymentMethod>;
 };
 
 function keyToDate(key: string): Date {
@@ -125,6 +128,7 @@ export function MobileSchedule({
   onSelect,
   onCreate,
   loading = false,
+  paymentMethods,
 }: MobileScheduleProps) {
   const profeColors = useProfeColors();
   const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
@@ -293,7 +297,7 @@ export function MobileSchedule({
                   <span className="text-[13px] opacity-85">
                     {r.time}–{end}
                     {r.kind !== "standard" ? ` · ${RESERVATION_KIND_LABELS[r.kind]}` : ""} ·{" "}
-                    {RESERVATION_TONE_LABELS[tone]}
+                    {paymentSummary(r, paymentMethods?.get(r.id)) || RESERVATION_TONE_LABELS[tone]}
                   </span>
                 </span>
                 <ChevronRight className="size-[18px] shrink-0 opacity-70" />

@@ -129,3 +129,8 @@ Plan aprobado por Mau a partir de la planilla en papel del club (fotos en `docs/
 > ✅ **Aplicado (16/11/2026), migración `0025`.** La Caja es la planilla del día: cambio inicial (lo edita el admin), "Registrar venta" (accesorios u otros ingresos, con sugerencias de lo ya vendido), "Registrar salida" (solo admin: liquidación de profe, empleado, proveedor, gasto general o retiro), totales por medio y "Efectivo en caja" = cambio + entradas en efectivo − salidas en efectivo. Las salidas se separan en "Gastos y liquidaciones" (efectivo) y "Gastos MP". Un movimiento no se borra: se anula y queda tachado. Los cobros aceptan Mercado Pago (en pantalla solo Efectivo y Mercado Pago). El operador ve la Caja y registra ventas. Plan en `openspec/changes/add-cash-register/`.
 
 - [ ] **Prueba manual:** cargar el cambio, vender un accesorio en efectivo y otro por MP (con cantidad), registrar una liquidación y un gasto MP, anular uno y ver que deja de sumar; entrar como operador y vender.
+
+## ✅ Cobro visible en la planilla y cierre del día
+> ✅ **Aplicado (16/11/2026).** Cada turno de la planilla (escritorio y celular) muestra valor, estado y medio del último cobro, por ejemplo "$18.000 · Pagado · MP". Reportes arranca con el "Cierre del día" (hoy o la fecha que elijas): efectivo en caja, ingresos, egresos, Mercado Pago, ingresos por origen, egresos por categoría y turnos jugados, cancelados y por cobrar; el resumen de WhatsApp usa esos números. Plan en `openspec/changes/add-day-close-and-sheet-payments/`.
+
+- [ ] **Prueba manual:** cobrar un turno por MP y otro en efectivo y verlos en la planilla; comparar el cierre del día con la Caja; cambiar la fecha del cierre; copiar el resumen de WhatsApp.

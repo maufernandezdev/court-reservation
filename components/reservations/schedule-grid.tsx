@@ -13,10 +13,11 @@ import {
 import {
   RESERVATION_TONE_LABELS,
   toneFor,
+  paymentSummary,
   reservationLook,
   reservationTitle,
 } from "@/lib/reservation-tone";
-import { RESERVATION_KIND_LABELS, type Reservation } from "@/lib/reservations";
+import { RESERVATION_KIND_LABELS, type PaymentMethod, type Reservation } from "@/lib/reservations";
 import { ReservationMarks } from "@/components/reservations/reservation-marks";
 import { useProfeColors } from "@/hooks/use-profes";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,8 @@ type ScheduleGridProps = {
   selectedId: string | null;
   onSelect: (reservation: Reservation) => void;
   onCreate: (courtId: string, time: string) => void;
+  /** Medio del último cobro de cada turno (para "$18.000 · Pagado · MP"). */
+  paymentMethods?: Map<string, PaymentMethod>;
 };
 
 /**
@@ -50,6 +53,7 @@ export function ScheduleGrid({
   selectedId,
   onSelect,
   onCreate,
+  paymentMethods,
 }: ScheduleGridProps) {
   const profeColors = useProfeColors();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -197,15 +201,18 @@ export function ScheduleGrid({
                   const title = reservationTitle(r);
                   const endTime = minutesToTime(item.start + r.duration_minutes);
                   const selected = r.id === selectedId;
+                  // Valor, estado y medio; si no hay precio a la vista, el estado como antes.
+                  const money = paymentSummary(r, paymentMethods?.get(r.id));
+                  const short = r.duration_minutes < 60;
                   return (
                     <button
                       key={r.id}
                       type="button"
                       onClick={() => onSelect(r)}
                       aria-pressed={selected}
-                      aria-label={`${r.kind === "standard" ? "" : `${RESERVATION_KIND_LABELS[r.kind]}: `}${title}, ${r.time} a ${endTime}${r.series_id ? ", fijo" : ""}, ${RESERVATION_TONE_LABELS[tone]}`}
+                      aria-label={`${r.kind === "standard" ? "" : `${RESERVATION_KIND_LABELS[r.kind]}: `}${title}, ${r.time} a ${endTime}${r.series_id ? ", fijo" : ""}, ${money || RESERVATION_TONE_LABELS[tone]}`}
                       className={cn(
-                        "z-10 m-0.5 flex min-w-0 flex-col items-start gap-0.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
+                        "z-10 m-0.5 flex min-w-0 flex-col items-start overflow-hidden rounded-lg px-2.5 py-1 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
                         look.className,
                         selected &&
                           "shadow-[0_6px_16px_rgb(16_20_24/0.18)] outline-3 outline-offset-2 outline-line"
@@ -222,10 +229,17 @@ export function ScheduleGrid({
                         </span>
                         <ReservationMarks reservation={r} />
                       </span>
-                      <span className="w-full truncate font-mono text-xs leading-tight opacity-85">
-                        {r.time} – {endTime}
-                        {look.paymentLabel ? ` · ${look.paymentLabel}` : ""}
-                      </span>
+                      {!(short && money) && (
+                        <span className="w-full truncate font-mono text-xs leading-tight opacity-85">
+                          {r.time} – {endTime}
+                          {!money && look.paymentLabel ? ` · ${look.paymentLabel}` : ""}
+                        </span>
+                      )}
+                      {money && (
+                        <span className="w-full truncate font-mono text-[11px] leading-tight font-semibold opacity-90">
+                          {money}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

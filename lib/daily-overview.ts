@@ -7,7 +7,8 @@ import { DEFAULT_DURATION_MINUTES, minutesToTime, timeToMinutes, type ClubHours 
  * reciben canchas, turnos y cobros del día y la hora actual en minutos.
  */
 
-export type DayPayment = Pick<Payment, "reservation_id" | "amount" | "released">;
+export type DayPayment = Pick<Payment, "reservation_id" | "amount" | "released"> &
+  Partial<Pick<Payment, "method" | "created_at">>;
 
 export type DaySummary = {
   activeCount: number;

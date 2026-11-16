@@ -14,14 +14,15 @@ import {
   type ReportPeriod,
 } from "@/lib/reports";
 import { loadOverdue, loadPeriodData } from "@/lib/reports-queries";
+import { INCOME_ORIGINS, INCOME_ORIGIN_LABELS, dayCloseLines, loadDayClose, type DayClose } from "@/lib/day-close";
+import { CLUB_TZ } from "@/lib/club-time";
+import { CashDateNav } from "@/components/cash/cash-date-nav";
 import { PageHeader } from "@/components/shell/page-header";
 import { PeriodTabs } from "@/components/reports/period-tabs";
 import { CopySummary } from "@/components/reports/copy-summary";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const metadata = { title: "Reportes" };
-
-const CLUB_TZ = "America/Argentina/Buenos_Aires";
 
 function todayKey(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: CLUB_TZ });
@@ -68,6 +69,15 @@ export default async function ReportesPage({
   const clubId = membership.club_id;
   const today = todayKey();
   const range = periodRange(period, today);
+  // Cierre del día: por defecto el último día del período (hoy, o ayer en "Ayer"); se elige otra fecha con ?cierre=.
+  const closeDate = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => value <= today)
+    .catch(range.to)
+    .parse(typeof raw.cierre === "string" ? raw.cierre : range.to);
+  const nowParts = new Date().toLocaleTimeString("en-GB", { timeZone: CLUB_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).split(":").map(Number);
+  const nowMinutes = closeDate === today ? nowParts[0] * 60 + nowParts[1] : null;
 
   const [courtsRes, settingsRes, pricesRes] = await Promise.all([
     supabase.from("courts").select("*").eq("club_id", clubId).eq("active", true).order("created_at"),
@@ -86,20 +96,28 @@ export default async function ReportesPage({
 
   let data: Awaited<ReturnType<typeof loadPeriodData>> = { reservations: [], payments: [], income: [] };
   let overdue = { count: 0, amount: 0 };
+  let close: DayClose | null = null;
   try {
-    [data, overdue] = await Promise.all([loadPeriodData(supabase, clubId, range), loadOverdue(supabase, clubId, today)]);
+    [data, overdue, close] = await Promise.all([
+      loadPeriodData(supabase, clubId, range),
+      loadOverdue(supabase, clubId, today),
+      loadDayClose(supabase, clubId, closeDate, nowMinutes),
+    ]);
   } catch {
     loadError = "No se pudieron cargar los datos del período.";
   }
 
   const report = buildReport({ courts, ...data, hours, nightStartsAt, range, today });
   const periodTitle = period === "hoy" || period === "ayer" ? longDate(range.from) : `${shortDate(range.from)} al ${shortDate(range.to)}`;
-  const summary = buildWhatsappSummary({
+  const closeLabel = closeDate === today ? `Hoy ${shortDate(closeDate)}` : longDate(closeDate);
+  const periodSummary = buildWhatsappSummary({
     clubName: membership.club.name,
     periodLabel: REPORT_PERIOD_LABELS[period],
     report,
     formatMoney,
   });
+  // El resumen de WhatsApp arranca con el cierre del día (mismos números que Caja) y sigue con el período.
+  const summary = close ? [...dayCloseLines(close, formatMoney, closeLabel), "", periodSummary].join("\n") : periodSummary;
 
   // Para revisar: lo que conviene mirar de las canchas.
   const pricedSports = new Set(
@@ -147,6 +165,10 @@ export default async function ReportesPage({
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       )}
+
+      {close && <DayCloseSection close={close} label={closeLabel} today={today} />}
+
+      <h2 className="text-lg font-bold">Rendimiento · {REPORT_PERIOD_LABELS[period]}</h2>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3.5">
         <section className="flex flex-col gap-1 rounded-2xl bg-ball p-5 text-ball-foreground">
@@ -293,5 +315,85 @@ export default async function ReportesPage({
         <CopySummary text={summary} />
       </div>
     </div>
+  );
+}
+
+/** Cierre del día: ingresos, egresos, Mercado Pago y efectivo en caja, con el detalle por origen y categoría. */
+function DayCloseSection({ close, label, today }: { close: DayClose; label: string; today: string }) {
+  const origins = INCOME_ORIGINS.filter((o) => close.incomeByOrigin[o] > 0);
+  const cards = [
+    { title: "Ingresos", value: close.cash.incomeTotal, note: `MP ${formatMoney(close.cash.income.mercado_pago)} · efectivo ${formatMoney(close.cash.income.efectivo)}` },
+    { title: "Egresos", value: close.cash.expenseTotal, note: `MP ${formatMoney(close.cash.expenses.mercado_pago)} · efectivo ${formatMoney(close.cash.expenses.efectivo)}` },
+    { title: "Mercado Pago", value: close.cash.income.mercado_pago, note: `Neto ${formatMoney(close.cash.mercadoPagoNet)}` },
+  ];
+  return (
+    <section aria-labelledby="cierre" className="flex flex-col gap-4 rounded-2xl border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="cierre" className="text-lg font-bold">
+          Cierre del día <span className="font-normal text-muted-foreground">· {label}</span>
+        </h2>
+        <CashDateNav date={close.date} today={today} param="cierre" />
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3">
+        <div className="flex flex-col gap-1 rounded-xl bg-ball p-4 text-ball-foreground">
+          <h3 className="text-sm font-medium">Efectivo en caja</h3>
+          <strong className="font-mono text-2xl font-bold">{formatMoney(close.cash.cashOnHand)}</strong>
+          <span className="text-xs">Cambio {formatMoney(close.cash.opening)}</span>
+        </div>
+        {cards.map((card) => (
+          <div key={card.title} className="flex flex-col gap-1 rounded-xl border p-4">
+            <h3 className="text-sm text-muted-foreground">{card.title}</h3>
+            <strong className="font-mono text-2xl font-bold">{formatMoney(card.value)}</strong>
+            <span className="text-xs text-muted-foreground">{card.note}</span>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <dl className="flex flex-col text-[15px]">
+          <dt className="pb-1 text-sm font-semibold">Ingresos por origen</dt>
+          {origins.length === 0 ? (
+            <dd className="text-sm text-muted-foreground">Sin ingresos.</dd>
+          ) : (
+            origins.map((o) => (
+              <div key={o} className="flex justify-between border-t border-muted py-1.5">
+                <dt>{INCOME_ORIGIN_LABELS[o]}</dt>
+                <dd className="font-mono">{formatMoney(close.incomeByOrigin[o])}</dd>
+              </div>
+            ))
+          )}
+        </dl>
+        <dl className="flex flex-col text-[15px]">
+          <dt className="pb-1 text-sm font-semibold">Egresos por categoría</dt>
+          {close.expensesByCategory.length === 0 ? (
+            <dd className="text-sm text-muted-foreground">Sin egresos.</dd>
+          ) : (
+            close.expensesByCategory.map((e) => (
+              <div key={e.category} className="flex justify-between border-t border-muted py-1.5">
+                <dt>{e.label}</dt>
+                <dd className="font-mono">{formatMoney(e.amount)}</dd>
+              </div>
+            ))
+          )}
+        </dl>
+        <dl className="flex flex-col text-[15px]">
+          <dt className="pb-1 text-sm font-semibold">Turnos</dt>
+          <div className="flex justify-between border-t border-muted py-1.5">
+            <dt>Jugados</dt>
+            <dd className="font-mono">{close.playedCount}</dd>
+          </div>
+          <div className="flex justify-between border-t border-muted py-1.5">
+            <dt>Cancelados</dt>
+            <dd className="font-mono">{close.cancelledCount}</dd>
+          </div>
+          <div className="flex justify-between border-t border-muted py-1.5">
+            <dt>Falta cobrar</dt>
+            <dd className="font-mono">
+              {formatMoney(close.dueAmount)}
+              {close.dueCount > 0 ? ` (${close.dueCount})` : ""}
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </section>
   );
 }

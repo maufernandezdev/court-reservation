@@ -24,6 +24,7 @@ import { useMembership } from "@/hooks/use-membership";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { dateKey, minutesOfDay, useNow } from "@/hooks/use-now";
 import { useReservationDetail } from "@/hooks/use-reservation-detail";
+import { useDayPayments } from "@/hooks/use-day-payments";
 import { type Court, type CourtType } from "@/lib/courts";
 import { firstFreeStart, firstStartFrom, timeToMinutes } from "@/lib/availability";
 import { useSportPrices } from "@/hooks/use-sport-prices";
@@ -34,6 +35,7 @@ import type { Membership } from "@/lib/roles";
 import {
   RESERVATION_TONES,
   RESERVATION_TONE_LABELS,
+  lastMethodByReservation,
   toneClasses,
 } from "@/lib/reservation-tone";
 import { CourtTypeFilter } from "@/components/court-type-filter";
@@ -256,6 +258,12 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
     [reservations]
   );
 
+  // Medio del último cobro de cada turno, para mostrar "$18.000 · Pagado · MP" en la planilla.
+  // Sin permiso para ver cobros (RLS) llega vacío y la planilla muestra solo el estado.
+  const activeIds = useMemo(() => activeReservations.map((r) => r.id), [activeReservations]);
+  const { payments: dayPayments, refetch: refetchPayments } = useDayPayments(activeIds);
+  const paymentMethods = useMemo(() => lastMethodByReservation(dayPayments), [dayPayments]);
+
   const visibleCourts = useMemo(
     () =>
       courtTypeFilter === "all"
@@ -302,6 +310,7 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
 
   const handleReservationSaved = (reservation: Reservation) => {
     upsertLocal(reservation);
+    refetchPayments();
     setEditingReservation((prev) => (prev?.id === reservation.id ? reservation : prev));
   };
 
@@ -447,6 +456,7 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
                 selectedId={selectedReservation?.id ?? null}
                 onSelect={(r) => setSelectedId(r.id)}
                 onCreate={openCreateDialog}
+                paymentMethods={paymentMethods}
               />
               )}
             </div>
@@ -503,6 +513,7 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
             loading={isLoadingReservations}
             onSelect={(r) => setSelectedId(r.id)}
             onCreate={openCreateDialog}
+            paymentMethods={paymentMethods}
           />
           <NewReservationFab onClick={openNewFromHeader} />
           {membership && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,17 +13,31 @@ function shiftDay(key: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Día de la caja: escribe `?fecha=YYYY-MM-DD` en la URL (el Server Component vuelve a leer). */
-export function CashDateNav({ date, today }: { date: string; today: string }) {
+/**
+ * Selector de día: escribe `?<param>=YYYY-MM-DD` en la URL (el Server Component vuelve a leer)
+ * y conserva los demás parámetros (por ejemplo, el período de Reportes).
+ */
+export function CashDateNav({
+  date,
+  today,
+  param = "fecha",
+}: {
+  date: string;
+  today: string;
+  param?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
   const go = (next: string) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
-    startTransition(() =>
-      router.push(next === today ? pathname : `${pathname}?fecha=${next}`)
-    );
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === today) params.delete(param);
+    else params.set(param, next);
+    const query = params.toString();
+    startTransition(() => router.push(query ? `${pathname}?${query}` : pathname));
   };
 
   return (
@@ -36,11 +50,11 @@ export function CashDateNav({ date, today }: { date: string; today: string }) {
       >
         <ChevronLeft />
       </Button>
-      <Label htmlFor="cash-date" className="sr-only">
+      <Label htmlFor={`date-${param}`} className="sr-only">
         Fecha
       </Label>
       <Input
-        id="cash-date"
+        id={`date-${param}`}
         type="date"
         value={date}
         max={today}
