@@ -275,6 +275,9 @@ export type ClubSettings = {
   /** Horario de apertura y cierre del club ("HH:MM:SS" como lo devuelve PostgREST). */
   open_time: string;
   close_time: string;
+  /** Redes del club (Políticas): WhatsApp solo con números e Instagram sin @. Vacío si no se cargaron. */
+  whatsapp: string;
+  instagram: string;
   updated_at: string;
 };
 

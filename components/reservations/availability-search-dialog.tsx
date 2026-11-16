@@ -16,6 +16,7 @@ import {
 import type { Reservation } from "@/lib/reservations";
 import { formatMoney, isNight, quotePrice } from "@/lib/pricing";
 import { canSeeMoney } from "@/lib/roles";
+import { clubContactLine } from "@/lib/clubs";
 import { useSportPrices } from "@/hooks/use-sport-prices";
 import { useClubSettings } from "@/hooks/use-club-settings";
 import { createClient } from "@/lib/supabase/client";
@@ -81,7 +82,7 @@ export function AvailabilitySearchDialog({
   // El organizador de torneos no ve montos.
   const seesMoney = canSeeMoney(membership.role);
   const { prices } = useSportPrices();
-  const { night_starts_at: nightStartsAt, open_time, close_time } = useClubSettings();
+  const { night_starts_at: nightStartsAt, open_time, close_time, whatsapp, instagram } = useClubSettings();
   const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const now = useNow();
   const todayKey = dateKey(now);
@@ -161,6 +162,7 @@ export function AvailabilitySearchDialog({
       time: slot.time,
       label: slot.court.name,
     })),
+    contact: clubContactLine({ whatsapp, instagram }),
   });
 
   const copy = async () => {

@@ -29,6 +29,7 @@ import { ClubDetailsForm } from "@/components/club/club-details-form";
 import { ClubHoursCard } from "@/components/club/club-hours-form";
 import { ClubLogoCard } from "@/components/club/club-logo-card";
 import { ApprovalRulesCard } from "@/components/club/approval-rules-card";
+import { ClubSocialForm } from "@/components/club/club-social-form";
 import { clubInitials, clubLogoUrl } from "@/lib/roles";
 import { useClubSettings } from "@/hooks/use-club-settings";
 
@@ -385,6 +386,12 @@ export function PoliciesView() {
         />
 
         <ClubDetailsForm key={membership.club.id} club={membership.club} />
+
+        <ClubSocialForm
+          key={`${settings.whatsapp}-${settings.instagram}`}
+          whatsapp={settings.whatsapp}
+          instagram={settings.instagram}
+        />
       </div>
   );
 }

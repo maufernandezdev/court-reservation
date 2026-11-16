@@ -212,15 +212,19 @@ export function buildAvailabilityMessage({
   dayLabel,
   detail,
   slots,
+  contact,
 }: {
   dayLabel: string;
   detail?: string;
   slots: AvailabilityMessageSlot[];
+  /** Línea con las redes del club (Políticas), al final del mensaje. */
+  contact?: string;
 }): string {
+  const footer = contact ? ["", contact] : [];
   if (slots.length === 0) {
-    return `Para ${dayLabel} no nos quedan canchas libres desde ese horario.`;
+    return [`Para ${dayLabel} no nos quedan canchas libres desde ese horario.`, ...footer].join("\n");
   }
   const header = `¡Hola! Para ${dayLabel} tenemos libre${detail ? ` (${detail})` : ""}:`;
   const lines = slots.map((slot) => `• ${slot.time} – ${slot.label}`);
-  return [header, ...lines, "¿Te reservo alguno?"].join("\n");
+  return [header, ...lines, "¿Te reservo alguno?", ...footer].join("\n");
 }

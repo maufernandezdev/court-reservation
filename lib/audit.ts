@@ -263,6 +263,13 @@ export function describeAuditEntry(
     case "player.removed":
       return `dio de baja al jugador ${String(p.full_name ?? "")}`.trim();
     case "club.updated":
+      if (p.social) {
+        const parts = [
+          p.whatsapp ? `WhatsApp ${String(p.whatsapp)}` : "sin WhatsApp",
+          p.instagram ? `Instagram @${String(p.instagram)}` : "sin Instagram",
+        ];
+        return `cambió las redes del club: ${parts.join(", ")}`;
+      }
       if (p.logo) {
         return p.logo === "removed" ? "quitó el logo del club" : "cambió el logo del club";
       }

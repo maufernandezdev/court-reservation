@@ -70,7 +70,7 @@ export default async function TodayPage() {
             requests={requests}
             isAdmin={isAdmin}
             clubName={membership.club.name}
-            clubWhatsapp={null}
+            clubWhatsapp={seed.settings?.whatsapp || null}
           />
         }
       />

@@ -6,7 +6,14 @@ import { approvalRuleSchema, type ApprovalRuleInput } from "@/lib/approval";
 import { clubSettingsSchema, type ClubSettings } from "@/lib/reservations";
 import { requireRole } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
-import { clubDetailsSchema, clubHoursSchema, type ClubDetailsInput, type ClubHoursInput } from "@/lib/clubs";
+import {
+  clubDetailsSchema,
+  clubHoursSchema,
+  clubSocialSchema,
+  type ClubDetailsInput,
+  type ClubHoursInput,
+  type ClubSocialInput,
+} from "@/lib/clubs";
 import { subscriptionMessage } from "@/lib/subscription";
 import { deleteObject, isR2Configured, putObject } from "@/lib/r2";
 
@@ -343,5 +350,44 @@ export async function deleteApprovalRuleAction(id: string): Promise<{ success: b
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "No se pudo quitar el horario." };
+  }
+}
+
+/** WhatsApp e Instagram del club (solo admin). */
+export async function updateClubSocialAction(
+  input: ClubSocialInput
+): Promise<{ success: boolean; error?: string; values?: { whatsapp: string; instagram: string } }> {
+  const parsed = clubSocialSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+
+    const { error } = await supabase.from("settings").upsert({
+      club_id: clubId,
+      whatsapp: parsed.data.whatsapp,
+      instagram: parsed.data.instagram,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      return { success: false, error: subscriptionMessage(error, "No se pudieron guardar las redes del club.") };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "club",
+      entityId: clubId,
+      action: "club.updated",
+      payload: { social: true, whatsapp: parsed.data.whatsapp, instagram: parsed.data.instagram },
+    });
+
+    revalidatePath("/dashboard", "layout");
+    return { success: true, values: parsed.data };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudieron guardar las redes del club." };
   }
 }

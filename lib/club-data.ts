@@ -21,6 +21,8 @@ export const DEFAULT_CLUB_SETTINGS = {
   night_starts_at: DEFAULT_NIGHT_STARTS_AT,
   open_time: DEFAULT_CLUB_HOURS.open_time,
   close_time: DEFAULT_CLUB_HOURS.close_time,
+  whatsapp: "",
+  instagram: "",
 };
 
 export type LoadedClubSettings = Pick<ClubSettings, keyof typeof DEFAULT_CLUB_SETTINGS>;
@@ -50,7 +52,7 @@ export async function queryClubSettings(
   const { data } = await supabase
     .from("settings")
     .select(
-      "cancel_window_hours, late_penalty_percent, tournament_duration_minutes, night_starts_at, open_time, close_time"
+      "cancel_window_hours, late_penalty_percent, tournament_duration_minutes, night_starts_at, open_time, close_time, whatsapp, instagram"
     )
     .eq("club_id", clubId)
     .maybeSingle();

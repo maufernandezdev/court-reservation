@@ -9,6 +9,7 @@ import { approvalWhatsappHref } from "@/lib/approval";
 import { reservationTitle } from "@/lib/reservation-tone";
 import { approveReservationAction, rejectReservationAction } from "@/app/dashboard/reservas/actions";
 import { useActiveClub } from "@/components/shell/active-club-provider";
+import { useClubSettings } from "@/hooks/use-club-settings";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -41,8 +42,8 @@ export function ApprovalBox({
   onSaved: (reservation: Reservation) => void;
 }) {
   const { membership } = useActiveClub();
-  // El número del club se carga en Políticas (bloque 5); sin número, WhatsApp pide elegir el chat.
-  const whatsapp: string | null = null;
+  // WhatsApp del club (Políticas); sin número, WhatsApp pide elegir el chat.
+  const { whatsapp } = useClubSettings();
   const [busy, setBusy] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");

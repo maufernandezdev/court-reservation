@@ -23,6 +23,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
 import type { Reservation } from "@/lib/reservations";
 import { formatMoney } from "@/lib/pricing";
+import { clubContactLine } from "@/lib/clubs";
 import { buildAvailabilityMessage, firstFreeStart, firstStartFrom, timeToMinutes } from "@/lib/availability";
 import { useClubSettings } from "@/hooks/use-club-settings";
 import {
@@ -175,7 +176,7 @@ export function TodayView({
 
   const { courts, isLoading: isLoadingCourts, error } = useCourts();
   const courtsError = initialCourtsError || error;
-  const { open_time, close_time } = useClubSettings();
+  const { open_time, close_time, whatsapp, instagram } = useClubSettings();
   const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const { membership } = useMembership();
   const profeColors = useProfeColors();
@@ -234,6 +235,7 @@ export function TodayView({
         time: `${gap.start} a ${gap.end}`,
         label: gap.court.name,
       })),
+      contact: clubContactLine({ whatsapp, instagram }),
     });
     try {
       await navigator.clipboard.writeText(text);
