@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { TriangleAlert } from "lucide-react";
+// Se usan en el aviso de suscripción, comentado más abajo: descomentar junto con el aviso.
+// import Link from "next/link";
+// import { TriangleAlert } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+// import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import AuthGuard from "@/components/auth-guard";
 import { AppSidebar, type ShellIdentity } from "@/components/shell/app-sidebar";
 import { MobileTabBar } from "@/components/shell/mobile-tab-bar";
@@ -23,7 +24,7 @@ type DashboardShellProps = {
   memberships: Membership[];
   /** Foto de perfil servida por la app, o null. */
   avatarUrl: string | null;
-  /** Aviso de la suscripción del club (prueba por terminar, gracia o vencida), o null. */
+  /** Aviso de la suscripción del club (prueba por terminar, gracia o vencida), o null. Hoy no se muestra: ver el bloque comentado. */
   notice: SubscriptionNotice | null;
   /** Turnos por confirmar (admin). */
   pendingApprovals?: number;
@@ -60,27 +61,34 @@ export function DashboardShell({
         <div className="flex min-h-screen bg-background">
           <AppSidebar identity={identity} isAdmin={isAdmin} onLogout={logout} />
           <main className="min-w-0 flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">
-            {notice && (
-              <Alert
-                variant={notice.tone === "destructive" ? "destructive" : "default"}
-                className="mb-6"
-                data-testid="subscription-notice"
-              >
-                <TriangleAlert className="h-4 w-4" />
-                <AlertTitle>{notice.title}</AlertTitle>
-                <AlertDescription>
-                  {notice.message}
-                  {isAdmin && (
-                    <>
-                      {" "}
-                      <Link href="/dashboard/suscripcion" className="font-medium underline underline-offset-4">
-                        Ver suscripción
-                      </Link>
-                    </>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
+            {/*
+              Aviso de la suscripción (prueba por terminar, gracia o vencida): oculto por pedido de Mau
+              (16/11/2026). Se reactiva cuando se cobre la suscripción automáticamente (Mercado Pago):
+              descomentar este bloque y los imports de arriba. El layout sigue calculando `notice` y la
+              pantalla Suscripción no cambia.
+
+              {notice && (
+                <Alert
+                  variant={notice.tone === "destructive" ? "destructive" : "default"}
+                  className="mb-6"
+                  data-testid="subscription-notice"
+                >
+                  <TriangleAlert className="h-4 w-4" />
+                  <AlertTitle>{notice.title}</AlertTitle>
+                  <AlertDescription>
+                    {notice.message}
+                    {isAdmin && (
+                      <>
+                        {" "}
+                        <Link href="/dashboard/suscripcion" className="font-medium underline underline-offset-4">
+                          Ver suscripción
+                        </Link>
+                      </>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+            */}
             {children}
           </main>
           <MobileTabBar identity={identity} isAdmin={isAdmin} onLogout={logout} />
