@@ -154,12 +154,15 @@ export function TodayView({
   initialPayments,
   courtsError: initialCourtsError,
   approvals,
+  cashSummary,
 }: {
   initialReservations: InitialReservations;
   initialPayments: InitialDayPayments;
   courtsError: string;
   /** Horarios con confirmación ("Para confirmar" o los pedidos propios), armado en el servidor. */
   approvals?: React.ReactNode;
+  /** Resumen de la caja de hoy (solo admin), armado en el servidor. */
+  cashSummary?: React.ReactNode;
 }) {
   const now = useNow();
   // La fecha y hora del encabezado y el resumen del día dependen de la hora del
@@ -298,6 +301,8 @@ export function TodayView({
         )}
 
         {approvals}
+
+        {cashSummary}
 
         {/* Los datos vienen del servidor; el resumen depende de la hora del dispositivo y se
             dibuja apenas hidrata (el HTML del servidor muestra el esqueleto). */}

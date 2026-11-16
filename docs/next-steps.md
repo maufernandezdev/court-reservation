@@ -149,3 +149,6 @@ Plan aprobado por Mau a partir de la planilla en papel del club (fotos en `docs/
 > ✅ **Aplicado (16/11/2026), migración `0029`.** En Políticas → "Redes del club" se cargan el WhatsApp (solo números) y el Instagram (usuario o link) del club. Los turnos libres que se copian para WhatsApp (Hoy y "¿Hay cancha?") terminan con el contacto del club, y "Avisar al admin por WhatsApp" va a ese número. La página pública queda para la etapa 2. Plan en `openspec/changes/add-club-social/`.
 
 - [ ] **Prueba manual:** cargar el WhatsApp y el Instagram reales del club, copiar los turnos libres de Hoy y pegarlos en WhatsApp; pedir un horario por confirmar como operador y tocar "Avisar al admin".
+
+## ✅ Resumen de la caja en Hoy
+> ✅ **Aplicado (16/11/2026).** El admin ve en Hoy la tarjeta "Caja de hoy" con efectivo en caja, ingresos, egresos y Mercado Pago (el mismo cálculo que Caja y el cierre del día de Reportes) y el botón "Ver caja". Operador, profe y organizador no la ven (se arma en el servidor solo para el admin).

@@ -7,6 +7,8 @@ import { TodayView } from "@/components/today/today-view";
 import { ApprovalRequests, type ApprovalRequest } from "@/components/today/approval-requests";
 import { RESERVATION_SELECT, RESERVATION_SOURCE, type Reservation } from "@/lib/reservations";
 import { reservationTitle } from "@/lib/reservation-tone";
+import { loadDayClose } from "@/lib/day-close";
+import { CashSummaryCard } from "@/components/today/cash-summary-card";
 
 export const metadata = { title: "Hoy" };
 
@@ -36,10 +38,12 @@ export default async function TodayPage() {
   requestsQuery = isAdmin
     ? requestsQuery.eq("status", "pending_approval")
     : requestsQuery.eq("created_by", membership.user_id).in("status", ["pending_approval", "rejected"]);
-  const [payments, { data: requestRows }, { data: members }] = await Promise.all([
+  const [payments, { data: requestRows }, { data: members }, close] = await Promise.all([
     queryDayPayments(supabase, clubId, ids),
     requestsQuery,
     supabase.from("memberships").select("user_id, full_name, email").eq("club_id", clubId),
+    // Caja de hoy: solo el admin, con el mismo cálculo que Caja y el cierre del día de Reportes.
+    isAdmin ? loadDayClose(supabase, clubId, today, null).catch(() => null) : Promise.resolve(null),
   ]);
   const courtName = new Map((seed.courts ?? []).map((c) => [c.id, c.name]));
   const memberName = new Map(
@@ -65,6 +69,7 @@ export default async function TodayPage() {
         initialReservations={{ date: today, ...reservationsResult }}
         initialPayments={{ idsKey: idsKey(ids), payments }}
         courtsError={courtsError}
+        cashSummary={close ? <CashSummaryCard cash={close.cash} /> : null}
         approvals={
           <ApprovalRequests
             requests={requests}
