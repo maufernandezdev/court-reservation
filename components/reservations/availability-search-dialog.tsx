@@ -116,7 +116,7 @@ export function AvailabilitySearchDialog({
           .select("*")
           .eq("club_id", clubId)
           .eq("date", date)
-          .eq("status", "active")
+          .in("status", ["active", "pending_approval"])
           .order("time", { ascending: true })
       )
       .then(({ data }) => {

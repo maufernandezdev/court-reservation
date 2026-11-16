@@ -45,7 +45,7 @@ const tabClass =
 export function MobileTabBar({ identity, isAdmin, onLogout }: MobileTabBarProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  const { membership } = useActiveClub();
+  const { membership, pendingApprovals = 0 } = useActiveClub();
 
   const tabs: TabItem[] = [
     { href: "/dashboard", label: "Hoy", icon: LayoutDashboard },
@@ -80,7 +80,17 @@ export function MobileTabBar({ identity, isAdmin, onLogout }: MobileTabBarProps)
                 active ? "font-bold text-ball" : "text-sidebar-label"
               )}
             >
-              <Icon className="size-[22px]" strokeWidth={active ? 2 : 1.8} />
+              <span className="relative">
+                <Icon className="size-[22px]" strokeWidth={active ? 2 : 1.8} />
+                {tab.href === "/dashboard" && pendingApprovals > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-2.5 rounded-full bg-destructive px-1.5 font-mono text-[10px] leading-4 font-bold text-white"
+                    aria-label={`${pendingApprovals} para confirmar`}
+                  >
+                    {pendingApprovals}
+                  </span>
+                )}
+              </span>
               {tab.label}
             </Link>
           );

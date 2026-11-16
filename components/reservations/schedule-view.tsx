@@ -110,6 +110,10 @@ function StatusLegend({ showDeposit }: { showDeposit: boolean }) {
         <Repeat aria-hidden="true" className="size-3.5" />
         Fijo
       </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-3.5 rounded border border-dashed border-line bg-hatch" />
+        Por confirmar
+      </li>
     </ul>
   );
 }
@@ -254,7 +258,8 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
   const depositConfigured = priceRows.some((p) => p.public_deposit_enabled || p.profe_deposit_enabled);
 
   const activeReservations = useMemo(
-    () => reservations.filter((r) => r.status === "active"),
+    // Los turnos por confirmar también ocupan el lugar (se ven rayados).
+    () => reservations.filter((r) => r.status === "active" || r.status === "pending_approval"),
     [reservations]
   );
 

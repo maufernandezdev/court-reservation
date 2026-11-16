@@ -66,10 +66,14 @@ export function lastMethodByReservation(
  * Sin precio a la vista (organizador de torneos) solo queda el texto vacío.
  */
 export function paymentSummary(
-  reservation: Pick<Reservation, "payment_status"> & { price?: number | null },
+  reservation: Pick<Reservation, "payment_status"> & { price?: number | null; status?: Reservation["status"] },
   lastMethod?: PaymentMethod | null
 ): string {
-  if (reservation.price === undefined || reservation.price === null) return "";
+  const noPrice = reservation.price === undefined || reservation.price === null;
+  if (reservation.status === "pending_approval") {
+    return noPrice ? "Por confirmar" : `Por confirmar · ${formatMoney(Number(reservation.price))}`;
+  }
+  if (noPrice) return "";
   const parts = [formatMoney(Number(reservation.price)), PAYMENT_STATE_SHORT[reservation.payment_status]];
   if (lastMethod && reservation.payment_status !== "pendiente") parts.push(PAYMENT_METHOD_SHORT[lastMethod]);
   return parts.join(" · ");
@@ -144,6 +148,13 @@ export function reservationLook(
   reservation: Pick<Reservation, "kind" | "status" | "payment_status">,
   profeColor?: string | null
 ): ReservationLook {
+  // Pedido en un horario con confirmación: ocupa el lugar, rayado hasta que el admin lo confirme.
+  if (reservation.status === "pending_approval") {
+    return {
+      className: "bg-hatch text-foreground border-[1.5px] border-dashed border-line",
+      paymentLabel: "Por confirmar",
+    };
+  }
   const tone = toneFor(reservation);
   if (reservation.status === "cancelled" || reservation.kind === "standard") {
     return { className: toneClasses(tone), paymentLabel: null };

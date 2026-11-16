@@ -4,6 +4,7 @@ import { createContext, useContext } from "react";
 import type { Court } from "@/lib/courts";
 import type { SportPrices } from "@/lib/pricing";
 import type { LoadedClubSettings, Profe } from "@/lib/club-data";
+import type { ApprovalRule } from "@/lib/approval";
 
 /**
  * Datos del club que la página ya trajo en el servidor. Los hooks (`useCourts`,
@@ -17,6 +18,8 @@ export type ClubDataSeed = {
   settings?: LoadedClubSettings;
   sportPrices?: SportPrices[];
   profes?: Profe[];
+  /** Horarios con confirmación del admin. */
+  approvalRules?: ApprovalRule[];
 };
 
 const ClubDataContext = createContext<ClubDataSeed | null>(null);

@@ -1,7 +1,21 @@
 import { z } from "zod";
 
-export const RESERVATION_STATUSES = ["active", "cancelled"] as const;
+export const RESERVATION_STATUSES = ["active", "cancelled", "pending_approval", "rejected"] as const;
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
+
+/** Estados que ocupan el lugar en la planilla: activo o esperando la confirmación del admin. */
+export const OCCUPYING_STATUSES = ["active", "pending_approval"] as const satisfies readonly ReservationStatus[];
+
+export function occupiesSlot(reservation: Pick<Reservation, "status">): boolean {
+  return reservation.status === "active" || reservation.status === "pending_approval";
+}
+
+export const RESERVATION_STATUS_LABELS: Record<ReservationStatus, string> = {
+  active: "Confirmado",
+  cancelled: "Cancelado",
+  pending_approval: "Por confirmar",
+  rejected: "Rechazado",
+};
 
 /** Tipo de turno: estándar (público), de profe o de torneo. */
 export const RESERVATION_KINDS = ["standard", "profe", "torneo"] as const;
@@ -133,6 +147,11 @@ export type Reservation = {
   /** Torneo: lado ganador (1 = primeros jugadores, 2 = los otros) y marcador ("6-4 3-6 10-8"). */
   result_winner?: 1 | 2 | null;
   result_score?: string | null;
+  /** Horario con confirmación: quién y cuándo lo confirmó o lo rechazó el admin. */
+  approved_by?: string | null;
+  approved_at?: string | null;
+  rejected_by?: string | null;
+  rejected_at?: string | null;
   /** Personas del turno (si la consulta las trae embebidas), ordenadas por posición. */
   participants?: ReservationParticipant[];
   created_by: string | null;

@@ -8,6 +8,8 @@ type ActiveClubValue = {
   membership: Membership;
   /** Todas las membresías de la persona, para el selector de club. */
   memberships: Membership[];
+  /** Turnos por confirmar (solo para el admin; 0 para el resto): contador en "Hoy". */
+  pendingApprovals?: number;
 };
 
 const ActiveClubContext = createContext<ActiveClubValue | null>(null);
@@ -15,10 +17,11 @@ const ActiveClubContext = createContext<ActiveClubValue | null>(null);
 export function ActiveClubProvider({
   membership,
   memberships,
+  pendingApprovals = 0,
   children,
 }: ActiveClubValue & { children: React.ReactNode }) {
   return (
-    <ActiveClubContext.Provider value={{ membership, memberships }}>
+    <ActiveClubContext.Provider value={{ membership, memberships, pendingApprovals }}>
       {children}
     </ActiveClubContext.Provider>
   );

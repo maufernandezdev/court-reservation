@@ -6,6 +6,7 @@ import { DEFAULT_NIGHT_STARTS_AT } from "@/lib/pricing";
 import { DEFAULT_CLUB_HOURS, normalizeTime } from "@/lib/availability";
 import { RESERVATION_SELECT, RESERVATION_SOURCE, type ClubSettings, type Reservation } from "@/lib/reservations";
 import { ensureFixedReservations } from "@/lib/series";
+import type { ApprovalRule } from "@/lib/approval";
 
 /**
  * Consultas de datos del club que comparten el servidor (carga inicial de las páginas)
@@ -80,6 +81,15 @@ export async function queryProfes(supabase: SupabaseClient, clubId: string): Pro
   return ((data ?? []) as { user_id: string; full_name: string; email: string; color: string | null }[])
     .map((m) => ({ user_id: m.user_id, name: m.full_name || m.email, color: m.color }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function queryApprovalRules(supabase: SupabaseClient, clubId: string): Promise<ApprovalRule[]> {
+  const { data } = await supabase
+    .from("approval_rules")
+    .select("*")
+    .eq("club_id", clubId)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as ApprovalRule[];
 }
 
 /** Turnos de una fecha. Antes genera las fechas de los turnos fijos que falten hasta ese día. */

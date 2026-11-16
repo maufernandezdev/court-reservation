@@ -97,7 +97,7 @@ export function courtStatusNow(
   const open = timeToMinutes(hours.open_time);
   const close = timeToMinutes(hours.close_time);
   const mine = reservations
-    .filter((r) => r.status === "active" && r.court_id === court.id)
+    .filter((r) => (r.status === "active" || r.status === "pending_approval") && r.court_id === court.id)
     .sort((a, b) => a.time.localeCompare(b.time));
 
   if (nowMinutes < open) return { kind: "closed", opensAt: hours.open_time };
@@ -152,7 +152,7 @@ export function freeGaps(
     const close = timeToMinutes(hours.close_time);
     let cursor = Math.max(from, timeToMinutes(hours.open_time));
     const busy = reservations
-      .filter((r) => r.status === "active" && r.court_id === court.id)
+      .filter((r) => (r.status === "active" || r.status === "pending_approval") && r.court_id === court.id)
       .map((r) => [timeToMinutes(r.time), timeToMinutes(r.time) + r.duration_minutes] as const)
       .sort((a, b) => a[0] - b[0]);
 

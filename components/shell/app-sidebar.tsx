@@ -181,7 +181,7 @@ export function UserBlock({
 
 export function NavGroups({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { membership } = useActiveClub();
+  const { membership, pendingApprovals = 0 } = useActiveClub();
 
   return (
     <nav aria-label="Principal" className="flex flex-col gap-5">
@@ -208,6 +208,14 @@ export function NavGroups({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <Icon className="size-[18px]" strokeWidth={1.8} />
                 {item.label}
+                {item.href === "/dashboard" && pendingApprovals > 0 && (
+                  <span
+                    className="ml-auto rounded-full bg-destructive px-2 py-0.5 font-mono text-[11px] font-bold text-white"
+                    aria-label={`${pendingApprovals} ${pendingApprovals === 1 ? "turno" : "turnos"} para confirmar`}
+                  >
+                    {pendingApprovals}
+                  </span>
+                )}
               </Link>
             );
           })}

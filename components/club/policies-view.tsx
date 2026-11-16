@@ -28,6 +28,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ClubDetailsForm } from "@/components/club/club-details-form";
 import { ClubHoursCard } from "@/components/club/club-hours-form";
 import { ClubLogoCard } from "@/components/club/club-logo-card";
+import { ApprovalRulesCard } from "@/components/club/approval-rules-card";
 import { clubInitials, clubLogoUrl } from "@/lib/roles";
 import { useClubSettings } from "@/hooks/use-club-settings";
 
@@ -374,6 +375,8 @@ export function PoliciesView() {
         </Form>
 
         <ClubHoursCard openTime={clubOpenTime} closeTime={clubCloseTime} />
+
+        <ApprovalRulesCard />
 
         <ClubLogoCard
           logoUrl={clubLogoUrl(membership.club)}

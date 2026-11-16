@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClubDataSeed } from "@/components/club/club-data-provider";
-import { queryClubSettings, queryCourts, queryProfes, querySportPrices } from "@/lib/club-data";
+import { queryApprovalRules, queryClubSettings, queryCourts, queryProfes, querySportPrices } from "@/lib/club-data";
 
 /**
  * Datos del club que usan Hoy y la Planilla (canchas, políticas, precios y profes),
@@ -11,11 +11,12 @@ export async function loadClubDataSeed(
   supabase: SupabaseClient,
   clubId: string
 ): Promise<ClubDataSeed & { courtsError: string }> {
-  const [courtsResult, settings, sportPrices, profes] = await Promise.all([
+  const [courtsResult, settings, sportPrices, profes, approvalRules] = await Promise.all([
     queryCourts(supabase, clubId),
     queryClubSettings(supabase, clubId),
     querySportPrices(supabase, clubId),
     queryProfes(supabase, clubId),
+    queryApprovalRules(supabase, clubId),
   ]);
   return {
     clubId,
@@ -24,5 +25,6 @@ export async function loadClubDataSeed(
     settings,
     sportPrices,
     profes,
+    approvalRules,
   };
 }

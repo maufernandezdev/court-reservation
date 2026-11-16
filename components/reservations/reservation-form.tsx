@@ -29,6 +29,8 @@ import {
 import { digitsOnly } from "@/lib/players";
 import { depositFor, formatMoney, isNight, quotePrice } from "@/lib/pricing";
 import { useSportPrices } from "@/hooks/use-sport-prices";
+import { useApprovalRules } from "@/hooks/use-approval-rules";
+import { requiresApproval } from "@/lib/approval";
 import { createClient } from "@/lib/supabase/client";
 import { ensureFixedReservations } from "@/lib/series";
 import { useMembership } from "@/hooks/use-membership";
@@ -141,6 +143,7 @@ export function ReservationForm({
   } = useClubSettings();
   const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
   const { prices } = useSportPrices();
+  const approvalRules = useApprovalRules();
 
   // El formulario se monta al abrir el diálogo: arranca ya con los valores.
   const valuesFor = (): ReservationInput => {
@@ -222,7 +225,7 @@ export function ReservationForm({
           .select("*")
           .eq("club_id", membership.club_id)
           .eq("date", date)
-          .eq("status", "active")
+          .in("status", ["active", "pending_approval"])
       )
       .then(({ data }) => {
         if (!cancelled) setOtherDay({ date, list: (data ?? []) as Reservation[] });
@@ -368,6 +371,16 @@ export function ReservationForm({
 
     if (!result.success) {
       setFormError(result.error ?? "No se pudo guardar la reserva.");
+      return;
+    }
+
+    if (result.reservation?.status === "pending_approval" && reservation?.status !== "pending_approval") {
+      toast.info("Turno pedido: queda por confirmar", {
+        description: "El horario necesita confirmación del admin. Podés avisarle por WhatsApp desde el detalle del turno.",
+        duration: 8000,
+      });
+      onSaved(result.reservation);
+      if (mode !== "edit") onClose();
       return;
     }
 
@@ -675,6 +688,18 @@ export function ReservationForm({
             )}
           />
         )}
+
+        {membership.role !== "admin" &&
+          !isCancelled &&
+          selectedCourt &&
+          requiresApproval(approvalRules, selectedCourt.id, date, time, effectiveDuration) && (
+            <Alert role="status">
+              <AlertDescription>
+                Este horario necesita confirmación del admin: el turno ocupa el lugar y queda &quot;Por confirmar&quot;
+                hasta que lo confirme.
+              </AlertDescription>
+            </Alert>
+          )}
 
         {selectedCourt && !isCancelled && (
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl bg-ink px-4 py-3 text-sm text-primary-foreground">

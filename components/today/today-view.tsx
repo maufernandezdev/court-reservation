@@ -152,10 +152,13 @@ export function TodayView({
   initialReservations,
   initialPayments,
   courtsError: initialCourtsError,
+  approvals,
 }: {
   initialReservations: InitialReservations;
   initialPayments: InitialDayPayments;
   courtsError: string;
+  /** Horarios con confirmación ("Para confirmar" o los pedidos propios), armado en el servidor. */
+  approvals?: React.ReactNode;
 }) {
   const now = useNow();
   // La fecha y hora del encabezado y el resumen del día dependen de la hora del
@@ -291,6 +294,8 @@ export function TodayView({
             <AlertDescription>{loadError}</AlertDescription>
           </Alert>
         )}
+
+        {approvals}
 
         {/* Los datos vienen del servidor; el resumen depende de la hora del dispositivo y se
             dibuja apenas hidrata (el HTML del servidor muestra el esqueleto). */}
@@ -537,7 +542,7 @@ export function TodayView({
             initialTime={creating.time}
             initialDate={todayKey}
             courts={courts}
-            activeReservations={reservations.filter((r) => r.status === "active")}
+            activeReservations={reservations.filter((r) => r.status === "active" || r.status === "pending_approval")}
             membership={membership}
             onSaved={(r) => {
               upsertLocal(r);
@@ -559,7 +564,7 @@ export function TodayView({
             initialTime={charging.time}
             initialDate={todayKey}
             courts={courts}
-            activeReservations={reservations.filter((r) => r.status === "active")}
+            activeReservations={reservations.filter((r) => r.status === "active" || r.status === "pending_approval")}
             membership={membership}
             onSaved={(r) => {
               upsertLocal(r);

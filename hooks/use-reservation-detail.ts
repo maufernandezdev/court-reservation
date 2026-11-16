@@ -82,7 +82,8 @@ export function useReservationDetail({
   const slotPrice = reservation ? Number(reservation.price) : 0;
   const deposit = court && reservation ? depositFor(prices[court.type], reservation.kind, slotPrice) : 0;
 
-  const isCancelled = reservation?.status === "cancelled";
+  // Un turno rechazado tampoco ocupa el lugar: se trata como cancelado (sin cobros ni acciones).
+  const isCancelled = reservation?.status === "cancelled" || reservation?.status === "rejected";
   const depositPaid = payments
     .filter((p) => p.kind === "seña" && !p.released)
     .reduce((sum, p) => sum + Number(p.amount), 0);

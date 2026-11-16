@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { approvalRuleSchema, type ApprovalRuleInput } from "@/lib/approval";
 import { clubSettingsSchema, type ClubSettings } from "@/lib/reservations";
 import { requireRole } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
@@ -254,5 +256,92 @@ export async function removeClubLogoAction(): Promise<{ success: boolean; error?
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "No se pudo quitar el logo." };
+  }
+}
+
+/** Nueva franja con confirmación del admin (solo admin). */
+export async function createApprovalRuleAction(
+  input: ApprovalRuleInput
+): Promise<{ success: boolean; error?: string }> {
+  const parsed = approvalRuleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+    const data = parsed.data;
+
+    if (data.court_id) {
+      const { data: court } = await supabase
+        .from("courts")
+        .select("id")
+        .eq("club_id", clubId)
+        .eq("id", data.court_id)
+        .maybeSingle();
+      if (!court) return { success: false, error: "Elegí una cancha del club." };
+    }
+
+    const row = {
+      club_id: clubId,
+      court_id: data.court_id,
+      weekdays: data.mode === "weekdays" ? [...new Set(data.weekdays)].sort() : null,
+      on_date: data.mode === "date" ? data.on_date : null,
+      from_time: data.from_time,
+      to_time: data.to_time === "24:00" ? "24:00:00" : data.to_time,
+      created_by: user!.id,
+    };
+    const { data: created, error } = await supabase.from("approval_rules").insert(row).select("id").single();
+    if (error) {
+      return { success: false, error: subscriptionMessage(error, "No se pudo guardar el horario.") };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "approval_rule",
+      entityId: created.id,
+      action: "approval_rule.created",
+      payload: row,
+    });
+
+    revalidatePath("/dashboard/configuracion");
+    revalidatePath("/dashboard/reservas");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo guardar el horario." };
+  }
+}
+
+/** Quita una franja con confirmación (solo admin). Los turnos ya pedidos siguen por confirmar. */
+export async function deleteApprovalRuleAction(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!z.string().uuid().safeParse(id).success) return { success: false, error: "Horario inválido." };
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+    const { data, error } = await supabase
+      .from("approval_rules")
+      .delete()
+      .eq("club_id", clubId)
+      .eq("id", id)
+      .select("court_id, weekdays, on_date, from_time, to_time")
+      .maybeSingle();
+    if (error) return { success: false, error: subscriptionMessage(error, "No se pudo quitar el horario.") };
+    if (!data) return { success: false, error: "El horario ya no existe." };
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "approval_rule",
+      entityId: id,
+      action: "approval_rule.removed",
+      payload: data,
+    });
+    revalidatePath("/dashboard/configuracion");
+    revalidatePath("/dashboard/reservas");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo quitar el horario." };
   }
 }

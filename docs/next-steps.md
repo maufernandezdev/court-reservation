@@ -139,3 +139,8 @@ Plan aprobado por Mau a partir de la planilla en papel del club (fotos en `docs/
 > ✅ **Aplicado (16/11/2026), migraciones `0026` y `0027`.** Nuevo rol "Organizador de torneos" (se invita desde Equipo): ve toda la planilla sin montos, crea, mueve y cancela turnos de torneo (en término y sin cobros) y carga resultados; no ve Caja, Reportes, Canchas, Equipo ni Políticas. Los montos se ocultan en la base, no solo en pantalla. Los torneos guardan ganador y marcador (tilde y marcador en la planilla) y tienen su propio precio de día y de noche en Precios (arrancó igual al del público). Plan en `openspec/changes/add-tournament-organizer/`.
 
 - [ ] **Prueba manual:** invitar a un organizador, entrar con esa cuenta y recorrer planilla, detalle y Hoy (sin montos); crear un torneo, moverlo y cargar el resultado; intentar cancelar uno fuera de término; cambiar el precio de torneo y reservar uno de día y otro de noche.
+
+## ✅ Horarios con confirmación del admin
+> ✅ **Aplicado (16/11/2026), migración `0028`.** En Políticas el admin define franjas (todas las canchas o una; días de la semana o una fecha; desde y hasta). Si un operador, profe u organizador reserva ahí, el formulario avisa y el turno queda "Por confirmar": ocupa el lugar y se ve rayado. El admin lo ve en Hoy ("Para confirmar", con contador en el menú) y lo confirma o lo rechaza (libera el lugar). Quien pidió ve el estado y puede avisarle al admin por WhatsApp. El admin reserva sin confirmación. Plan en `openspec/changes/add-approval-rules/`.
+
+- [ ] **Prueba manual:** cargar "lunes a viernes desde las 19:00", reservar como operador un martes a las 20:00 (aviso y rayado), avisar por WhatsApp, confirmarlo como admin; pedir otro y rechazarlo; reservar como admin en la franja (queda confirmado).

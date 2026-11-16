@@ -91,7 +91,7 @@ export function maxDurationAt(
   const start = timeToMinutes(time);
   let limit = Math.min(maxMinutes, timeToMinutes(hours.close_time) - start);
   for (const r of courtReservations) {
-    if (r.status !== "active") continue;
+    if (r.status !== "active" && r.status !== "pending_approval") continue;
     const s = timeToMinutes(r.time);
     const e = s + r.duration_minutes;
     if (s <= start && start < e) return 0;
@@ -116,7 +116,7 @@ export function reservationCoversSlot(
   reservation: Pick<Reservation, "time" | "duration_minutes" | "status">,
   time: string
 ): boolean {
-  if (reservation.status !== "active") return false;
+  if (reservation.status !== "active" && reservation.status !== "pending_approval") return false;
   const slotStart = timeToMinutes(time);
   const resStart = timeToMinutes(reservation.time);
   return (

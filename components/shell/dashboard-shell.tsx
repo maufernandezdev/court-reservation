@@ -25,10 +25,19 @@ type DashboardShellProps = {
   avatarUrl: string | null;
   /** Aviso de la suscripción del club (prueba por terminar, gracia o vencida), o null. */
   notice: SubscriptionNotice | null;
+  /** Turnos por confirmar (admin). */
+  pendingApprovals?: number;
   children: React.ReactNode;
 };
 
-export function DashboardShell({ membership, memberships, avatarUrl, notice, children }: DashboardShellProps) {
+export function DashboardShell({
+  membership,
+  memberships,
+  avatarUrl,
+  notice,
+  pendingApprovals = 0,
+  children,
+}: DashboardShellProps) {
   const { user, logout } = useAuth();
   const email = user?.email ?? membership.email;
   const userName = membership.full_name.trim() || email || "Usuario";
@@ -47,7 +56,7 @@ export function DashboardShell({ membership, memberships, avatarUrl, notice, chi
 
   return (
     <AuthGuard>
-      <ActiveClubProvider membership={membership} memberships={memberships}>
+      <ActiveClubProvider membership={membership} memberships={memberships} pendingApprovals={pendingApprovals}>
         <div className="flex min-h-screen bg-background">
           <AppSidebar identity={identity} isAdmin={isAdmin} onLogout={logout} />
           <main className="min-w-0 flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">

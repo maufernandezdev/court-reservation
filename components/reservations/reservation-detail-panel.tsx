@@ -27,6 +27,7 @@ import {
   toneFor,
 } from "@/lib/reservation-tone";
 import { MatchResultForm } from "@/components/reservations/match-result-form";
+import { ApprovalBox } from "@/components/reservations/approval-box";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
@@ -234,6 +235,13 @@ export function ReservationDetailPanel({
         <DetailSkeleton />
       ) : (
         <>
+          <ApprovalBox
+            reservation={reservation}
+            courtName={court?.name ?? "Cancha"}
+            isAdmin={membership.role === "admin"}
+            onSaved={detail.onSaved}
+          />
+
           {reservation.kind === "torneo" &&
             (canSetResult(membership.role) && !isCancelled ? (
               <MatchResultForm key={`${reservation.id}-${reservation.result_score ?? ""}-${reservation.result_winner ?? ""}`} reservation={reservation} onSaved={detail.onSaved} />

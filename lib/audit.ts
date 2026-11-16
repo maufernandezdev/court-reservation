@@ -1,5 +1,6 @@
 import { formatCancelWindow } from "@/lib/reservations";
 import { CASH_CATEGORY_LABELS, type CashCategory } from "@/lib/cash";
+import { describeRuleWhen } from "@/lib/approval";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AuditAction =
@@ -31,7 +32,11 @@ export type AuditAction =
   | "cash.movement_created"
   | "cash.movement_voided"
   | "cash.opening_set"
-  | "reservation.result_set";
+  | "reservation.result_set"
+  | "reservation.approved"
+  | "reservation.rejected"
+  | "approval_rule.created"
+  | "approval_rule.removed";
 
 type AuditInput = {
   clubId: string;
@@ -84,6 +89,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "player.created",
     "series.created",
     "cash.movement_created",
+    "approval_rule.created",
   ],
   updated: [
     "reservation.updated",
@@ -97,9 +103,10 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "player.updated",
     "cash.opening_set",
     "reservation.result_set",
+    "reservation.approved",
   ],
   charged: ["payment.registered", "credit.applied"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed"],
 };
 
 function depositText(p: Record<string, unknown>, audience: "public" | "profe"): string {
@@ -169,6 +176,21 @@ export function describeAuditEntry(
       return `creó un turno${who ? ` para ${who}` : ""}${where ? ` · ${where}` : ""}`;
     case "reservation.updated":
       return `modificó el turno${turno}`;
+    case "approval_rule.created":
+    case "approval_rule.removed": {
+      const when = describeRuleWhen({
+        weekdays: (p.weekdays as number[] | null) ?? null,
+        on_date: (p.on_date as string | null) ?? null,
+        from_time: String(p.from_time ?? ""),
+        to_time: String(p.to_time ?? ""),
+      });
+      const verb = entry.action === "approval_rule.created" ? "pidió confirmación del admin para" : "quitó la confirmación del admin de";
+      return `${verb} ${when}${ctx.courtName ? ` en ${ctx.courtName}` : p.court_id ? "" : " (todas las canchas)"}`;
+    }
+    case "reservation.approved":
+      return `confirmó el horario del turno${turno}`;
+    case "reservation.rejected":
+      return `rechazó el horario del turno${turno}${p.reason ? ` (${String(p.reason)})` : ""}`;
     case "reservation.result_set":
       return p.winner || p.score
         ? `cargó el resultado del partido${turno}${p.score ? `: ${String(p.score)}` : ""}${p.winner ? ` (ganó el lado ${String(p.winner)})` : ""}`

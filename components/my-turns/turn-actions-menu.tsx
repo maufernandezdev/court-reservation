@@ -24,7 +24,7 @@ function EditTurnDialog({ turn, onClose }: { turn: Reservation; onClose: () => v
   const { courts, isLoading: isLoadingCourts } = useCourts();
   const { membership } = useMembership();
   const { reservations, isLoading: isLoadingReservations } = useReservations(turn.date);
-  const activeReservations = useMemo(() => reservations.filter((r) => r.status === "active"), [reservations]);
+  const activeReservations = useMemo(() => reservations.filter((r) => r.status === "active" || r.status === "pending_approval"), [reservations]);
 
   if (isLoadingCourts || isLoadingReservations) return null;
 

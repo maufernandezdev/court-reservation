@@ -11,6 +11,7 @@ import {
   reservationInputSchema,
   type Payment,
   MAX_PEOPLE,
+  OCCUPYING_STATUSES,
   RESERVATION_SELECT,
   canManageReservation,
   type Reservation,
@@ -175,7 +176,7 @@ async function assertNoOverlap(
     .eq("club_id", clubId)
     .eq("court_id", courtId)
     .eq("date", date)
-    .eq("status", "active");
+    .in("status", OCCUPYING_STATUSES);
 
   const start = timeToMinutes(time);
   const overlaps = (data ?? []).some(
@@ -466,6 +467,24 @@ async function createSeries(
 ): Promise<ActionResult> {
   const { supabase, user, membership } = ctx;
   const clubId = membership!.club_id;
+
+  // Las fechas de un fijo se generan solas: en un horario con confirmación lo carga el admin.
+  if (membership!.role !== "admin") {
+    const { data: needsApproval } = await supabase.rpc("requires_approval", {
+      p_club_id: clubId,
+      p_court_id: prepared.court.id,
+      p_date: data.date,
+      p_time: data.time,
+      p_duration: prepared.duration,
+    });
+    if (needsApproval) {
+      return {
+        success: false,
+        error: "Ese horario necesita confirmación del admin: los turnos fijos ahí los carga el administrador.",
+      };
+    }
+  }
+
   const [y, m, d] = data.date.split("-").map(Number);
   const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 
@@ -569,7 +588,7 @@ export async function updateReservationAction(
     if (!existing) {
       return { success: false, error: "No se encontró la reserva." };
     }
-    if (existing.status === "cancelled") {
+    if (existing.status === "cancelled" || existing.status === "rejected") {
       return {
         success: false,
         error: "La reserva ya fue cancelada y no se puede modificar.",
@@ -691,8 +710,11 @@ export async function cancelReservationAction(
     if (!reservation) {
       return { success: false, error: "No se encontró la reserva." };
     }
-    if (reservation.status === "cancelled") {
-      return { success: false, error: "La reserva ya estaba cancelada." };
+    if (reservation.status === "cancelled" || reservation.status === "rejected") {
+      return {
+        success: false,
+        error: reservation.status === "rejected" ? "El turno fue rechazado: no ocupa el lugar." : "La reserva ya estaba cancelada.",
+      };
     }
 
     // Valor fijado al reservar.
@@ -865,6 +887,9 @@ export async function registerPaymentAction(
         error: "La reserva está cancelada y no admite cobros.",
       };
     }
+    if (reservation.status === "pending_approval" || reservation.status === "rejected") {
+      return { success: false, error: "El turno todavía no está confirmado por el admin: no admite cobros." };
+    }
 
     const court = await fetchCourt(supabase, clubId, reservation.court_id);
     if (!court) {
@@ -968,6 +993,9 @@ export async function applyCreditAction(
         success: false,
         error: "La reserva está cancelada y no admite cobros.",
       };
+    }
+    if (reservation.status === "pending_approval" || reservation.status === "rejected") {
+      return { success: false, error: "El turno todavía no está confirmado por el admin: no admite cobros." };
     }
 
     const phone = reservation.phone.trim();
@@ -1230,5 +1258,84 @@ export async function setMatchResultAction(
     return forClient(ctx, { success: true, reservation: updated ?? undefined });
   } catch (err) {
     return failure(err, "No se pudo guardar el resultado.");
+  }
+}
+
+/** El admin confirma un horario pedido: el turno pasa a activo. */
+export async function approveReservationAction(id: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) return { success: false, error: "No se encontró la reserva." };
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+    const { data, error } = await supabase
+      .from("reservations")
+      .update({ status: "active", approved_by: user!.id, approved_at: new Date().toISOString(), updated_by: user!.id })
+      .eq("id", id)
+      .eq("club_id", clubId)
+      .eq("status", "pending_approval")
+      .select(RESERVATION_SELECT)
+      .maybeSingle();
+    if (error) return { success: false, error: subscriptionMessage(error, "No se pudo confirmar el turno.") };
+    if (!data) return { success: false, error: "El turno ya no está por confirmar." };
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "reservation",
+      entityId: id,
+      action: "reservation.approved",
+      payload: { customer_name: data.customer_name, date: data.date, time: data.time },
+    });
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/reservas");
+    return { success: true, reservation: data as Reservation };
+  } catch (err) {
+    return failure(err, "No se pudo confirmar el turno.");
+  }
+}
+
+/** El admin rechaza un horario pedido: el turno queda rechazado y libera el lugar. */
+export async function rejectReservationAction(id: string, reason: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) return { success: false, error: "No se encontró la reserva." };
+  const parsed = cancelReservationSchema.safeParse({ reason });
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+    const { data, error } = await supabase
+      .from("reservations")
+      .update({
+        status: "rejected",
+        rejected_by: user!.id,
+        rejected_at: new Date().toISOString(),
+        cancel_reason: parsed.data.reason.trim() || null,
+        updated_by: user!.id,
+      })
+      .eq("id", id)
+      .eq("club_id", clubId)
+      .eq("status", "pending_approval")
+      .select(RESERVATION_SELECT)
+      .maybeSingle();
+    if (error) return { success: false, error: subscriptionMessage(error, "No se pudo rechazar el turno.") };
+    if (!data) return { success: false, error: "El turno ya no está por confirmar." };
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "reservation",
+      entityId: id,
+      action: "reservation.rejected",
+      payload: {
+        customer_name: data.customer_name,
+        date: data.date,
+        time: data.time,
+        reason: parsed.data.reason.trim() || undefined,
+      },
+    });
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/reservas");
+    return { success: true, reservation: data as Reservation };
+  } catch (err) {
+    return failure(err, "No se pudo rechazar el turno.");
   }
 }
