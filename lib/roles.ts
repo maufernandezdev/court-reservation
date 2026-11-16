@@ -82,7 +82,9 @@ export const ROLE_CAPABILITIES: RoleCapability[] = [
   },
   { label: "Cancelar fuera de término", access: { admin: true, operador: true, profesor: false } },
   { label: "Registrar cobros y señas", access: { admin: true, operador: true, profesor: false } },
-  { label: "Ver caja y reportes", access: { admin: true, operador: false, profesor: false } },
+  { label: "Ver la caja y registrar ventas", access: { admin: true, operador: true, profesor: false } },
+  { label: "Registrar salidas, cambio y anular", access: { admin: true, operador: false, profesor: false } },
+  { label: "Ver reportes", access: { admin: true, operador: false, profesor: false } },
   { label: "Canchas, precios y políticas", access: { admin: true, operador: false, profesor: false } },
   { label: "Invitar y cambiar roles", access: { admin: true, operador: false, profesor: false } },
 ];

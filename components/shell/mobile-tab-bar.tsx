@@ -51,7 +51,7 @@ export function MobileTabBar({ identity, isAdmin, onLogout }: MobileTabBarProps)
     { href: "/dashboard", label: "Hoy", icon: LayoutDashboard },
     { href: "/dashboard/reservas", label: "Planilla", icon: Grid3x3 },
     { href: "/dashboard/reservas?buscar=1", label: "Buscar", icon: Search, match: "__never__" },
-    ...(isAdmin
+    ...(isAdmin || membership.role === "operador"
       ? [{ href: "/dashboard/caja", label: "Caja", icon: Wallet }]
       : membership.role === "profesor"
         ? [{ href: "/dashboard/mis-turnos", label: "Mis turnos", icon: CalendarDays }]

@@ -120,3 +120,12 @@ Las canchas cambian de precio según la hora por el costo de la luz: hasta las 1
 > ✅ **Aplicado (18/10/2026, migración `0013`).** Modelo, estado, límite de canchas, solo lectura, pantalla y script listos.
 >
 > **Pendiente: integrar Mercado Pago** (checkout de suscripción y webhook que llame a `register_subscription_payment`; la tabla ya guarda `mp_payment_id`, `mp_preapproval_id`, `external_reference` y la respuesta cruda). Hasta entonces el dueño del producto registra cada pago con `scripts/subscription-admin.mjs`, y antes de publicar hay que cargar el primer pago de cada club cuando termine su mes gratis. Sin avisos por correo todavía (se anota para Notificaciones).
+
+# Etapa 1 — pedidos del 15/11/2026
+
+Plan aprobado por Mau a partir de la planilla en papel del club (fotos en `docs/`).
+
+## ✅ Caja: entradas y salidas del día
+> ✅ **Aplicado (16/11/2026), migración `0025`.** La Caja es la planilla del día: cambio inicial (lo edita el admin), "Registrar venta" (accesorios u otros ingresos, con sugerencias de lo ya vendido), "Registrar salida" (solo admin: liquidación de profe, empleado, proveedor, gasto general o retiro), totales por medio y "Efectivo en caja" = cambio + entradas en efectivo − salidas en efectivo. Las salidas se separan en "Gastos y liquidaciones" (efectivo) y "Gastos MP". Un movimiento no se borra: se anula y queda tachado. Los cobros aceptan Mercado Pago (en pantalla solo Efectivo y Mercado Pago). El operador ve la Caja y registra ventas. Plan en `openspec/changes/add-cash-register/`.
+
+- [ ] **Prueba manual:** cargar el cambio, vender un accesorio en efectivo y otro por MP (con cantidad), registrar una liquidación y un gasto MP, anular uno y ver que deja de sumar; entrar como operador y vender.

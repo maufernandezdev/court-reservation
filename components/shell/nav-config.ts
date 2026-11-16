@@ -45,7 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard", label: "Hoy", icon: LayoutDashboard },
       { href: "/dashboard/reservas", label: "Planilla", icon: Grid3x3 },
       { href: "/dashboard/mis-turnos", label: "Mis turnos", icon: CalendarDays, roles: ["profesor"] },
-      { href: "/dashboard/caja", label: "Caja", icon: Wallet, minRole: "admin" },
+      { href: "/dashboard/caja", label: "Caja", icon: Wallet, minRole: "operador" },
     ],
   },
   {

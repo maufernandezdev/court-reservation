@@ -5,7 +5,7 @@ import { History, MessageCircle, Pencil, Wallet, X, Repeat, Trophy } from "lucid
 import {
   sortedParticipants,
   RESERVATION_KIND_LABELS,
-  PAYMENT_METHODS,
+  VISIBLE_PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   canManageReservation,
   formatCancelWindow,
@@ -276,9 +276,9 @@ export function ReservationDetailPanel({
                 value={detail.paymentMethod}
                 onValueChange={(v) => v && detail.setPaymentMethod(v as PaymentMethod)}
                 aria-labelledby="payment-method-label"
-                className="grid w-full grid-cols-3 rounded-lg bg-muted p-1"
+                className="grid w-full grid-cols-2 rounded-lg bg-muted p-1"
               >
-                {PAYMENT_METHODS.map((method) => (
+                {VISIBLE_PAYMENT_METHODS.map((method) => (
                   <ToggleGroupItem key={method} value={method} className="h-9 w-full">
                     {PAYMENT_METHOD_LABELS[method]}
                   </ToggleGroupItem>

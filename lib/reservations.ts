@@ -41,12 +41,26 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
 export const PAYMENT_KINDS = ["seña", "total", "saldo"] as const;
 export type PaymentKind = (typeof PAYMENT_KINDS)[number];
 
-export const PAYMENT_METHODS = ["efectivo", "transferencia", "otro"] as const;
+/** Medios que acepta la base (transferencia y otro quedan para cobros viejos). */
+export const PAYMENT_METHODS = ["efectivo", "mercado_pago", "transferencia", "otro"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+/** Medios que se ofrecen al cobrar o registrar un movimiento. */
+export const VISIBLE_PAYMENT_METHODS = ["efectivo", "mercado_pago"] as const satisfies readonly PaymentMethod[];
+export type VisiblePaymentMethod = (typeof VISIBLE_PAYMENT_METHODS)[number];
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   efectivo: "Efectivo",
+  mercado_pago: "Mercado Pago",
   transferencia: "Transferencia",
+  otro: "Otro",
+};
+
+/** Rótulo corto (planilla, listas): "Efectivo", "MP"… */
+export const PAYMENT_METHOD_SHORT: Record<PaymentMethod, string> = {
+  efectivo: "Efectivo",
+  mercado_pago: "MP",
+  transferencia: "Transf.",
   otro: "Otro",
 };
 
@@ -199,7 +213,7 @@ export const cancelReservationSchema = z.object({
 
 export const registerPaymentSchema = z.object({
   kind: z.enum(PAYMENT_KINDS, { message: "Tipo de cobro inválido" }),
-  method: z.enum(PAYMENT_METHODS, { message: "Método de pago inválido" }),
+  method: z.enum(VISIBLE_PAYMENT_METHODS, { message: "Elegí efectivo o Mercado Pago" }),
 });
 
 export type ClubSettings = {

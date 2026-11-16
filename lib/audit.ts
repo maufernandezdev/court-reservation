@@ -1,4 +1,5 @@
 import { formatCancelWindow } from "@/lib/reservations";
+import { CASH_CATEGORY_LABELS, type CashCategory } from "@/lib/cash";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AuditAction =
@@ -26,7 +27,10 @@ export type AuditAction =
   | "invitation.created"
   | "invitation.regenerated"
   | "invitation.revoked"
-  | "invitation.accepted";
+  | "invitation.accepted"
+  | "cash.movement_created"
+  | "cash.movement_voided"
+  | "cash.opening_set";
 
 type AuditInput = {
   clubId: string;
@@ -78,6 +82,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "invitation.accepted",
     "player.created",
     "series.created",
+    "cash.movement_created",
   ],
   updated: [
     "reservation.updated",
@@ -89,9 +94,10 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "invitation.regenerated",
     "prices.updated",
     "player.updated",
+    "cash.opening_set",
   ],
   charged: ["payment.registered", "credit.applied"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided"],
 };
 
 function depositText(p: Record<string, unknown>, audience: "public" | "profe"): string {
@@ -122,6 +128,7 @@ const ROLE_NAMES: Record<string, string> = {
 
 const METHOD_TEXT: Record<string, string> = {
   efectivo: "en efectivo",
+  mercado_pago: "por Mercado Pago",
   transferencia: "por transferencia",
   otro: "",
 };
@@ -246,6 +253,24 @@ export function describeAuditEntry(
     }
     case "invitation.accepted":
       return `se sumó al club como ${ROLE_NAMES[String(p.role)] ?? String(p.role ?? "miembro")}`;
+    case "cash.movement_created":
+    case "cash.movement_voided": {
+      const method = METHOD_TEXT[String(p.method)] ?? "";
+      const category = CASH_CATEGORY_LABELS[p.category as CashCategory]?.toLowerCase() ?? "movimiento";
+      const detail =
+        p.type === "in"
+          ? `${p.concept ? String(p.concept) : category}${Number(p.quantity) > 1 ? ` ×${String(p.quantity)}` : ""}`
+          : `${category}${p.counterparty ? ` a ${String(p.counterparty)}` : ""}`;
+      const verb =
+        entry.action === "cash.movement_voided"
+          ? "anuló en la caja"
+          : p.type === "in"
+            ? "registró la venta de"
+            : "registró la salida:";
+      return `${verb} ${detail} por ${money(p.amount)}${method ? ` ${method}` : ""}`;
+    }
+    case "cash.opening_set":
+      return `fijó el cambio inicial de la caja${typeof p.date === "string" ? ` del ${shortDate(p.date)}` : ""} en ${money(p.amount)}`;
     case "settings.updated":
       return `cambió las políticas: ${typeof p.cancel_window_hours === "number" ? formatCancelWindow(p.cancel_window_hours) : "?"} de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%${p.tournament_duration_minutes ? `, torneos de ${String(p.tournament_duration_minutes)} min` : ""}`;
     default:
