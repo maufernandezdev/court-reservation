@@ -320,6 +320,8 @@ export function useReservationDetail({
     applyCredit,
     cancel,
     actorName,
+    /** Avisa a la planilla de un turno actualizado (por ejemplo, el resultado de un torneo). */
+    onSaved,
   };
 }
 

@@ -202,7 +202,9 @@ export function ScheduleGrid({
                   const endTime = minutesToTime(item.start + r.duration_minutes);
                   const selected = r.id === selectedId;
                   // Valor, estado y medio; si no hay precio a la vista, el estado como antes.
-                  const money = paymentSummary(r, paymentMethods?.get(r.id));
+                  const money = [paymentSummary(r, paymentMethods?.get(r.id)), r.kind === "torneo" ? r.result_score : null]
+                    .filter(Boolean)
+                    .join(" · ");
                   const short = r.duration_minutes < 60;
                   return (
                     <button

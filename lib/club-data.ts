@@ -4,7 +4,7 @@ import type { DayPayment } from "@/lib/daily-overview";
 import type { SportPrices } from "@/lib/pricing";
 import { DEFAULT_NIGHT_STARTS_AT } from "@/lib/pricing";
 import { DEFAULT_CLUB_HOURS, normalizeTime } from "@/lib/availability";
-import { RESERVATION_SELECT, type ClubSettings, type Reservation } from "@/lib/reservations";
+import { RESERVATION_SELECT, RESERVATION_SOURCE, type ClubSettings, type Reservation } from "@/lib/reservations";
 import { ensureFixedReservations } from "@/lib/series";
 
 /**
@@ -91,7 +91,7 @@ export async function queryReservations(
 ): Promise<{ reservations: Reservation[]; error: string }> {
   await ensureFixedReservations(supabase, clubId, date, todayKey);
   const { data, error } = await supabase
-    .from("reservations")
+    .from(RESERVATION_SOURCE)
     .select(RESERVATION_SELECT)
     .eq("club_id", clubId)
     .eq("date", date)

@@ -1,11 +1,17 @@
-export const CLUB_ROLES = ["admin", "operador", "profesor"] as const;
+export const CLUB_ROLES = ["admin", "operador", "profesor", "organizador"] as const;
 export type ClubRole = (typeof CLUB_ROLES)[number];
 
 export const CLUB_ROLE_LABELS: Record<ClubRole, string> = {
   admin: "Administrador",
   operador: "Operador",
   profesor: "Profesor",
+  organizador: "Organizador de torneos",
 };
+
+/** Quien puede ver montos (precios, cobros, caja): todos menos el organizador de torneos. */
+export function canSeeMoney(role: ClubRole): boolean {
+  return role !== "organizador";
+}
 
 export type Club = {
   id: string;
@@ -56,6 +62,8 @@ const ROLE_RANK: Record<ClubRole, number> = {
   admin: 3,
   operador: 2,
   profesor: 1,
+  // Mismo nivel que el profe: carga turnos, no cobra. Lo que cambia se aplica por rol exacto.
+  organizador: 1,
 };
 
 /** `role` alcanza al menos el nivel `minimum` (admin > operador > profesor). */
@@ -74,17 +82,21 @@ export type RoleCapability = {
  * aplican las Server Actions (`requireRole`) y las reglas de cancelación.
  */
 export const ROLE_CAPABILITIES: RoleCapability[] = [
-  { label: "Ver la planilla", access: { admin: true, operador: true, profesor: true } },
-  { label: "Crear y mover turnos", access: { admin: true, operador: true, profesor: true } },
+  { label: "Ver la planilla", access: { admin: true, operador: true, profesor: true, organizador: "Sin montos" } },
+  {
+    label: "Crear y mover turnos",
+    access: { admin: true, operador: true, profesor: "Los suyos", organizador: "Torneos" },
+  },
+  { label: "Cargar resultados de torneo", access: { admin: true, operador: true, profesor: false, organizador: true } },
   {
     label: "Cancelar en término",
-    access: { admin: true, operador: true, profesor: "Sin cobros" },
+    access: { admin: true, operador: true, profesor: "Sin cobros", organizador: "Torneos sin cobros" },
   },
-  { label: "Cancelar fuera de término", access: { admin: true, operador: true, profesor: false } },
-  { label: "Registrar cobros y señas", access: { admin: true, operador: true, profesor: false } },
-  { label: "Ver la caja y registrar ventas", access: { admin: true, operador: true, profesor: false } },
-  { label: "Registrar salidas, cambio y anular", access: { admin: true, operador: false, profesor: false } },
-  { label: "Ver reportes", access: { admin: true, operador: false, profesor: false } },
-  { label: "Canchas, precios y políticas", access: { admin: true, operador: false, profesor: false } },
-  { label: "Invitar y cambiar roles", access: { admin: true, operador: false, profesor: false } },
+  { label: "Cancelar fuera de término", access: { admin: true, operador: true, profesor: false, organizador: false } },
+  { label: "Registrar cobros y señas", access: { admin: true, operador: true, profesor: false, organizador: false } },
+  { label: "Ver la caja y registrar ventas", access: { admin: true, operador: true, profesor: false, organizador: false } },
+  { label: "Registrar salidas, cambio y anular", access: { admin: true, operador: false, profesor: false, organizador: false } },
+  { label: "Ver reportes", access: { admin: true, operador: false, profesor: false, organizador: false } },
+  { label: "Canchas, precios y políticas", access: { admin: true, operador: false, profesor: false, organizador: false } },
+  { label: "Invitar y cambiar roles", access: { admin: true, operador: false, profesor: false, organizador: false } },
 ];

@@ -104,6 +104,25 @@ export function reservationTitle(
   return `${people[0] ?? reservation.customer_name}${extra}`;
 }
 
+/** Los dos lados de un partido de torneo (singles: uno por lado; dobles: dos y dos). */
+export function matchSides(reservation: Pick<Reservation, "participants" | "customer_name">): [string, string] {
+  const people = sortedParticipants(reservation).map((p) => p.name);
+  if (people.length >= 4) return [`${people[0]} / ${people[1]}`, `${people[2]} / ${people[3]}`];
+  if (people.length === 3) return [`${people[0]} / ${people[1]}`, people[2]];
+  return [people[0] ?? reservation.customer_name, people[1] ?? "Rival"];
+}
+
+/** Texto corto del resultado: "Ganó Pérez · 6-4 3-6 10-8" (vacío si no hay). */
+export function resultLabel(
+  reservation: Pick<Reservation, "kind" | "participants" | "customer_name" | "result_winner" | "result_score">
+): string {
+  if (reservation.kind !== "torneo" || (!reservation.result_winner && !reservation.result_score)) return "";
+  const parts: string[] = [];
+  if (reservation.result_winner) parts.push(`Ganó ${matchSides(reservation)[reservation.result_winner - 1]}`);
+  if (reservation.result_score) parts.push(reservation.result_score);
+  return parts.join(" · ");
+}
+
 /** Alumnos de un turno de profe (personas después del profe). */
 export function profeStudents(reservation: Pick<Reservation, "participants">): string[] {
   return sortedParticipants(reservation).slice(1).map((p) => p.name);

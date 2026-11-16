@@ -8,11 +8,12 @@ import {
   VISIBLE_PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   canManageReservation,
+  canSetResult,
   formatCancelWindow,
   type PaymentMethod,
   type Reservation,
 } from "@/lib/reservations";
-import type { Membership } from "@/lib/roles";
+import { canSeeMoney, type Membership } from "@/lib/roles";
 import { formatMoney } from "@/lib/pricing";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { COURT_TYPE_LABELS } from "@/lib/courts";
@@ -22,8 +23,10 @@ import {
   RESERVATION_TONE_LABELS,
   reservationLook,
   reservationTitle,
+  resultLabel,
   toneFor,
 } from "@/lib/reservation-tone";
+import { MatchResultForm } from "@/components/reservations/match-result-form";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
@@ -111,7 +114,11 @@ export function ReservationDetailPanel({
     cancelOutcome,
     audit,
   } = detail;
-  const canCharge = membership.role !== "profesor";
+  // El organizador de torneos no ve montos ni cobra (y la base tampoco se los muestra).
+  const seesMoney = canSeeMoney(membership.role);
+  const isOrganizer = membership.role === "organizador";
+  const canCharge = membership.role !== "profesor" && seesMoney;
+  const result = resultLabel(reservation);
   // Un profesor ve los turnos de otros en modo lectura: sin editar, cancelar ni dar de baja el fijo.
   const canManage = canManageReservation(membership, reservation);
   const end = minutesToTime(
@@ -227,6 +234,17 @@ export function ReservationDetailPanel({
         <DetailSkeleton />
       ) : (
         <>
+          {reservation.kind === "torneo" &&
+            (canSetResult(membership.role) && !isCancelled ? (
+              <MatchResultForm key={`${reservation.id}-${reservation.result_score ?? ""}-${reservation.result_winner ?? ""}`} reservation={reservation} onSaved={detail.onSaved} />
+            ) : result ? (
+              <p className="flex items-center gap-2 rounded-xl border p-3.5 text-sm font-semibold">
+                <Trophy aria-hidden="true" className="size-4" />
+                {result}
+              </p>
+            ) : null)}
+
+          {seesMoney && (
           <div className="flex flex-col gap-2 rounded-xl bg-background p-3.5 text-sm">
             <div className="flex justify-between">
               <span>Valor del turno</span>
@@ -263,6 +281,7 @@ export function ReservationDetailPanel({
               </ul>
             )}
           </div>
+          )}
 
           {!isCancelled && canCharge && reservation.payment_status !== "pagada" && (
             <div className="flex flex-col gap-2.5">
@@ -343,7 +362,14 @@ export function ReservationDetailPanel({
             </AlertDialogContent>
           </AlertDialog>
 
-          {!isCancelled && canManage && (
+          {!isCancelled && canManage && isOrganizer && wouldBeLate && (
+            <p className="text-[13px] leading-snug text-pretty text-muted-foreground">
+              Faltan menos de {formatCancelWindow(cancelWindowHours)}: para cancelarlo ahora pedíselo a un operador o al
+              administrador.
+            </p>
+          )}
+
+          {!isCancelled && canManage && !(isOrganizer && wouldBeLate) && (
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-2 gap-2">
                 {onEdit && (

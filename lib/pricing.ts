@@ -14,6 +14,9 @@ export type SportPrices = {
   profe_price_per_hour: number;
   public_night_price_per_hour: number;
   profe_night_price_per_hour: number;
+  /** Precio de torneo de día y de noche (arrancó igual al del público). */
+  torneo_price_per_hour: number;
+  torneo_night_price_per_hour: number;
   public_deposit_enabled: boolean;
   public_deposit_type: DepositType;
   public_deposit_value: number;
@@ -36,8 +39,22 @@ export function isNight(start: string, nightStartsAt: string): boolean {
 }
 
 /**
- * Precio por hora según el tipo de turno y el momento: profe usa los precios de profes;
- * estándar y torneo, los del público. De noche se usan los precios de noche; si no hay uno cargado (0), el de día.
+ * Lista de precios que usa cada tipo de turno. Para sumar una modalidad (por ejemplo, "americano")
+ * alcanza con su columna `<lista>_price_per_hour` / `<lista>_night_price_per_hour` y una entrada acá.
+ */
+export const PRICE_LISTS = ["public", "profe", "torneo"] as const;
+export type PriceList = (typeof PRICE_LISTS)[number];
+
+export const PRICE_LIST_BY_KIND: Record<ReservationKind, PriceList> = {
+  standard: "public",
+  profe: "profe",
+  torneo: "torneo",
+};
+
+/**
+ * Precio por hora según el tipo de turno y el momento: cada tipo usa su lista (público, profe o torneo).
+ * De noche se usan los precios de noche; si no hay uno cargado (0), el de día. Un torneo sin precio
+ * propio (0) se cobra como el público.
  */
 export function hourlyPrice(
   prices: SportPrices | undefined,
@@ -45,10 +62,12 @@ export function hourlyPrice(
   night: boolean
 ): number {
   if (!prices) return 0;
-  const [day, nightPrice] =
-    kind === "profe"
-      ? [prices.profe_price_per_hour, prices.profe_night_price_per_hour]
-      : [prices.public_price_per_hour, prices.public_night_price_per_hour];
+  const list = PRICE_LIST_BY_KIND[kind];
+  if (list === "torneo" && !(Number(prices.torneo_price_per_hour) > 0)) {
+    return hourlyPrice(prices, "standard", night);
+  }
+  const day = prices[`${list}_price_per_hour`];
+  const nightPrice = prices[`${list}_night_price_per_hour`];
   // Sin precio de noche cargado (0) se cobra el de día: el club que no distingue no tiene que cargarlo dos veces.
   return Number(night && Number(nightPrice) > 0 ? nightPrice : day);
 }
@@ -120,6 +139,12 @@ export const sportPricesSchema = z
       .number({ message: "Ingresá un precio válido" })
       .min(0, "El precio no puede ser negativo"),
     profe_night_price_per_hour: z.coerce
+      .number({ message: "Ingresá un precio válido" })
+      .min(0, "El precio no puede ser negativo"),
+    torneo_price_per_hour: z.coerce
+      .number({ message: "Ingresá un precio válido" })
+      .min(0, "El precio no puede ser negativo"),
+    torneo_night_price_per_hour: z.coerce
       .number({ message: "Ingresá un precio válido" })
       .min(0, "El precio no puede ser negativo"),
     public_deposit_enabled: z.boolean(),

@@ -74,6 +74,8 @@ function toValues(sport: CourtType, row: SportPrices | undefined): SportPricesIn
     profe_price_per_hour: Number(row?.profe_price_per_hour ?? 0),
     public_night_price_per_hour: Number(row?.public_night_price_per_hour ?? 0),
     profe_night_price_per_hour: Number(row?.profe_night_price_per_hour ?? 0),
+    torneo_price_per_hour: Number(row?.torneo_price_per_hour ?? row?.public_price_per_hour ?? 0),
+    torneo_night_price_per_hour: Number(row?.torneo_night_price_per_hour ?? row?.public_night_price_per_hour ?? 0),
     public_deposit_enabled: row?.public_deposit_enabled ?? false,
     public_deposit_type: row?.public_deposit_type ?? "percent",
     public_deposit_value: Number(row?.public_deposit_value ?? 0),
@@ -201,6 +203,8 @@ function SportPricesCard({
     profe_price_per_hour: Number(values.profe_price_per_hour) || 0,
     public_night_price_per_hour: Number(values.public_night_price_per_hour) || 0,
     profe_night_price_per_hour: Number(values.profe_night_price_per_hour) || 0,
+    torneo_price_per_hour: Number(values.torneo_price_per_hour) || 0,
+    torneo_night_price_per_hour: Number(values.torneo_night_price_per_hour) || 0,
     public_deposit_value: Number(values.public_deposit_value) || 0,
     profe_deposit_value: Number(values.profe_deposit_value) || 0,
   } as SportPrices;
@@ -209,6 +213,8 @@ function SportPricesCard({
   const profeDay = quotePriceFor(preview, "profe", DEFAULT_DURATION_MINUTES, false);
   const publicNight = quotePriceFor(preview, "standard", DEFAULT_DURATION_MINUTES, true);
   const profeNight = quotePriceFor(preview, "profe", DEFAULT_DURATION_MINUTES, true);
+  const torneoDay = quotePriceFor(preview, "torneo", DEFAULT_DURATION_MINUTES, false);
+  const torneoNight = quotePriceFor(preview, "torneo", DEFAULT_DURATION_MINUTES, true);
   const publicDeposit = depositFor(preview, "standard", publicDay);
   const publicDepositNight = depositFor(preview, "standard", publicNight);
   const profeDeposit = depositFor(preview, "profe", profeDay);
@@ -251,7 +257,7 @@ function SportPricesCard({
             <legend className="mb-2 text-[13px] font-semibold text-muted-foreground">
               De día · hasta las {nightStartsAt}
             </legend>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <FormField
                 control={form.control}
                 name="public_price_per_hour"
@@ -278,6 +284,19 @@ function SportPricesCard({
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="torneo_price_per_hour"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Torneo por hora</FormLabel>
+                    <FormControl>
+                      <MoneyInput {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
           </fieldset>
 
@@ -286,9 +305,9 @@ function SportPricesCard({
               De noche · desde las {nightStartsAt}
             </legend>
             <p className="-mt-1 text-[13px] text-muted-foreground">
-              Si lo dejás vacío, se cobra el precio de día.
+              Si lo dejás vacío, se cobra el precio de día. Un torneo sin precio se cobra como el público.
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <FormField
                 control={form.control}
                 name="public_night_price_per_hour"
@@ -308,6 +327,19 @@ function SportPricesCard({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Profe por hora</FormLabel>
+                    <FormControl>
+                      <MoneyInput {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="torneo_night_price_per_hour"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Torneo por hora</FormLabel>
                     <FormControl>
                       <MoneyInput {...field} value={field.value ?? ""} />
                     </FormControl>
@@ -339,11 +371,13 @@ function SportPricesCard({
           >
             <span>
               Turno de 1 hora de día: <strong>{formatMoney(publicDay)}</strong> público ·{" "}
-              <strong>{formatMoney(profeDay)}</strong> profe
+              <strong>{formatMoney(profeDay)}</strong> profe ·{" "}
+              <strong>{formatMoney(torneoDay)}</strong> torneo
             </span>
             <span>
               De noche: <strong>{formatMoney(publicNight)}</strong> público ·{" "}
-              <strong>{formatMoney(profeNight)}</strong> profe
+              <strong>{formatMoney(profeNight)}</strong> profe ·{" "}
+              <strong>{formatMoney(torneoNight)}</strong> torneo
             </span>
             <span>
               Seña del público:{" "}

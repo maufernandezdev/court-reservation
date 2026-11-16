@@ -9,6 +9,7 @@ import type { Court } from "@/lib/courts";
 import {
   MAX_PEOPLE,
   RESERVATION_KINDS,
+  RESERVATION_SOURCE,
   RESERVATION_KIND_LABELS,
   reservationInputSchema,
   sortedParticipants,
@@ -128,6 +129,8 @@ export function ReservationForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { membership } = useMembership();
   const isProfesor = membership.role === "profesor";
+  // El organizador de torneos solo carga turnos de torneo y no ve montos.
+  const isOrganizer = membership.role === "organizador";
   const { profes } = useProfes();
   const {
     tournament_duration_minutes: tournamentDefault,
@@ -162,9 +165,9 @@ export function ReservationForm({
       date: initialDate,
       time: initialTime,
       phone: "",
-      kind: isProfesor ? "profe" : "standard",
+      kind: isProfesor ? "profe" : isOrganizer ? "torneo" : "standard",
       profe_user_id: isProfesor ? membership.user_id : null,
-      duration_minutes: DEFAULT_DURATION_MINUTES,
+      duration_minutes: isOrganizer ? tournamentDefault : DEFAULT_DURATION_MINUTES,
       people: [],
       repeat_weekly: false,
     };
@@ -215,7 +218,7 @@ export function ReservationForm({
     ensureFixedReservations(supabase, membership.club_id, date)
       .then(() =>
         supabase
-          .from("reservations")
+          .from(RESERVATION_SOURCE)
           .select("*")
           .eq("club_id", membership.club_id)
           .eq("date", date)
@@ -400,7 +403,7 @@ export function ReservationForm({
           </Alert>
         )}
 
-        {!isProfesor && (
+        {!isProfesor && !isOrganizer && (
           <Controller
             control={form.control}
             name="kind"
@@ -678,13 +681,15 @@ export function ReservationForm({
             <span className="text-sidebar-muted">
               {RESERVATION_KIND_LABELS[kind]} · {durationLabel(effectiveDuration)}
             </span>
-            <span className="font-mono">
-              <strong>{formatMoney(slotPrice)}</strong>
-              {startsAtNight && " (noche)"} · seña{" "}
-              <strong className="text-ball">
-                {deposit > 0 ? formatMoney(deposit) : "no requiere"}
-              </strong>
-            </span>
+            {!isOrganizer && (
+              <span className="font-mono">
+                <strong>{formatMoney(slotPrice)}</strong>
+                {startsAtNight && " (noche)"} · seña{" "}
+                <strong className="text-ball">
+                  {deposit > 0 ? formatMoney(deposit) : "no requiere"}
+                </strong>
+              </span>
+            )}
           </div>
         )}
 

@@ -134,3 +134,8 @@ Plan aprobado por Mau a partir de la planilla en papel del club (fotos en `docs/
 > ✅ **Aplicado (16/11/2026).** Cada turno de la planilla (escritorio y celular) muestra valor, estado y medio del último cobro, por ejemplo "$18.000 · Pagado · MP". Reportes arranca con el "Cierre del día" (hoy o la fecha que elijas): efectivo en caja, ingresos, egresos, Mercado Pago, ingresos por origen, egresos por categoría y turnos jugados, cancelados y por cobrar; el resumen de WhatsApp usa esos números. Plan en `openspec/changes/add-day-close-and-sheet-payments/`.
 
 - [ ] **Prueba manual:** cobrar un turno por MP y otro en efectivo y verlos en la planilla; comparar el cierre del día con la Caja; cambiar la fecha del cierre; copiar el resumen de WhatsApp.
+
+## ✅ Torneos: organizador, resultados y precio de torneo
+> ✅ **Aplicado (16/11/2026), migraciones `0026` y `0027`.** Nuevo rol "Organizador de torneos" (se invita desde Equipo): ve toda la planilla sin montos, crea, mueve y cancela turnos de torneo (en término y sin cobros) y carga resultados; no ve Caja, Reportes, Canchas, Equipo ni Políticas. Los montos se ocultan en la base, no solo en pantalla. Los torneos guardan ganador y marcador (tilde y marcador en la planilla) y tienen su propio precio de día y de noche en Precios (arrancó igual al del público). Plan en `openspec/changes/add-tournament-organizer/`.
+
+- [ ] **Prueba manual:** invitar a un organizador, entrar con esa cuenta y recorrer planilla, detalle y Hoy (sin montos); crear un torneo, moverlo y cargar el resultado; intentar cancelar uno fuera de término; cambiar el precio de torneo y reservar uno de día y otro de noche.

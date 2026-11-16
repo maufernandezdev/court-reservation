@@ -30,7 +30,8 @@ export type AuditAction =
   | "invitation.accepted"
   | "cash.movement_created"
   | "cash.movement_voided"
-  | "cash.opening_set";
+  | "cash.opening_set"
+  | "reservation.result_set";
 
 type AuditInput = {
   clubId: string;
@@ -95,6 +96,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "prices.updated",
     "player.updated",
     "cash.opening_set",
+    "reservation.result_set",
   ],
   charged: ["payment.registered", "credit.applied"],
   cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided"],
@@ -124,6 +126,7 @@ const ROLE_NAMES: Record<string, string> = {
   admin: "administrador",
   operador: "operador",
   profesor: "profesor",
+  organizador: "organizador de torneos",
 };
 
 const METHOD_TEXT: Record<string, string> = {
@@ -166,6 +169,10 @@ export function describeAuditEntry(
       return `creó un turno${who ? ` para ${who}` : ""}${where ? ` · ${where}` : ""}`;
     case "reservation.updated":
       return `modificó el turno${turno}`;
+    case "reservation.result_set":
+      return p.winner || p.score
+        ? `cargó el resultado del partido${turno}${p.score ? `: ${String(p.score)}` : ""}${p.winner ? ` (ganó el lado ${String(p.winner)})` : ""}`
+        : `borró el resultado del partido${turno}`;
     case "reservation.cancelled": {
       const details = [
         p.late ? "fuera de término" : "en término",
@@ -212,7 +219,11 @@ export function describeAuditEntry(
       if (p.public_night_price_per_hour === undefined) {
         return `cambió los precios de ${sport}: ${money(p.public_price_per_hour)} por hora (profe ${money(p.profe_price_per_hour)})`;
       }
-      const prices = `${money(p.public_price_per_hour)} por hora de día y ${money(p.public_night_price_per_hour)} de noche (profe ${money(p.profe_price_per_hour)} y ${money(p.profe_night_price_per_hour)})`;
+      const torneo =
+        p.torneo_price_per_hour === undefined
+          ? ""
+          : `; torneo ${money(p.torneo_price_per_hour)} y ${money(p.torneo_night_price_per_hour)}`;
+      const prices = `${money(p.public_price_per_hour)} por hora de día y ${money(p.public_night_price_per_hour)} de noche (profe ${money(p.profe_price_per_hour)} y ${money(p.profe_night_price_per_hour)}${torneo})`;
       // Los registros anteriores a la seña por audiencia no la traen.
       if (p.public_deposit_enabled === undefined) return `cambió los precios de ${sport}: ${prices}`;
       return `cambió los precios de ${sport}: ${prices}; seña del público ${depositText(p, "public")}, seña de profes ${depositText(p, "profe")}`;

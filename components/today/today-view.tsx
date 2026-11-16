@@ -187,7 +187,8 @@ export function TodayView({
     initialPayments
   );
 
-  const canSeeMoney = membership ? membership.role !== "profesor" : false;
+  // Montos y cobros: solo el personal (ni el profe ni el organizador de torneos).
+  const canSeeMoney = membership ? membership.role === "admin" || membership.role === "operador" : false;
 
   const visibleCourts = useMemo(
     () =>

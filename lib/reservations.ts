@@ -15,19 +15,36 @@ export const RESERVATION_KIND_LABELS: Record<ReservationKind, string> = {
 
 /**
  * Si quien mira puede editar o cancelar el turno: el personal (admin/operador) puede con todos;
- * un profesor solo con los que creó él o los que están a su nombre (aunque los haya cargado otro).
- * Los demás los ve, pero no los toca.
+ * un profesor solo con los que creó él o los que están a su nombre (aunque los haya cargado otro);
+ * el organizador de torneos, con los turnos de torneo. Los demás los ve, pero no los toca.
  */
 export function canManageReservation(
   membership: { role: string; user_id: string },
-  reservation: { created_by: string | null; profe_user_id: string | null }
+  reservation: { created_by: string | null; profe_user_id: string | null; kind?: ReservationKind }
 ): boolean {
+  if (membership.role === "organizador") return reservation.kind === "torneo";
   return (
     membership.role !== "profesor" ||
     reservation.created_by === membership.user_id ||
     reservation.profe_user_id === membership.user_id
   );
 }
+
+/** Carga el resultado de un partido de torneo: admin, operador u organizador. */
+export function canSetResult(role: string): boolean {
+  return role === "admin" || role === "operador" || role === "organizador";
+}
+
+/** Resultado de un partido de torneo: ganador (lado 1 o 2) y marcador en texto libre. */
+export const matchResultSchema = z.object({
+  result_winner: z.union([z.literal(1), z.literal(2)]).nullable(),
+  result_score: z
+    .string()
+    .trim()
+    .max(60, "El marcador puede tener hasta 60 caracteres")
+    .regex(/^[0-9 ()\-/,.]*$/, "Usá números, guiones y espacios (ej.: 6-4 3-6 10-8)"),
+});
+export type MatchResultInput = z.infer<typeof matchResultSchema>;
 
 export const PAYMENT_STATUSES = ["pendiente", "senada", "pagada"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
@@ -106,10 +123,16 @@ export type Reservation = {
   kind: ReservationKind;
   /** Profe que usa el turno (solo en turnos de profe). */
   profe_user_id: string | null;
-  /** Valor fijado al reservar (precio del tipo de cancha × duración). */
+  /**
+   * Valor fijado al reservar (precio del tipo de cancha × duración). Llega en null a quien no
+   * puede ver montos (organizador de torneos): la vista `reservation_board` no lo muestra.
+   */
   price: number;
   /** Serie del turno fijo semanal, si es una fecha de un fijo. */
   series_id: string | null;
+  /** Torneo: lado ganador (1 = primeros jugadores, 2 = los otros) y marcador ("6-4 3-6 10-8"). */
+  result_winner?: 1 | 2 | null;
+  result_score?: string | null;
   /** Personas del turno (si la consulta las trae embebidas), ordenadas por posición. */
   participants?: ReservationParticipant[];
   created_by: string | null;
@@ -125,6 +148,12 @@ export type ReservationParticipant = {
   name: string;
   player_id: string | null;
 };
+
+/**
+ * De dónde lee la app los turnos: la vista `reservation_board` (todas las columnas, con el precio
+ * en null para quien no puede ver montos). La tabla `reservations` queda para escribir.
+ */
+export const RESERVATION_SOURCE = "reservation_board";
 
 /** Select de turnos con sus personas embebidas. */
 export const RESERVATION_SELECT = "*, participants:reservation_participants(position, name, player_id)";

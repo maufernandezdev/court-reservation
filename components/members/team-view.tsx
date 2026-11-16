@@ -320,8 +320,11 @@ export function TeamView({
                     <span className="sr-only">Permiso</span>
                   </th>
                   {CLUB_ROLES.map((role) => (
-                    <th key={role} scope="col" className="w-[72px] px-1 py-2 font-medium uppercase">
-                      {role === "admin" ? "Admin" : role === "operador" ? "Oper." : "Profe"}
+                    <th key={role} scope="col" className="w-[60px] px-1 py-2 font-medium uppercase">
+                      <span aria-hidden="true">
+                        {role === "admin" ? "Admin" : role === "operador" ? "Oper." : role === "profesor" ? "Profe" : "Org."}
+                      </span>
+                      <span className="sr-only">{CLUB_ROLE_LABELS[role]}</span>
                     </th>
                   ))}
                 </tr>
@@ -360,7 +363,8 @@ export function TeamView({
             </table>
             <p className="text-[13px] leading-relaxed text-muted-foreground">
               Los profesores no pueden cancelar dentro de la ventana de penalidad
-              ni turnos que ya tienen cobros: se lo piden a un operador.
+              ni turnos que ya tienen cobros: se lo piden a un operador. El organizador
+              de torneos ve toda la planilla sin montos y maneja los turnos de torneo.
             </p>
           </section>
         </div>

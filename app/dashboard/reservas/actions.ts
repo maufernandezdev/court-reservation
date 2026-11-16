@@ -5,6 +5,8 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   cancelReservationSchema,
+  canSetResult,
+  matchResultSchema,
   registerPaymentSchema,
   reservationInputSchema,
   type Payment,
@@ -28,6 +30,7 @@ import {
 import { requireRole, type SessionContext } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { subscriptionMessage } from "@/lib/subscription";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const DOUBLE_BOOKING_MESSAGE = "Esa cancha ya está reservada en ese horario";
 
@@ -52,6 +55,29 @@ const SERIES_INITIAL_WEEKS = 8;
 function addDays(dateKey: string, days: number): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * El organizador de torneos no puede leer los turnos con precio (RLS, migración 0026), y Postgres
+ * pide poder leer una fila para actualizarla. Sus acciones validan rol y reglas acá y escriben con
+ * el cliente del servidor, siempre filtrando por su club. El solo lectura por suscripción, que
+ * en los demás aplica la base, se revisa antes.
+ */
+async function forRole(ctx: SessionContext): Promise<SessionContext> {
+  if (ctx.membership?.role !== "organizador") return ctx;
+  const { data: readOnly } = await ctx.supabase.rpc("club_is_read_only", { p_club_id: ctx.membership.club_id });
+  if (readOnly) {
+    throw new Error(
+      "La suscripción del club está vencida: solo podés consultar la información hasta regularizar el pago."
+    );
+  }
+  return { ...ctx, supabase: createAdminClient() as unknown as SessionContext["supabase"] };
+}
+
+/** Lo que vuelve al navegador: sin montos para el organizador de torneos. */
+function forClient(ctx: SessionContext, result: ActionResult): ActionResult {
+  if (ctx.membership?.role !== "organizador" || !result.reservation) return result;
+  return { ...result, reservation: { ...result.reservation, price: null as unknown as number } };
 }
 
 function failure(error: unknown, fallback: string): ActionResult {
@@ -234,9 +260,9 @@ async function prepareReservation(
     throw new Error("La cancha seleccionada no está disponible.");
   }
 
-  // Un profesor solo carga turnos de profe a su nombre.
+  // Un profesor solo carga turnos de profe a su nombre; el organizador, solo turnos de torneo.
   const isProfesor = membership!.role === "profesor";
-  const kind = isProfesor ? "profe" : input.kind;
+  const kind = isProfesor ? "profe" : membership!.role === "organizador" ? "torneo" : input.kind;
   const profeUserId = kind === "profe" ? (isProfesor ? user!.id : input.profe_user_id) : null;
 
   let people = input.people.map((p) => ({ name: p.name.trim(), player_id: p.player_id }));
@@ -359,7 +385,7 @@ export async function createReservationAction(
   const data = reservationInputSchema.parse(input);
 
   try {
-    const ctx: SessionContext = await requireRole("profesor");
+    const ctx: SessionContext = await forRole(await requireRole("profesor"));
     const { supabase, user, membership } = ctx;
     const clubId = membership!.club_id;
 
@@ -421,7 +447,7 @@ export async function createReservationAction(
     revalidatePath("/dashboard/reservas");
 
     const reservation = await fetchReservation(supabase, clubId, created.id);
-    return { success: true, reservation: reservation ?? undefined };
+    return forClient(ctx, { success: true, reservation: reservation ?? undefined });
   } catch (err) {
     return failure(err, "No se pudo guardar la reserva.");
   }
@@ -535,7 +561,7 @@ export async function updateReservationAction(
   const data = reservationInputSchema.parse(input);
 
   try {
-    const ctx: SessionContext = await requireRole("profesor");
+    const ctx: SessionContext = await forRole(await requireRole("profesor"));
     const { supabase, user, membership } = ctx;
     const clubId = membership!.club_id;
 
@@ -550,7 +576,13 @@ export async function updateReservationAction(
       };
     }
     if (!canManageReservation(membership!, existing)) {
-      return { success: false, error: "Solo podés editar tus turnos: los que creaste vos o los que están a tu nombre." };
+      return {
+        success: false,
+        error:
+          membership!.role === "organizador"
+            ? "Solo podés editar turnos de torneo."
+            : "Solo podés editar tus turnos: los que creaste vos o los que están a tu nombre.",
+      };
     }
 
     const prepared = await prepareReservation(ctx, data, existing);
@@ -607,7 +639,7 @@ export async function updateReservationAction(
     revalidatePath("/dashboard/reservas");
 
     const reservation = await fetchReservation(supabase, clubId, id);
-    return { success: true, reservation: reservation ?? undefined };
+    return forClient(ctx, { success: true, reservation: reservation ?? undefined });
   } catch (err) {
     return failure(err, "No se pudo actualizar la reserva.");
   }
@@ -629,7 +661,7 @@ export async function cancelReservationAction(
   }
 
   try {
-    const ctx: SessionContext = await requireRole("profesor");
+    const ctx: SessionContext = await forRole(await requireRole("profesor"));
     const { supabase, user, membership } = ctx;
     const clubId = membership!.club_id;
 
@@ -686,6 +718,22 @@ export async function cancelReservationAction(
     // Cobros previos ANTES de mutar nada.
     const payments = await fetchPayments(supabase, clubId, id);
     const pendingPayments = payments.filter((p) => !p.released);
+
+    // El organizador de torneos cancela con las reglas del profe: sus turnos de torneo, en término y sin cobros.
+    if (membership!.role === "organizador") {
+      if (!canManageReservation(membership!, reservation)) {
+        return { success: false, error: "Solo podés cancelar turnos de torneo." };
+      }
+      if (isLate) {
+        return {
+          success: false,
+          error: "No podés cancelar un turno dentro de la ventana de penalidad. Consultá con un administrador.",
+        };
+      }
+      if (pendingPayments.length > 0) {
+        return { success: false, error: "El turno ya tiene cobros: pedile a un operador que lo cancele." };
+      }
+    }
     const paidTotal = round2(
       pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0)
     );
@@ -776,7 +824,7 @@ export async function cancelReservationAction(
 
     revalidatePath("/dashboard/reservas");
 
-    return { success: true, reservation: data as Reservation };
+    return forClient(ctx, { success: true, reservation: data as Reservation });
   } catch (err) {
     return failure(err, "No se pudo cancelar la reserva.");
   }
@@ -1121,5 +1169,66 @@ export async function endSeriesAction(
     return { success: true, cancelled, kept };
   } catch (err) {
     return failure(err, "No se pudo dar de baja el turno fijo.");
+  }
+}
+
+/** Resultado de un partido de torneo (admin, operador u organizador). */
+export async function setMatchResultAction(
+  id: string,
+  input: { result_winner: 1 | 2 | null; result_score: string }
+): Promise<ActionResult> {
+  const parsed = matchResultSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+  if (!z.string().uuid().safeParse(id).success) {
+    return { success: false, error: "No se encontró la reserva." };
+  }
+
+  try {
+    const ctx: SessionContext = await forRole(await requireRole("profesor"));
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
+    if (!canSetResult(membership!.role)) {
+      return { success: false, error: "No tenés permisos para cargar resultados." };
+    }
+
+    const reservation = await fetchReservation(supabase, clubId, id);
+    if (!reservation || reservation.kind !== "torneo") {
+      return { success: false, error: "El resultado se carga solo en turnos de torneo." };
+    }
+    if (reservation.status === "cancelled") {
+      return { success: false, error: "El turno está cancelado." };
+    }
+
+    const score = parsed.data.result_score.replace(/\s+/g, " ").trim();
+    const { error } = await supabase
+      .from("reservations")
+      .update({
+        result_winner: parsed.data.result_winner,
+        result_score: score || null,
+        result_updated_by: user!.id,
+        result_updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("club_id", clubId);
+    if (error) {
+      return { success: false, error: subscriptionMessage(error, "No se pudo guardar el resultado.") };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "reservation",
+      entityId: id,
+      action: "reservation.result_set",
+      payload: { winner: parsed.data.result_winner, score: score || null },
+    });
+
+    revalidatePath("/dashboard/reservas");
+    const updated = await fetchReservation(supabase, clubId, id);
+    return forClient(ctx, { success: true, reservation: updated ?? undefined });
+  } catch (err) {
+    return failure(err, "No se pudo guardar el resultado.");
   }
 }

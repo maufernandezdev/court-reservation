@@ -1,5 +1,7 @@
 "use client";
 
+import { RESERVATION_SOURCE } from "@/lib/reservations";
+
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, MessageCircle } from "lucide-react";
@@ -13,6 +15,7 @@ import {
 } from "@/lib/availability";
 import type { Reservation } from "@/lib/reservations";
 import { formatMoney, isNight, quotePrice } from "@/lib/pricing";
+import { canSeeMoney } from "@/lib/roles";
 import { useSportPrices } from "@/hooks/use-sport-prices";
 import { useClubSettings } from "@/hooks/use-club-settings";
 import { createClient } from "@/lib/supabase/client";
@@ -73,7 +76,10 @@ export function AvailabilitySearchDialog({
   onSelect,
 }: AvailabilitySearchDialogProps) {
   const supabase = createClient();
-  const clubId = useMembership().membership.club_id;
+  const { membership } = useMembership();
+  const clubId = membership.club_id;
+  // El organizador de torneos no ve montos.
+  const seesMoney = canSeeMoney(membership.role);
   const { prices } = useSportPrices();
   const { night_starts_at: nightStartsAt, open_time, close_time } = useClubSettings();
   const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
@@ -106,7 +112,7 @@ export function AvailabilitySearchDialog({
     ensureFixedReservations(supabase, clubId, date)
       .then(() =>
         supabase
-          .from("reservations")
+          .from(RESERVATION_SOURCE)
           .select("*")
           .eq("club_id", clubId)
           .eq("date", date)
@@ -315,9 +321,14 @@ export function AvailabilitySearchDialog({
                   <span className="flex min-w-0 flex-1 flex-col">
                     <strong className="text-[15px]">{slot.court.name}</strong>
                     <span className="text-[13px] text-muted-foreground">
-                      {COURT_TYPE_LABELS[slot.court.type]} · {durationLabel(duration)} ·{" "}
-                      {formatMoney(
-                        quotePrice(prices[slot.court.type], "standard", duration, slot.time, nightStartsAt)
+                      {COURT_TYPE_LABELS[slot.court.type]} · {durationLabel(duration)}
+                      {seesMoney && (
+                        <>
+                          {" · "}
+                          {formatMoney(
+                            quotePrice(prices[slot.court.type], "standard", duration, slot.time, nightStartsAt)
+                          )}
+                        </>
                       )}
                       {isNight(slot.time, nightStartsAt) && " (noche)"}
                     </span>

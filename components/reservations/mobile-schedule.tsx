@@ -298,6 +298,7 @@ export function MobileSchedule({
                     {r.time}–{end}
                     {r.kind !== "standard" ? ` · ${RESERVATION_KIND_LABELS[r.kind]}` : ""} ·{" "}
                     {paymentSummary(r, paymentMethods?.get(r.id)) || RESERVATION_TONE_LABELS[tone]}
+                    {r.kind === "torneo" && r.result_score ? ` · ${r.result_score}` : ""}
                   </span>
                 </span>
                 <ChevronRight className="size-[18px] shrink-0 opacity-70" />
