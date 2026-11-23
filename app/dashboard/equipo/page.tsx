@@ -3,12 +3,13 @@ import { getSessionContext } from "@/lib/auth";
 import { avatarUrl, type Profile } from "@/lib/profile";
 import type { ClubInvitation } from "@/lib/invitations";
 import type { MemberWithEmail } from "@/lib/members";
+import type { Payee } from "@/lib/cash";
 import { TeamView } from "@/components/members/team-view";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const metadata = { title: "Equipo" };
 
-/** Equipo: el permiso, los miembros, sus fotos y las invitaciones se resuelven en el servidor. */
+/** Equipo: miembros con acceso, personas sin acceso a la app, fotos e invitaciones, resueltos en el servidor. */
 export default async function TeamPage() {
   const { supabase, membership } = await getSessionContext();
   if (!membership) return null;
@@ -26,7 +27,7 @@ export default async function TeamPage() {
 
   const clubId = membership.club_id;
   // Abiertas = ni aceptadas ni canceladas (las vencidas se muestran para renovarlas).
-  const [{ data: membersData }, { data: invitationsData }] = await Promise.all([
+  const [{ data: membersData }, { data: invitationsData }, { data: staffData }] = await Promise.all([
     supabase
       .from("memberships")
       .select("*")
@@ -39,6 +40,15 @@ export default async function TeamPage() {
       .is("accepted_at", null)
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
+    // Personas del equipo sin acceso a la app (se les paga en Caja; se les puede dar acceso).
+    supabase
+      .from("cash_payees")
+      .select("id, name, kind, active")
+      .eq("club_id", clubId)
+      .neq("kind", "proveedor")
+      .is("user_id", null)
+      .order("active", { ascending: false })
+      .order("name"),
   ]);
   const members = (membersData ?? []) as MemberWithEmail[];
 
@@ -56,6 +66,7 @@ export default async function TeamPage() {
       members={members}
       invitations={(invitationsData ?? []) as ClubInvitation[]}
       avatarUrls={avatarUrls}
+      staffWithoutAccess={(staffData ?? []) as Payee[]}
     />
   );
 }

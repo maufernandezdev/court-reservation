@@ -71,6 +71,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { PageHeader } from "@/components/shell/page-header";
+import { PayeeManager } from "@/components/cash/payee-manager";
+import type { Payee } from "@/lib/cash";
 
 function initials(text: string): string {
   const words = text.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
@@ -86,11 +88,14 @@ export function TeamView({
   members,
   invitations,
   avatarUrls,
+  staffWithoutAccess,
 }: {
   members: MemberWithEmail[];
   invitations: ClubInvitation[];
   /** Foto de cada miembro por `user_id` (o null). */
   avatarUrls: Record<string, string | null>;
+  /** Empleados y profes que no usan la app (se les paga en Caja; se les puede dar acceso). */
+  staffWithoutAccess: Payee[];
 }) {
   const router = useRouter();
   const { membership } = useMembership();
@@ -103,6 +108,8 @@ export function TeamView({
   const [shared, setShared] = useState<SharedInvitation | null>(null);
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ClubInvitation | null>(null);
+  /** Persona del equipo sin acceso a la que se le está generando el link. */
+  const [grantingTo, setGrantingTo] = useState<Payee | null>(null);
 
   /** Vuelve a traer miembros e invitaciones desde el servidor. */
   const loadMembers = () => router.refresh();
@@ -115,7 +122,17 @@ export function TeamView({
   const openInvite = () => {
     setFormError("");
     setShared(null);
+    setGrantingTo(null);
     form.reset({ role: "operador", note: "" });
+    setInviteOpen(true);
+  };
+
+  /** "Darle acceso": invitación ligada a la persona (al aceptarla pasa a ser miembro con cuenta). */
+  const openGrantAccess = (payee: Payee) => {
+    setFormError("");
+    setShared(null);
+    setGrantingTo(payee);
+    form.reset({ role: payee.kind === "profe" ? "profesor" : "operador", note: payee.name.slice(0, NOTE_MAX_LENGTH) });
     setInviteOpen(true);
   };
 
@@ -123,7 +140,7 @@ export function TeamView({
     setFormError("");
     setIsSubmitting(true);
 
-    const { success, error, invitation } = await createInvitationAction(values);
+    const { success, error, invitation } = await createInvitationAction(values, grantingTo?.id);
 
     if (success && invitation) {
       setShared(invitation);
@@ -192,19 +209,20 @@ export function TeamView({
       <div className="space-y-6">
         <PageHeader
           title="Equipo"
-          description="Quién entra al panel y qué puede hacer cada uno."
+          description="Las personas del club. Cada una puede tener o no acceso a la app; a todas se les puede pagar desde Caja."
           actions={
             <Button onClick={openInvite}>
               <UserPlus className="mr-2 h-4 w-4" />
-              Invitar persona
+              Invitar a la app
             </Button>
           }
         />
 
         <div className="flex flex-wrap items-start gap-6">
           <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-6">
+            <h2 className="-mb-3 text-lg font-bold">Con acceso a la app</h2>
             <section
-              aria-label="Personas del club"
+              aria-label="Personas con acceso a la app"
               className="overflow-hidden rounded-2xl border bg-card"
             >
               {members.length === 0 ? (
@@ -298,6 +316,28 @@ export function TeamView({
               )}
             </section>
 
+            <section aria-labelledby="sin-acceso" className="flex flex-col gap-3">
+              <div>
+                <h2 id="sin-acceso" className="text-lg font-bold">
+                  Sin acceso a la app
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Empleados y profes que no usan la app. Aparecen al registrar una salida en Caja; con
+                  &quot;Darle acceso&quot; les mandás un link para que tengan cuenta.
+                </p>
+              </div>
+              <PayeeManager
+                payees={staffWithoutAccess}
+                kinds={["empleado", "profe"]}
+                addLabel="Agregar persona sin acceso"
+                dialogTitle="Agregar persona al equipo"
+                emptyText="Nadie por ahora. Agregá al personal que no necesita entrar a la app."
+                label="Personas sin acceso a la app"
+                showKind
+                onGrantAccess={openGrantAccess}
+              />
+            </section>
+
             <PendingInvitations
               invitations={invitations}
               busyId={busyInvitationId}
@@ -373,11 +413,15 @@ export function TeamView({
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{shared ? "Invitación lista" : "Invitar al equipo"}</DialogTitle>
+            <DialogTitle>
+              {shared ? "Invitación lista" : grantingTo ? `Darle acceso a ${grantingTo.name}` : "Invitar a la app"}
+            </DialogTitle>
             <DialogDescription>
               {shared
                 ? "Compartí el link por WhatsApp o copialo en un correo."
-                : "Generamos un link de un solo uso. La persona carga su nombre y su correo al abrirlo."}
+                : grantingTo
+                  ? "Generamos un link de un solo uso. Cuando lo acepte, pasa a la lista de arriba con su cuenta."
+                  : "Generamos un link de un solo uso. La persona carga su nombre y su correo al abrirlo."}
             </DialogDescription>
           </DialogHeader>
           {shared ? (

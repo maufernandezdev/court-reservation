@@ -5,14 +5,18 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 import {
   CASH_CATEGORY_LABELS,
   CASH_IN_CATEGORIES,
   CASH_OUT_CATEGORIES,
+  COUNTERPARTY_REQUIRED,
+  PAYEE_KIND_BY_CATEGORY,
   cashExpenseSchema,
   cashSaleSchema,
   type CashExpenseInput,
   type CashSaleInput,
+  type PayeeKind,
 } from "@/lib/cash";
 import { PAYMENT_METHOD_LABELS, VISIBLE_PAYMENT_METHODS, type VisiblePaymentMethod } from "@/lib/reservations";
 import { formatMoney } from "@/lib/pricing";
@@ -34,8 +38,13 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-/** Producto vendido antes, con su último precio por unidad (para sugerirlo). */
-export type ProductSuggestion = { concept: string; unit_price: number };
+/** Producto del catálogo que se ofrece en "Registrar venta". */
+export type SaleProduct = { id: string; name: string; price: number };
+/** A quién se le puede pagar una salida: el equipo (con o sin acceso a la app) y los proveedores. */
+export type PayeeOption = { name: string; kind: PayeeKind };
+
+/** Valor del selector de producto para cargar algo que no está en el catálogo. */
+const OTHER = "__otro";
 
 function MethodToggle({
   value,
@@ -69,11 +78,20 @@ function normalize(text: string): string {
   return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
-/** "Registrar venta": accesorios (pelotas, grips, agua…) u otros ingresos. Admin y operador. */
-export function CashSaleDialog({ date, suggestions }: { date: string; suggestions: ProductSuggestion[] }) {
+/** "Registrar venta": se elige un producto del catálogo (el precio viene cargado) u otro ingreso. Admin y operador. */
+export function CashSaleDialog({
+  date,
+  products,
+  canEditProducts,
+}: {
+  date: string;
+  products: SaleProduct[];
+  canEditProducts: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [productId, setProductId] = useState<string>("");
   const empty: CashSaleInput = {
     date,
     category: "accesorio",
@@ -83,27 +101,36 @@ export function CashSaleDialog({ date, suggestions }: { date: string; suggestion
     method: "efectivo",
   };
   const form = useForm<CashSaleInput>({ resolver: zodResolver(cashSaleSchema), defaultValues: empty });
-  const [concept, unitPrice, quantity] = useWatch({
-    control: form.control,
-    name: ["concept", "unit_price", "quantity"],
-  });
+  const [unitPrice, quantity] = useWatch({ control: form.control, name: ["unit_price", "quantity"] });
   const total = (Number(unitPrice) || 0) * (Number(quantity) || 1);
+  const isOther = productId === OTHER;
 
   useEffect(() => {
     if (!open) return;
     setError("");
+    setProductId(products.length === 0 ? OTHER : "");
     form.reset({ ...empty, date });
   }, [open, date]);
 
-  const matches = useMemo(() => {
-    const query = normalize(concept ?? "");
-    return suggestions
-      .filter((s) => (query ? normalize(s.concept).includes(query) && normalize(s.concept) !== query : true))
-      .slice(0, 6);
-  }, [concept, suggestions]);
+  const chooseProduct = (value: string) => {
+    setProductId(value);
+    const product = products.find((p) => p.id === value);
+    if (product) {
+      form.setValue("category", "accesorio");
+      form.setValue("concept", product.name, { shouldValidate: true });
+      form.setValue("unit_price", product.price, { shouldValidate: true });
+    } else {
+      form.setValue("concept", "");
+      form.setValue("unit_price", 0);
+    }
+  };
 
   const onSubmit = async (values: CashSaleInput) => {
     setError("");
+    if (!productId) {
+      setError("Elegí el producto que se vendió.");
+      return;
+    }
     setIsSubmitting(true);
     const result = await registerCashSaleAction(values);
     setIsSubmitting(false);
@@ -135,98 +162,119 @@ export function CashSaleDialog({ date, suggestions }: { date: string; suggestion
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tipo</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {CASH_IN_CATEGORIES.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {CASH_CATEGORY_LABELS[c]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="concept"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Producto</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Tubo de pelotas" autoComplete="off" autoFocus {...field} />
-                  </FormControl>
-                  {matches.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5" aria-label="Productos vendidos antes">
-                      {matches.map((s) => (
-                        <Button
-                          key={s.concept}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 rounded-full text-xs"
-                          onClick={() => {
-                            form.setValue("concept", s.concept, { shouldValidate: true });
-                            form.setValue("unit_price", s.unit_price, { shouldValidate: true });
-                          }}
-                        >
-                          {s.concept} · {formatMoney(s.unit_price)}
-                        </Button>
-                      ))}
-                    </div>
+            {products.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <span id="sale-product-label" className="text-sm font-medium">
+                  Producto
+                </span>
+                <Select value={productId} onValueChange={chooseProduct}>
+                  <SelectTrigger className="w-full" aria-labelledby="sale-product-label">
+                    <SelectValue placeholder="Elegí el producto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} · {formatMoney(p.price)}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={OTHER}>Otro (escribirlo)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                Todavía no hay productos cargados.
+                {canEditProducts && (
+                  <>
+                    {" "}
+                    Cargalos en{" "}
+                    <Link href="/dashboard/productos" className="font-medium text-foreground underline">
+                      Productos
+                    </Link>{" "}
+                    y el precio va a venir solo.
+                  </>
+                )}
+              </p>
+            )}
+            {isOther && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CASH_IN_CATEGORIES.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {CASH_CATEGORY_LABELS[c]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-[1fr_96px] gap-3">
-              <FormField
-                control={form.control}
-                name="unit_price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Precio</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step="any"
-                        className="font-mono"
-                        {...field}
-                        value={field.value === 0 ? "" : field.value}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cantidad</FormLabel>
-                    <FormControl>
-                      <Input type="number" inputMode="numeric" min={1} step={1} className="font-mono" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                />
+                <FormField
+                  control={form.control}
+                  name="concept"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Qué se vendió</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Tubo de pelotas" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+            {productId && (
+              <div className="grid grid-cols-[1fr_96px] gap-3">
+                <FormField
+                  control={form.control}
+                  name="unit_price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Precio</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step="any"
+                          className="font-mono"
+                          {...field}
+                          value={field.value === 0 ? "" : field.value}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="quantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cantidad</FormLabel>
+                      <FormControl>
+                        <Input type="number" inputMode="numeric" min={1} step={1} className="font-mono" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
             <FormField
               control={form.control}
               name="method"
@@ -258,7 +306,7 @@ export function CashSaleDialog({ date, suggestions }: { date: string; suggestion
 }
 
 /** "Registrar salida": liquidaciones, empleados, proveedores, gastos y retiros. Solo admin. */
-export function CashExpenseDialog({ date, profeNames }: { date: string; profeNames: string[] }) {
+export function CashExpenseDialog({ date, payees }: { date: string; payees: PayeeOption[] }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -271,7 +319,18 @@ export function CashExpenseDialog({ date, profeNames }: { date: string; profeNam
     note: "",
   };
   const form = useForm<CashExpenseInput>({ resolver: zodResolver(cashExpenseSchema), defaultValues: empty });
-  const category = useWatch({ control: form.control, name: "category" });
+  const [category, counterparty] = useWatch({ control: form.control, name: ["category", "counterparty"] });
+  const required = COUNTERPARTY_REQUIRED.has(category);
+
+  // Sugerencias: los del tipo que corresponde a la categoría, filtrados por lo que se va escribiendo.
+  const matches = useMemo(() => {
+    const kind = PAYEE_KIND_BY_CATEGORY[category];
+    const query = normalize(counterparty ?? "");
+    return payees
+      .filter((p) => (kind ? p.kind === kind : true))
+      .filter((p) => (query ? normalize(p.name).includes(query) && normalize(p.name) !== query : true))
+      .slice(0, 8);
+  }, [category, counterparty, payees]);
 
   useEffect(() => {
     if (!open) return;
@@ -341,22 +400,27 @@ export function CashExpenseDialog({ date, profeNames }: { date: string; profeNam
               name="counterparty"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>A quién (opcional)</FormLabel>
+                  <FormLabel>A quién{required ? "" : " (opcional)"}</FormLabel>
                   <FormControl>
-                    <Input placeholder={category === "liquidacion_profe" ? "Nombre del profe" : "Persona o comercio"} autoComplete="off" {...field} />
+                    <Input
+                      placeholder={category === "liquidacion_profe" ? "Nombre del profe" : "Persona o comercio"}
+                      autoComplete="off"
+                      {...field}
+                    />
                   </FormControl>
-                  {category === "liquidacion_profe" && profeNames.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5" aria-label="Profes del club">
-                      {profeNames.map((name) => (
+                  {matches.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5" aria-label="Equipo y proveedores">
+                      {matches.map((p) => (
                         <Button
-                          key={name}
+                          key={`${p.kind}-${p.name}`}
                           type="button"
                           variant="outline"
                           size="sm"
                           className="h-7 rounded-full text-xs"
-                          onClick={() => form.setValue("counterparty", name, { shouldValidate: true })}
+                          onClick={() => form.setValue("counterparty", p.name, { shouldValidate: true })}
                         >
-                          {name}
+                          {p.name}
+                          {PAYEE_KIND_BY_CATEGORY[category] ? "" : ` · ${p.kind === "proveedor" ? "Proveedor" : "Equipo"}`}
                         </Button>
                       ))}
                     </div>

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { getSessionContext } from "@/lib/auth";
 import { formatMoney } from "@/lib/pricing";
 import { CLUB_TZ, clubTodayKey } from "@/lib/club-time";
-import { queryProfes } from "@/lib/club-data";
 import { roleAtLeast } from "@/lib/roles";
 import {
   PAYMENT_METHOD_LABELS,
@@ -20,7 +19,12 @@ import {
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shell/page-header";
 import { CashDateNav } from "@/components/cash/cash-date-nav";
-import { CashExpenseDialog, CashSaleDialog, type ProductSuggestion } from "@/components/cash/cash-movement-dialogs";
+import {
+  CashExpenseDialog,
+  CashSaleDialog,
+  type PayeeOption,
+  type SaleProduct,
+} from "@/components/cash/cash-movement-dialogs";
 import { CashOpeningForm, VoidMovementButton } from "@/components/cash/cash-controls";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -109,8 +113,8 @@ export default async function CajaPage({
     { data: movementsData, error: movementsError },
     { data: openingData },
     { data: membersData },
-    { data: soldData },
-    profes,
+    { data: productsData },
+    { data: payeesData },
   ] = await Promise.all([
     supabase
       .from("payments")
@@ -126,34 +130,44 @@ export default async function CajaPage({
       .eq("date", date)
       .order("created_at", { ascending: false }),
     supabase.from("cash_openings").select("amount").eq("club_id", clubId).eq("date", date).maybeSingle(),
-    supabase.from("memberships").select("user_id, full_name, email").eq("club_id", clubId),
-    // Lo ya vendido, para sugerir producto y precio en "Registrar venta".
-    supabase
-      .from("cash_movements")
-      .select("concept, amount, quantity")
-      .eq("club_id", clubId)
-      .eq("category", "accesorio")
-      .eq("voided", false)
-      .order("created_at", { ascending: false })
-      .limit(300),
-    isAdmin ? queryProfes(supabase, clubId) : Promise.resolve([]),
+    supabase.from("memberships").select("user_id, full_name, email, role").eq("club_id", clubId),
+    // Catálogo de productos: en "Registrar venta" se elige uno y el precio viene cargado.
+    supabase.from("products").select("id, name, price").eq("club_id", clubId).eq("active", true).order("name"),
+    // A quién se le paga (solo el admin registra salidas).
+    isAdmin
+      ? supabase
+          .from("cash_payees")
+          .select("id, name, kind, user_id")
+          .eq("club_id", clubId)
+          .eq("active", true)
+          .order("name")
+      : Promise.resolve({ data: [] }),
   ]);
 
   const payments = (paymentsData ?? []) as Payment[];
   const movements = (movementsData ?? []) as CashMovement[];
   const opening = Number(openingData?.amount ?? 0);
 
-  const suggestions: ProductSuggestion[] = [];
-  const seen = new Set<string>();
-  for (const row of (soldData ?? []) as { concept: string; amount: number; quantity: number | null }[]) {
-    const key = row.concept.trim().toLowerCase();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    suggestions.push({
-      concept: row.concept.trim(),
-      unit_price: Math.round((Number(row.amount) / (row.quantity || 1)) * 100) / 100,
-    });
+  const products: SaleProduct[] = ((productsData ?? []) as SaleProduct[]).map((p) => ({ ...p, price: Number(p.price) }));
+  // A quién se le paga: el equipo (con acceso a la app o sin él) y los proveedores. El admin no (lo suyo es Retiro).
+  const payees: PayeeOption[] = [];
+  const listed = new Set<string>();
+  const addPayee = (name: string, kind: PayeeOption["kind"]) => {
+    const key = name.trim().toLowerCase();
+    if (!key || listed.has(key)) return;
+    listed.add(key);
+    payees.push({ name: name.trim(), kind });
+  };
+  if (isAdmin) {
+    for (const m of (membersData ?? []) as { full_name: string; email: string; role: string }[]) {
+      if (m.role === "admin") continue;
+      addPayee(m.full_name || m.email, m.role === "profesor" ? "profe" : "empleado");
+    }
   }
+  for (const p of (payeesData ?? []) as { name: string; kind: PayeeOption["kind"]; user_id: string | null }[]) {
+    if (!p.user_id) addPayee(p.name, p.kind);
+  }
+  payees.sort((a, b) => a.name.localeCompare(b.name));
 
   const reservationIds = [...new Set(payments.map((p) => p.reservation_id))];
   const { data: reservationsData } = reservationIds.length
@@ -269,8 +283,8 @@ export default async function CajaPage({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <CashSaleDialog date={date} suggestions={suggestions} />
-        {isAdmin && <CashExpenseDialog date={date} profeNames={profes.map((p) => p.name)} />}
+        <CashSaleDialog date={date} products={products} canEditProducts={isAdmin} />
+        {isAdmin && <CashExpenseDialog date={date} payees={payees} />}
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3.5">

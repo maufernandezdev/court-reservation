@@ -33,9 +33,14 @@ function expiresAtFromNow(): string {
 
 /** Crea la invitación y devuelve el link (el token no se guarda: solo su hash). */
 export async function createInvitationAction(
-  input: MemberInviteInput
+  input: MemberInviteInput,
+  /** Persona del equipo sin acceso a la que se le da acceso: queda vinculada al aceptar. */
+  payeeId?: string
 ): Promise<InvitationResult> {
   const parsed = memberInviteSchema.safeParse(input);
+  if (payeeId !== undefined && !z.string().uuid().safeParse(payeeId).success) {
+    return { success: false, error: "Persona inválida." };
+  }
 
   if (!parsed.success) {
     return {
@@ -49,6 +54,18 @@ export async function createInvitationAction(
     const clubId = membership!.club_id;
     const note = parsed.data.note.trim();
 
+    if (payeeId) {
+      const { data: payee } = await supabase
+        .from("cash_payees")
+        .select("id")
+        .eq("id", payeeId)
+        .eq("club_id", clubId)
+        .neq("kind", "proveedor")
+        .is("user_id", null)
+        .maybeSingle();
+      if (!payee) return { success: false, error: "La persona no está en el equipo sin acceso." };
+    }
+
     const token = generateInvitationToken();
     const expiresAt = expiresAtFromNow();
 
@@ -56,6 +73,7 @@ export async function createInvitationAction(
       .from("club_invitations")
       .insert({
         club_id: clubId,
+        payee_id: payeeId ?? null,
         note,
         role: parsed.data.role,
         token_hash: hashInvitationToken(token),

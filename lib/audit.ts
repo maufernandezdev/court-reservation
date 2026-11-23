@@ -36,7 +36,11 @@ export type AuditAction =
   | "reservation.approved"
   | "reservation.rejected"
   | "approval_rule.created"
-  | "approval_rule.removed";
+  | "approval_rule.removed"
+  | "product.created"
+  | "product.updated"
+  | "payee.created"
+  | "payee.updated";
 
 type AuditInput = {
   clubId: string;
@@ -90,6 +94,8 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "series.created",
     "cash.movement_created",
     "approval_rule.created",
+    "product.created",
+    "payee.created",
   ],
   updated: [
     "reservation.updated",
@@ -104,6 +110,8 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "cash.opening_set",
     "reservation.result_set",
     "reservation.approved",
+    "product.updated",
+    "payee.updated",
   ],
   charged: ["payment.registered", "credit.applied"],
   cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed"],
@@ -309,6 +317,18 @@ export function describeAuditEntry(
             : "registró la salida:";
       return `${verb} ${detail} por ${money(p.amount)}${method ? ` ${method}` : ""}`;
     }
+    case "product.created":
+      return `agregó el producto ${String(p.name ?? "")} a ${money(p.price)}`;
+    case "product.updated":
+      return p.active === false
+        ? `dejó de vender ${String(p.name ?? "un producto")}`
+        : `actualizó el producto ${String(p.name ?? "")} a ${money(p.price)}`;
+    case "payee.created":
+      return `agregó a ${String(p.name ?? "")} a la lista de pagos`;
+    case "payee.updated":
+      return p.active === false
+        ? `sacó a ${String(p.name ?? "")} de la lista de pagos`
+        : `actualizó a ${String(p.name ?? "")} en la lista de pagos`;
     case "cash.opening_set":
       return `fijó el cambio inicial de la caja${typeof p.date === "string" ? ` del ${shortDate(p.date)}` : ""} en ${money(p.amount)}`;
     case "settings.updated":

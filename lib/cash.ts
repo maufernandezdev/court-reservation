@@ -76,6 +76,43 @@ export const cashSaleSchema = z.object({
 });
 export type CashSaleInput = z.infer<typeof cashSaleSchema>;
 
+/** Salidas que tienen que decir a quién se le pagó (el reporte mensual las agrupa por persona o proveedor). */
+export const COUNTERPARTY_REQUIRED: ReadonlySet<CashOutCategory> = new Set(["liquidacion_profe", "empleado", "proveedor"]);
+
+/** Producto del catálogo: al vender se elige y el precio viene cargado. */
+export type Product = { id: string; name: string; price: number; active: boolean };
+
+export const productSchema = z.object({
+  name: z.string().trim().min(1, "Escribí el nombre del producto").max(80, "Hasta 80 caracteres"),
+  price: moneySchema,
+});
+export type ProductInput = z.infer<typeof productSchema>;
+
+/** A quién se le paga en las salidas (tenga o no usuario en la app). */
+export const PAYEE_KINDS = ["empleado", "profe", "proveedor"] as const;
+export type PayeeKind = (typeof PAYEE_KINDS)[number];
+export const PAYEE_KIND_LABELS: Record<PayeeKind, string> = {
+  empleado: "Empleado",
+  profe: "Profe",
+  proveedor: "Proveedor",
+};
+export type Payee = { id: string; name: string; kind: PayeeKind; active: boolean };
+
+export const payeeSchema = z.object({
+  name: z.string().trim().min(1, "Escribí el nombre").max(80, "Hasta 80 caracteres"),
+  kind: z.enum(PAYEE_KINDS, { message: "Elegí si es empleado, profe o proveedor" }),
+});
+export type PayeeInput = z.infer<typeof payeeSchema>;
+
+/** Qué tipo de destinatario se sugiere para cada categoría de salida (null: todos). */
+export const PAYEE_KIND_BY_CATEGORY: Record<CashOutCategory, PayeeKind | null> = {
+  liquidacion_profe: "profe",
+  empleado: "empleado",
+  proveedor: "proveedor",
+  gasto_general: null,
+  retiro: null,
+};
+
 /** Salida de plata (solo admin): liquidaciones, empleados, proveedores, gastos y retiros. */
 export const cashExpenseSchema = z.object({
   date: dateSchema,
@@ -84,6 +121,10 @@ export const cashExpenseSchema = z.object({
   amount: moneySchema,
   method: z.enum(VISIBLE_PAYMENT_METHODS, { message: "Elegí efectivo o Mercado Pago" }),
   note: z.string().trim().max(200, "Hasta 200 caracteres"),
+}).superRefine((value, ctx) => {
+  if (COUNTERPARTY_REQUIRED.has(value.category) && !value.counterparty) {
+    ctx.addIssue({ code: "custom", path: ["counterparty"], message: "Elegí o escribí a quién se le paga" });
+  }
 });
 export type CashExpenseInput = z.infer<typeof cashExpenseSchema>;
 

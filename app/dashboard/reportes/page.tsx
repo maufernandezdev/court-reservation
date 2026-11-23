@@ -1,26 +1,26 @@
-import { CircleCheck, ShieldAlert, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, ShieldAlert } from "lucide-react";
 import { z } from "zod";
 import { getSessionContext } from "@/lib/auth";
-import { DEFAULT_CLUB_HOURS, normalizeTime } from "@/lib/availability";
-import { COURT_TYPE_LABELS, type Court, type CourtType } from "@/lib/courts";
-import { DEFAULT_NIGHT_STARTS_AT, formatMoney } from "@/lib/pricing";
-import {
-  REPORT_PERIODS,
-  REPORT_PERIOD_LABELS,
-  buildReport,
-  buildWhatsappSummary,
-  hoursLabel,
-  periodRange,
-  type ReportPeriod,
-} from "@/lib/reports";
-import { loadOverdue, loadPeriodData } from "@/lib/reports-queries";
+import { formatMoney } from "@/lib/pricing";
 import { INCOME_ORIGINS, INCOME_ORIGIN_LABELS, dayCloseLines, loadDayClose, type DayClose } from "@/lib/day-close";
+import {
+  loadMonthlyReport,
+  monthLabel,
+  monthlyReportLines,
+  shiftMonth,
+  type MonthlyReport,
+} from "@/lib/monthly-report";
+import { CASH_CATEGORY_LABELS } from "@/lib/cash";
+import { PAYMENT_METHOD_SHORT } from "@/lib/reservations";
 import { CLUB_TZ } from "@/lib/club-time";
 import { CashDateNav } from "@/components/cash/cash-date-nav";
 import { PageHeader } from "@/components/shell/page-header";
-import { PeriodTabs } from "@/components/reports/period-tabs";
 import { CopySummary } from "@/components/reports/copy-summary";
+import { PrintButton } from "@/components/reports/print-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Reportes" };
 
@@ -38,11 +38,9 @@ function shortDate(key: string): string {
   return `${d}/${m}`;
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 /**
- * Reportes: cómo rindieron las canchas del club en un período (hoy, ayer, 7 días o el mes), con datos
- * reales de turnos y cobros. Los ingresos siguen el mismo criterio que Caja.
+ * Reportes: el cierre del día (lo mismo que la planilla de papel) y el reporte mensual de ingresos,
+ * egresos y balance, con a quién fue cada egreso. Los números siguen el mismo criterio que Caja.
  */
 export default async function ReportesPage({
   searchParams,
@@ -61,103 +59,60 @@ export default async function ReportesPage({
   }
 
   const raw = await searchParams;
-  const period: ReportPeriod = z
-    .enum(REPORT_PERIODS)
-    .catch("hoy")
-    .parse(typeof raw.periodo === "string" ? raw.periodo : "hoy");
-
   const clubId = membership.club_id;
   const today = todayKey();
-  const range = periodRange(period, today);
-  // Cierre del día: por defecto el último día del período (hoy, o ayer en "Ayer"); se elige otra fecha con ?cierre=.
+  const currentMonth = today.slice(0, 7);
   const closeDate = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .refine((value) => value <= today)
-    .catch(range.to)
-    .parse(typeof raw.cierre === "string" ? raw.cierre : range.to);
-  const nowParts = new Date().toLocaleTimeString("en-GB", { timeZone: CLUB_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).split(":").map(Number);
+    .catch(today)
+    .parse(typeof raw.cierre === "string" ? raw.cierre : today);
+  const month = z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .refine((value) => value <= currentMonth)
+    .catch(currentMonth)
+    .parse(typeof raw.mes === "string" ? raw.mes : currentMonth);
+  const nowParts = new Date()
+    .toLocaleTimeString("en-GB", { timeZone: CLUB_TZ, hour: "2-digit", minute: "2-digit", hour12: false })
+    .split(":")
+    .map(Number);
   const nowMinutes = closeDate === today ? nowParts[0] * 60 + nowParts[1] : null;
 
-  const [courtsRes, settingsRes, pricesRes] = await Promise.all([
-    supabase.from("courts").select("*").eq("club_id", clubId).eq("active", true).order("created_at"),
-    supabase.from("settings").select("night_starts_at, open_time, close_time").eq("club_id", clubId).maybeSingle(),
-    supabase.from("sport_prices").select("sport, public_price_per_hour").eq("club_id", clubId),
-  ]);
-
-  let loadError = courtsRes.error ? "No se pudieron cargar las canchas." : "";
-  const courts = (courtsRes.data ?? []) as Court[];
-  const settings = settingsRes.data;
-  const hours = {
-    open_time: normalizeTime(settings?.open_time ?? DEFAULT_CLUB_HOURS.open_time),
-    close_time: normalizeTime(settings?.close_time ?? DEFAULT_CLUB_HOURS.close_time),
-  };
-  const nightStartsAt = normalizeTime(settings?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT);
-
-  let data: Awaited<ReturnType<typeof loadPeriodData>> = { reservations: [], payments: [], income: [] };
-  let overdue = { count: 0, amount: 0 };
+  let loadError = "";
   let close: DayClose | null = null;
+  let monthly: MonthlyReport | null = null;
   try {
-    [data, overdue, close] = await Promise.all([
-      loadPeriodData(supabase, clubId, range),
-      loadOverdue(supabase, clubId, today),
+    [close, monthly] = await Promise.all([
       loadDayClose(supabase, clubId, closeDate, nowMinutes),
+      loadMonthlyReport(supabase, clubId, month),
     ]);
   } catch {
-    loadError = "No se pudieron cargar los datos del período.";
+    loadError = "No se pudieron cargar los datos del reporte.";
   }
 
-  const report = buildReport({ courts, ...data, hours, nightStartsAt, range, today });
-  const periodTitle = period === "hoy" || period === "ayer" ? longDate(range.from) : `${shortDate(range.from)} al ${shortDate(range.to)}`;
   const closeLabel = closeDate === today ? `Hoy ${shortDate(closeDate)}` : longDate(closeDate);
-  const periodSummary = buildWhatsappSummary({
-    clubName: membership.club.name,
-    periodLabel: REPORT_PERIOD_LABELS[period],
-    report,
-    formatMoney,
-  });
-  // El resumen de WhatsApp arranca con el cierre del día (mismos números que Caja) y sigue con el período.
-  const summary = close ? [...dayCloseLines(close, formatMoney, closeLabel), "", periodSummary].join("\n") : periodSummary;
+  const summary = [
+    ...(close ? dayCloseLines(close, formatMoney, closeLabel) : []),
+    ...(close && monthly ? [""] : []),
+    ...(monthly ? monthlyReportLines(monthly, formatMoney) : []),
+  ].join("\n");
 
-  // Para revisar: lo que conviene mirar de las canchas.
-  const pricedSports = new Set(
-    (pricesRes.data ?? []).filter((p) => Number(p.public_price_per_hour) > 0).map((p) => p.sport as CourtType)
-  );
-  const sportsWithoutPrice = [...new Set(courts.map((c) => c.type))].filter((sport) => !pricedSports.has(sport));
-  const idleCourts = report.courts.filter((row) => row.bookings === 0);
-  const reviewItems: string[] = [];
-  if (overdue.count > 0) {
-    reviewItems.push(
-      `${plural(overdue.count, "turno", "turnos")} de los últimos 30 días con saldo sin cobrar: ${formatMoney(overdue.amount)}.`
-    );
-  }
-  if (report.lateCancelledCount > 0) {
-    reviewItems.push(`${plural(report.lateCancelledCount, "cancelación tardía", "cancelaciones tardías")} en el período.`);
-  }
-  if (sportsWithoutPrice.length > 0) {
-    reviewItems.push(
-      `Sin precio cargado: ${sportsWithoutPrice.map((s) => COURT_TYPE_LABELS[s]).join(", ")} (Canchas → Precios).`
-    );
-  }
-  if (idleCourts.length > 0 && courts.length > 0) {
-    reviewItems.push(`Sin turnos en el período: ${idleCourts.map((row) => row.court.name).join(", ")}.`);
-  }
-
-  const maxHour = report.byHour[0]?.bookings ?? 0;
-  const topHours = report.byHour.slice(0, 6);
-  const kindRows = [
-    { label: "Estándar", value: report.byKind.standard },
-    { label: "Profe", value: report.byKind.profe },
-    { label: "Torneo", value: report.byKind.torneo },
-  ];
+  // Los links conservan la fecha del cierre elegida.
+  const monthHref = (value: string) => {
+    const params = new URLSearchParams();
+    if (closeDate !== today) params.set("cierre", closeDate);
+    if (value !== currentMonth) params.set("mes", value);
+    const query = params.toString();
+    return query ? `/dashboard/reportes?${query}` : "/dashboard/reportes";
+  };
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Reportes"
-        eyebrow={`${REPORT_PERIOD_LABELS[period]} · ${periodTitle}`}
-        description="Cómo rindieron tus canchas en el período."
-        actions={<PeriodTabs current={period} />}
+        description="El cierre del día y el reporte mensual de ingresos, egresos y balance."
       />
 
       {loadError && (
@@ -168,153 +123,154 @@ export default async function ReportesPage({
 
       {close && <DayCloseSection close={close} label={closeLabel} today={today} />}
 
-      <h2 className="text-lg font-bold">Rendimiento · {REPORT_PERIOD_LABELS[period]}</h2>
+      {monthly && (
+        <MonthlySection
+          report={monthly}
+          clubName={membership.club.name}
+          prevHref={monthHref(shiftMonth(month, -1))}
+          nextHref={month < currentMonth ? monthHref(shiftMonth(month, 1)) : null}
+        />
+      )}
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3.5">
-        <section className="flex flex-col gap-1 rounded-2xl bg-ball p-5 text-ball-foreground">
-          <h2 className="text-sm font-medium">Ingresos cobrados</h2>
-          <strong className="font-display text-[34px] leading-tight font-extrabold font-stretch-[125%]">
-            {formatMoney(report.income)}
-          </strong>
-          <span className="text-sm">{plural(report.incomeCount, "cobro", "cobros")}</span>
-        </section>
-        <section className="flex flex-col gap-1 rounded-2xl border bg-card p-5">
-          <h2 className="text-sm text-muted-foreground">Turnos</h2>
-          <strong className="font-mono text-2xl font-bold">{report.activeCount}</strong>
-          <span className="text-sm text-muted-foreground">
-            {report.cancelledCount > 0 ? plural(report.cancelledCount, "cancelado", "cancelados") : "Sin cancelaciones"}
-          </span>
-        </section>
-        <section className="flex flex-col gap-1 rounded-2xl border bg-card p-5">
-          <h2 className="text-sm text-muted-foreground">Ocupación</h2>
-          <strong className="font-mono text-2xl font-bold">{report.occupancyPercent}%</strong>
-          <span className="text-sm text-muted-foreground">{hoursLabel(report.bookedMinutes)} reservadas</span>
-        </section>
-        <section className="flex flex-col gap-1 rounded-2xl border bg-card p-5">
-          <h2 className="text-sm text-muted-foreground">Falta cobrar</h2>
-          <strong className="font-mono text-2xl font-bold">{formatMoney(report.due)}</strong>
-          <span className="text-sm text-muted-foreground">
-            {report.dueCount > 0 ? plural(report.dueCount, "turno", "turnos") : "Todo cobrado"}
-          </span>
-        </section>
+      <CopySummary text={summary} />
+    </div>
+  );
+}
+
+function Row({ label, value, muted, strong }: { label: string; value: number; muted?: boolean; strong?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3 border-t border-muted py-1.5">
+      <dt className={cn(muted && "pl-3 text-muted-foreground", strong && "font-semibold")}>{label}</dt>
+      <dd className={cn("font-mono", muted && "text-muted-foreground", strong && "font-semibold")}>{formatMoney(value)}</dd>
+    </div>
+  );
+}
+
+/** Reporte mensual: ingresos, egresos (con a quién fueron) y balance. Se puede imprimir o guardar como PDF. */
+function MonthlySection({
+  report,
+  clubName,
+  prevHref,
+  nextHref,
+}: {
+  report: MonthlyReport;
+  clubName: string;
+  prevHref: string;
+  nextHref: string | null;
+}) {
+  const cards = [
+    { title: "Ingresos", value: report.incomeTotal, note: `MP ${formatMoney(report.income.mercado_pago)} · efectivo ${formatMoney(report.income.efectivo)}` },
+    { title: "Egresos", value: report.expenseTotal, note: `MP ${formatMoney(report.expenses.mercado_pago)} · efectivo ${formatMoney(report.expenses.efectivo)}` },
+  ];
+  return (
+    <section aria-labelledby="mensual" className="print-area flex flex-col gap-4 rounded-2xl border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="mensual" className="text-lg font-bold">
+          Reporte mensual <span className="font-normal text-muted-foreground">· {monthLabel(report.month)}</span>
+          <span className="hidden font-normal text-muted-foreground print:inline"> · {clubName}</span>
+        </h2>
+        <div className="flex items-center gap-1.5 print:hidden">
+          <Button asChild variant="outline" size="icon" aria-label="Mes anterior">
+            <Link href={prevHref}>
+              <ChevronLeft />
+            </Link>
+          </Button>
+          {nextHref ? (
+            <Button asChild variant="outline" size="icon" aria-label="Mes siguiente">
+              <Link href={nextHref}>
+                <ChevronRight />
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" size="icon" aria-label="Mes siguiente" disabled>
+              <ChevronRight />
+            </Button>
+          )}
+          <PrintButton />
+        </div>
       </div>
 
-      <section aria-labelledby="por-cancha" className="overflow-hidden rounded-2xl border bg-card">
-        <h2 id="por-cancha" className="border-b px-5 py-3.5 text-base font-bold">
-          Por cancha
-        </h2>
-        {report.courts.length === 0 ? (
-          <p className="p-8 text-center text-muted-foreground">Todavía no hay canchas.</p>
-        ) : (
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3">
+        {cards.map((card) => (
+          <div key={card.title} className="flex flex-col gap-1 rounded-xl border p-4">
+            <h3 className="text-sm text-muted-foreground">{card.title}</h3>
+            <strong className="font-mono text-2xl font-bold">{formatMoney(card.value)}</strong>
+            <span className="text-xs text-muted-foreground">{card.note}</span>
+          </div>
+        ))}
+        <div className="flex flex-col gap-1 rounded-xl bg-ball p-4 text-ball-foreground">
+          <h3 className="text-sm font-medium">Balance</h3>
+          <strong className="font-mono text-2xl font-bold">{formatMoney(report.balance)}</strong>
+          <span className="text-xs">Ingresos − egresos</span>
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <dl className="flex flex-col text-[15px]">
+          <dt className="pb-1 text-sm font-semibold">Ingresos por origen</dt>
+          {report.incomeByOrigin.length === 0 ? (
+            <dd className="text-sm text-muted-foreground">Sin ingresos.</dd>
+          ) : (
+            <>
+              {report.incomeByOrigin.map((o) => (
+                <Row key={o.origin} label={o.label} value={o.amount} />
+              ))}
+              <Row label="Total" value={report.incomeTotal} strong />
+            </>
+          )}
+        </dl>
+        <dl className="flex flex-col text-[15px]">
+          <dt className="pb-1 text-sm font-semibold">Egresos: a dónde fueron</dt>
+          {report.expenseGroups.length === 0 ? (
+            <dd className="text-sm text-muted-foreground">Sin egresos.</dd>
+          ) : (
+            <>
+              {report.expenseGroups.map((g) => (
+                <div key={g.category} className="flex flex-col">
+                  <Row label={g.label} value={g.total} strong />
+                  {g.byPayee.map((p) => (
+                    <Row key={p.name} label={`${p.name}${p.count > 1 ? ` (${p.count})` : ""}`} value={p.amount} muted />
+                  ))}
+                </div>
+              ))}
+              <Row label="Total" value={report.expenseTotal} strong />
+            </>
+          )}
+        </dl>
+      </div>
+
+      {report.expenseLines.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Detalle de egresos</h3>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-[15px]">
+            <table className="w-full min-w-[560px] text-left text-[14px]">
               <thead className="text-[13px] text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-5 py-2.5 font-medium">Cancha</th>
-                  <th scope="col" className="px-3 py-2.5 text-right font-medium">Turnos</th>
-                  <th scope="col" className="px-3 py-2.5 text-right font-medium">Horas</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Ocupación</th>
-                  <th scope="col" className="px-5 py-2.5 text-right font-medium">Ingresos</th>
+                  <th scope="col" className="py-2 pr-3 font-medium">Fecha</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Categoría</th>
+                  <th scope="col" className="px-3 py-2 font-medium">A quién</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Nota</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Medio</th>
+                  <th scope="col" className="py-2 pl-3 text-right font-medium">Monto</th>
                 </tr>
               </thead>
               <tbody>
-                {report.courts.map((row) => (
-                  <tr key={row.court.id} className="border-t border-muted">
-                    <th scope="row" className="px-5 py-3 font-semibold">
-                      {row.court.name}
-                      <span className="block text-xs font-normal text-muted-foreground">
-                        {COURT_TYPE_LABELS[row.court.type]}
-                      </span>
-                    </th>
-                    <td className="px-3 py-3 text-right font-mono">{row.bookings}</td>
-                    <td className="px-3 py-3 text-right font-mono">{hoursLabel(row.bookedMinutes)}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-24 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                          <div className="h-full rounded-full bg-ink" style={{ width: `${Math.min(100, row.occupancyPercent)}%` }} />
-                        </div>
-                        <span className="w-10 font-mono text-sm">{row.occupancyPercent}%</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono">{formatMoney(row.income)}</td>
+                {report.expenseLines.map((line) => (
+                  <tr key={line.id} className="border-t border-muted">
+                    <td className="py-2 pr-3 font-mono">{shortDate(line.date)}</td>
+                    <td className="px-3 py-2">{CASH_CATEGORY_LABELS[line.category]}</td>
+                    <td className="px-3 py-2">{line.counterparty || <span className="text-muted-foreground">Sin especificar</span>}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{line.note}</td>
+                    <td className="px-3 py-2">{PAYMENT_METHOD_SHORT[line.method]}</td>
+                    <td className="py-2 pl-3 text-right font-mono">{formatMoney(line.amount)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section aria-labelledby="horarios" className="flex flex-col gap-3 rounded-2xl border bg-card p-5">
-          <h2 id="horarios" className="text-base font-bold">
-            Horarios más pedidos
-          </h2>
-          {topHours.length === 0 ? (
-            <p className="text-muted-foreground">No hay turnos en el período.</p>
-          ) : (
-            <ol className="flex flex-col gap-2">
-              {topHours.map(({ hour, bookings }) => (
-                <li key={hour} className="flex items-center gap-3">
-                  <span className="w-12 font-mono text-sm">{String(hour).padStart(2, "0")}:00</span>
-                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                    <div className="h-full rounded-full bg-ink" style={{ width: `${(bookings / maxHour) * 100}%` }} />
-                  </div>
-                  <span className="w-8 text-right font-mono text-sm">{bookings}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-
-        <section aria-labelledby="tipos" className="flex flex-col gap-3 rounded-2xl border bg-card p-5">
-          <h2 id="tipos" className="text-base font-bold">
-            Tipos de turno
-          </h2>
-          <dl className="flex flex-col text-[15px]">
-            {kindRows.map(({ label, value }) => (
-              <div key={label} className="flex justify-between border-t border-muted py-2 first:border-t-0">
-                <dt>{label}</dt>
-                <dd className="font-mono font-semibold">{value}</dd>
-              </div>
-            ))}
-            <div className="flex justify-between border-t border-muted py-2">
-              <dt className="text-muted-foreground">Fijos (incluidos arriba)</dt>
-              <dd className="font-mono">{report.byKind.fixed}</dd>
-            </div>
-            <div className="flex justify-between border-t border-muted py-2">
-              <dt className="text-muted-foreground">De noche (desde las {nightStartsAt})</dt>
-              <dd className="font-mono">{report.nightCount}</dd>
-            </div>
-          </dl>
-        </section>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section aria-labelledby="revisar" className="flex flex-col gap-3 rounded-2xl border bg-card p-5">
-          <h2 id="revisar" className="flex items-center gap-2 text-base font-bold">
-            <TriangleAlert className="size-5 text-destructive" />
-            Para revisar
-          </h2>
-          {reviewItems.length === 0 ? (
-            <p className="flex items-center gap-2 text-muted-foreground">
-              <CircleCheck className="size-4" />
-              No hay nada para revisar.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {reviewItems.map((item) => (
-                <li key={item} className="rounded-xl border p-3 text-[15px]">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <CopySummary text={summary} />
-      </div>
-    </div>
+        </div>
+      )}
+    </section>
   );
 }
 
