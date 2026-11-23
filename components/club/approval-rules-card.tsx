@@ -37,8 +37,8 @@ const EMPTY: ApprovalRuleInput = {
 };
 
 /**
- * Horarios con confirmación del admin (Políticas): si un operador, profe u organizador reserva
- * dentro de una franja, el turno queda "Por confirmar" hasta que el admin lo confirma.
+ * Horarios bloqueados (Políticas): un operador, profe u organizador no puede reservar dentro de una
+ * franja; la app le pide que se comunique con el admin, que carga el turno desde su panel.
  */
 export function ApprovalRulesCard() {
   const rules = useApprovalRules();
@@ -60,7 +60,7 @@ export function ApprovalRulesCard() {
       setError(result.error ?? "No se pudo guardar el horario.");
       return;
     }
-    toast.success("Horario con confirmación agregado");
+    toast.success("Horario bloqueado agregado");
     form.reset(EMPTY);
   };
 
@@ -79,17 +79,17 @@ export function ApprovalRulesCard() {
     <section aria-labelledby="confirmacion" className="flex flex-col gap-4 rounded-2xl border bg-card p-6">
       <div className="flex flex-col gap-1">
         <h2 id="confirmacion" className="text-lg font-bold">
-          Horarios con confirmación del admin
+          Horarios bloqueados
         </h2>
         <p className="text-[15px] text-pretty text-muted-foreground">
-          Si un operador, un profe o el organizador reserva en estas franjas, el turno ocupa el lugar y queda
-          &quot;Por confirmar&quot; hasta que lo confirmes desde Hoy. Vos reservás sin confirmación.
+          En estas franjas solo vos cargás turnos. Si un operador, un profe o el organizador quiere reservar, la
+          app le pide que se comunique con vos (por WhatsApp) y vos lo cargás desde tu panel.
         </p>
       </div>
 
       {rules.length === 0 ? (
         <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-          Todavía no hay horarios con confirmación: todos los turnos quedan confirmados al cargarlos.
+          Todavía no hay horarios bloqueados: todo el equipo puede reservar en cualquier horario.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">

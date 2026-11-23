@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,7 +31,8 @@ import { digitsOnly } from "@/lib/players";
 import { depositFor, formatMoney, isNight, quotePrice } from "@/lib/pricing";
 import { useSportPrices } from "@/hooks/use-sport-prices";
 import { useApprovalRules } from "@/hooks/use-approval-rules";
-import { requiresApproval } from "@/lib/approval";
+import { requiresApproval, whatsappLink } from "@/lib/approval";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { createClient } from "@/lib/supabase/client";
 import { ensureFixedReservations } from "@/lib/series";
 import { useMembership } from "@/hooks/use-membership";
@@ -139,6 +141,7 @@ export function ReservationForm({
     night_starts_at: nightStartsAt,
     open_time,
     close_time,
+    whatsapp: clubWhatsapp,
     loaded: settingsLoaded,
   } = useClubSettings();
   const hours = useMemo(() => ({ open_time, close_time }), [open_time, close_time]);
@@ -303,6 +306,21 @@ export function ReservationForm({
       ? maxDuration
       : wantedDuration
     : 0;
+  // Horario bloqueado: solo el admin carga turnos ahí (un turno que ya estaba y no se mueve se puede editar).
+  const unchangedSlot =
+    mode === "edit" &&
+    !!reservation &&
+    reservation.court_id === courtId &&
+    reservation.date === date &&
+    reservation.time === time &&
+    reservation.duration_minutes === effectiveDuration &&
+    reservation.status === "active";
+  const isBlocked =
+    membership.role !== "admin" &&
+    !isCancelled &&
+    !!selectedCourt &&
+    !unchangedSlot &&
+    requiresApproval(approvalRules, selectedCourt.id, date, time, effectiveDuration);
   // El precio de día o de noche se elige por la hora de inicio del turno.
   const slotPrice = selectedCourt
     ? quotePrice(prices[selectedCourt.type], kind, effectiveDuration, time, nightStartsAt)
@@ -689,17 +707,29 @@ export function ReservationForm({
           />
         )}
 
-        {membership.role !== "admin" &&
-          !isCancelled &&
-          selectedCourt &&
-          requiresApproval(approvalRules, selectedCourt.id, date, time, effectiveDuration) && (
-            <Alert role="status">
-              <AlertDescription>
-                Este horario necesita confirmación del admin: el turno ocupa el lugar y queda &quot;Por confirmar&quot;
-                hasta que lo confirme.
-              </AlertDescription>
-            </Alert>
-          )}
+        {isBlocked && selectedCourt && (
+          <Alert variant="destructive" role="status">
+            <AlertDescription className="flex flex-col gap-2">
+              <span>
+                Este horario está bloqueado. Comunicate con el administrador: él gestiona los turnos en esta
+                franja desde su panel.
+              </span>
+              <Button asChild variant="outline" size="sm" className="self-start">
+                <Link
+                  href={whatsappLink(
+                    clubWhatsapp,
+                    `Hola, quiero reservar en ${membership.club.name} un horario bloqueado: ${selectedCourt.name}, el ${date.split("-").reverse().slice(0, 2).join("/")} a las ${time}. ¿Lo podés gestionar? Gracias.`
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <WhatsAppIcon className="size-4" />
+                  Avisarle al admin por WhatsApp
+                </Link>
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {selectedCourt && !isCancelled && (
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl bg-ink px-4 py-3 text-sm text-primary-foreground">
@@ -723,7 +753,7 @@ export function ReservationForm({
             <Button type="button" variant="outline" onClick={onClose}>
               Cerrar
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || isBlocked}>
               {isSubmitting && <Loader2 className="animate-spin" />}
               Guardar reserva
             </Button>

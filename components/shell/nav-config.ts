@@ -4,6 +4,7 @@ import {
   Bell,
   CreditCard,
   Grid3x3,
+  HandCoins,
   History,
   IdCard,
   LandPlot,
@@ -47,6 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/reservas", label: "Planilla", icon: Grid3x3 },
       { href: "/dashboard/mis-turnos", label: "Mis turnos", icon: CalendarDays, roles: ["profesor"] },
       { href: "/dashboard/caja", label: "Caja", icon: Wallet, minRole: "operador" },
+      { href: "/dashboard/liquidaciones", label: "Liquidación de profes", icon: HandCoins, minRole: "admin" },
     ],
   },
   {

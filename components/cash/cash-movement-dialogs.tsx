@@ -9,8 +9,8 @@ import Link from "next/link";
 import {
   CASH_CATEGORY_LABELS,
   CASH_IN_CATEGORIES,
-  CASH_OUT_CATEGORIES,
   COUNTERPARTY_REQUIRED,
+  NEW_CASH_OUT_CATEGORIES,
   PAYEE_KIND_BY_CATEGORY,
   cashExpenseSchema,
   cashSaleSchema,
@@ -362,7 +362,7 @@ export function CashExpenseDialog({ date, payees }: { date: string; payees: Paye
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Registrar salida</DialogTitle>
-          <DialogDescription>Plata que sale de la caja: liquidaciones, sueldos, proveedores, gastos o retiros.</DialogDescription>
+          <DialogDescription>Plata que sale de la caja: sueldos, proveedores, gastos o retiros.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
@@ -384,7 +384,7 @@ export function CashExpenseDialog({ date, payees }: { date: string; payees: Paye
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {CASH_OUT_CATEGORIES.map((c) => (
+                      {NEW_CASH_OUT_CATEGORIES.map((c) => (
                         <SelectItem key={c} value={c}>
                           {CASH_CATEGORY_LABELS[c]}
                         </SelectItem>

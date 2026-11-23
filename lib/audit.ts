@@ -40,7 +40,8 @@ export type AuditAction =
   | "product.created"
   | "product.updated"
   | "payee.created"
-  | "payee.updated";
+  | "payee.updated"
+  | "profe.settled";
 
 type AuditInput = {
   clubId: string;
@@ -113,7 +114,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "product.updated",
     "payee.updated",
   ],
-  charged: ["payment.registered", "credit.applied"],
+  charged: ["payment.registered", "credit.applied", "profe.settled"],
   cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed"],
 };
 
@@ -316,6 +317,11 @@ export function describeAuditEntry(
             ? "registró la venta de"
             : "registró la salida:";
       return `${verb} ${detail} por ${money(p.amount)}${method ? ` ${method}` : ""}`;
+    }
+    case "profe.settled": {
+      const method = METHOD_TEXT[String(p.method)] ?? "";
+      const range = typeof p.from === "string" && typeof p.to === "string" ? ` del ${shortDate(p.from)} al ${shortDate(p.to)}` : "";
+      return `cobró la liquidación de ${String(p.profe || "un profe")}${range}: ${String(p.count ?? 0)} turnos por ${money(p.amount)}${method ? ` ${method}` : ""}`;
     }
     case "product.created":
       return `agregó el producto ${String(p.name ?? "")} a ${money(p.price)}`;

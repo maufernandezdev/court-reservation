@@ -113,6 +113,12 @@ export const PAYEE_KIND_BY_CATEGORY: Record<CashOutCategory, PayeeKind | null> =
   retiro: null,
 };
 
+/**
+ * Categorías que se ofrecen al registrar una salida. "Liquidación de profe" queda solo para las
+ * salidas viejas: ahora es el profe quien le paga al club (Liquidación de profes).
+ */
+export const NEW_CASH_OUT_CATEGORIES = CASH_OUT_CATEGORIES.filter((c) => c !== "liquidacion_profe");
+
 /** Salida de plata (solo admin): liquidaciones, empleados, proveedores, gastos y retiros. */
 export const cashExpenseSchema = z.object({
   date: dateSchema,

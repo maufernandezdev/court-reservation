@@ -468,7 +468,7 @@ async function createSeries(
   const { supabase, user, membership } = ctx;
   const clubId = membership!.club_id;
 
-  // Las fechas de un fijo se generan solas: en un horario con confirmación lo carga el admin.
+  // Las fechas de un fijo se generan solas: en un horario bloqueado lo carga el admin.
   if (membership!.role !== "admin") {
     const { data: needsApproval } = await supabase.rpc("requires_approval", {
       p_club_id: clubId,
@@ -480,7 +480,7 @@ async function createSeries(
     if (needsApproval) {
       return {
         success: false,
-        error: "Ese horario necesita confirmación del admin: los turnos fijos ahí los carga el administrador.",
+        error: "Ese horario está bloqueado: comunicate con el administrador para reservarlo.",
       };
     }
   }
