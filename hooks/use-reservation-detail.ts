@@ -73,6 +73,9 @@ export function useReservationDetail({
   const [isCancelling, setIsCancelling] = useState(false);
   const [endSeriesOpen, setEndSeriesOpen] = useState(false);
   const [isEndingSeries, setIsEndingSeries] = useState(false);
+  /** Cobro en curso: bloquea todos los botones de cobro hasta que responde el servidor. */
+  const [chargingKind, setChargingKind] = useState<"seña" | "total" | "saldo" | null>(null);
+  const chargingRef = useRef(false);
 
   const { prices, isLoading: isLoadingPrices } = useSportPrices();
   const court = reservation
@@ -201,31 +204,49 @@ export function useReservationDetail({
   };
 
   const registerPayment = async (kind: "seña" | "total") => {
-    if (!reservation) return;
-    const { success, error, reservation: updated } = await registerPaymentAction(
-      reservation.id,
-      { kind, method: paymentMethod }
-    );
-    if (success) {
-      toast.success(kind === "seña" ? "Seña registrada" : "Pago total registrado");
-      onSaved(updated!);
-      await loadExtras();
-    } else {
-      toast.error(error ?? "No se pudo registrar el cobro");
+    if (!reservation || chargingRef.current) return;
+    chargingRef.current = true;
+    setChargingKind(kind);
+    try {
+      const { success, error, reservation: updated } = await registerPaymentAction(
+        reservation.id,
+        { kind, method: paymentMethod }
+      );
+      if (success) {
+        toast.success(kind === "seña" ? "Seña registrada" : "Pago total registrado");
+        onSaved(updated!);
+        await loadExtras();
+      } else {
+        toast.error(error ?? "No se pudo registrar el cobro");
+      }
+    } catch {
+      toast.error("No se pudo registrar el cobro");
+    } finally {
+      chargingRef.current = false;
+      setChargingKind(null);
     }
   };
 
   const applyCredit = async () => {
-    if (!reservation) return;
-    const { success, error, reservation: updated } = await applyCreditAction(
-      reservation.id
-    );
-    if (success) {
-      toast.success("Saldo a favor aplicado");
-      onSaved(updated!);
-      await loadExtras();
-    } else {
-      toast.error(error ?? "No se pudo aplicar el saldo");
+    if (!reservation || chargingRef.current) return;
+    chargingRef.current = true;
+    setChargingKind("saldo");
+    try {
+      const { success, error, reservation: updated } = await applyCreditAction(
+        reservation.id
+      );
+      if (success) {
+        toast.success("Saldo a favor aplicado");
+        onSaved(updated!);
+        await loadExtras();
+      } else {
+        toast.error(error ?? "No se pudo aplicar el saldo");
+      }
+    } catch {
+      toast.error("No se pudo aplicar el saldo");
+    } finally {
+      chargingRef.current = false;
+      setChargingKind(null);
     }
   };
 
@@ -319,6 +340,7 @@ export function useReservationDetail({
     isCancelling,
     registerPayment,
     applyCredit,
+    chargingKind,
     cancel,
     actorName,
     /** Avisa a la planilla de un turno actualizado (por ejemplo, el resultado de un torneo). */

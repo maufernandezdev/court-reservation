@@ -30,6 +30,7 @@ import { MatchResultForm } from "@/components/reservations/match-result-form";
 import { ApprovalBox } from "@/components/reservations/approval-box";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { useProfeColors } from "@/hooks/use-profes";
+import { ProcessingButton } from "@/components/processing-button";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -302,6 +303,7 @@ export function ReservationDetailPanel({
                 spacing={1}
                 value={detail.paymentMethod}
                 onValueChange={(v) => v && detail.setPaymentMethod(v as PaymentMethod)}
+                disabled={detail.chargingKind !== null}
                 aria-labelledby="payment-method-label"
                 className="grid w-full grid-cols-2 rounded-lg bg-muted p-1"
               >
@@ -311,21 +313,39 @@ export function ReservationDetailPanel({
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
-              <Button size="lg" onClick={() => detail.registerPayment("total")}>
+              <ProcessingButton
+                size="lg"
+                onClick={() => detail.registerPayment("total")}
+                processing={detail.chargingKind === "total"}
+                disabled={detail.chargingKind !== null}
+                processingLabel="Procesando cobro…"
+              >
                 {totalPaid > 0
                   ? `Cobrar saldo de ${formatMoney(remaining)}`
                   : `Cobrar total de ${formatMoney(slotPrice)}`}
-              </Button>
+              </ProcessingButton>
               {deposit > 0 && depositPaid === 0 && totalPaid === 0 && (
-                <Button variant="outline" onClick={() => detail.registerPayment("seña")}>
+                <ProcessingButton
+                  variant="outline"
+                  onClick={() => detail.registerPayment("seña")}
+                  processing={detail.chargingKind === "seña"}
+                  disabled={detail.chargingKind !== null}
+                  processingLabel="Procesando seña…"
+                >
                   Cobrar solo la seña ({formatMoney(deposit)})
-                </Button>
+                </ProcessingButton>
               )}
               {credit !== null && credit > 0 && remaining > 0 && (
-                <Button variant="outline" onClick={detail.applyCredit}>
+                <ProcessingButton
+                  variant="outline"
+                  onClick={detail.applyCredit}
+                  processing={detail.chargingKind === "saldo"}
+                  disabled={detail.chargingKind !== null}
+                  processingLabel="Aplicando saldo…"
+                >
                   <Wallet />
                   Aplicar saldo a favor ({formatMoney(credit)})
-                </Button>
+                </ProcessingButton>
               )}
             </div>
           )}
