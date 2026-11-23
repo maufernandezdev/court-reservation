@@ -5,7 +5,20 @@ import { getSessionContext } from "@/lib/auth";
 import { queryProfes } from "@/lib/club-data";
 import { clubTodayKey } from "@/lib/club-time";
 import { formatMoney } from "@/lib/pricing";
-import { addDaysKey, loadProfeSettlements, shortDay, weekStart, type ProfeSettlement } from "@/lib/profe-settlement";
+import {
+  WEEKDAY_NAMES,
+  addDaysKey,
+  hoursText,
+  loadProfeSettlements,
+  settlementText,
+  shortDay,
+  weekStart,
+  type ProfeSettlement,
+} from "@/lib/profe-settlement";
+import { DEFAULT_NIGHT_STARTS_AT } from "@/lib/pricing";
+import { normalizeTime } from "@/lib/availability";
+import { CopyTextButton } from "@/components/reports/copy-text-button";
+import { PrintButton } from "@/components/reports/print-button";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { PageHeader } from "@/components/shell/page-header";
 import { SettleProfeDialog } from "@/components/settlements/settle-profe-dialog";
@@ -60,9 +73,14 @@ export default async function SettlementsPage({
   const clubId = membership.club_id;
   let loadError = "";
   let settlements: ProfeSettlement[] = [];
+  let nightStartsAt = DEFAULT_NIGHT_STARTS_AT;
   try {
-    const profes = await queryProfes(supabase, clubId);
-    settlements = await loadProfeSettlements(supabase, clubId, profes, from, to);
+    const [profes, { data: settingsRow }] = await Promise.all([
+      queryProfes(supabase, clubId),
+      supabase.from("settings").select("night_starts_at").eq("club_id", clubId).maybeSingle(),
+    ]);
+    nightStartsAt = normalizeTime(settingsRow?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT);
+    settlements = await loadProfeSettlements(supabase, clubId, profes, from, to, nightStartsAt);
   } catch {
     loadError = "No se pudieron cargar los turnos de los profes.";
   }
@@ -112,6 +130,14 @@ export default async function SettlementsPage({
         </section>
       </div>
 
+      <div className="flex justify-end print:hidden">
+        <PrintButton />
+      </div>
+
+      <div className="print-area flex flex-col gap-4">
+      <h2 className="hidden text-lg font-bold print:block">
+        Liquidación de profes · {membership.club.name} · {periodLabel}
+      </h2>
       {settlements.length === 0 ? (
         <p className="rounded-2xl border bg-card p-8 text-center text-muted-foreground">
           No hay profes en el equipo. Sumalos en Equipo para liquidar sus turnos.
@@ -130,7 +156,7 @@ export default async function SettlementsPage({
                 {profe.turns.length} {profe.turns.length === 1 ? "turno" : "turnos"} · {formatMoney(profe.total)}
               </span>
               {profe.due > 0 ? (
-                <SettleProfeDialog
+                <span className="print:hidden"><SettleProfeDialog
                   profeUserId={profe.user_id}
                   profeName={profe.name}
                   from={from}
@@ -138,11 +164,69 @@ export default async function SettlementsPage({
                   periodLabel={periodLabel}
                   due={profe.due}
                   turns={profe.turns.filter((t) => t.due > 0).length}
-                />
+                /></span>
               ) : profe.turns.length > 0 ? (
                 <Badge variant="outline">Pagado</Badge>
               ) : null}
             </div>
+            {profe.turns.length > 0 && (
+              <div className="flex flex-col gap-4 border-b bg-muted/30 px-5 py-4">
+                <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(120px,100%),1fr))] gap-3 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground">Turnos</dt>
+                    <dd className="font-mono text-base font-semibold">
+                      {profe.turns.length}
+                      {profe.summary.fixedCount > 0 && (
+                        <span className="text-sm font-normal text-muted-foreground"> · {profe.summary.fixedCount} fijos</span>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Horas</dt>
+                    <dd className="font-mono text-base font-semibold">{hoursText(profe.summary.minutes)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Día / noche</dt>
+                    <dd className="font-mono">
+                      {hoursText(profe.summary.dayMinutes)} / {hoursText(profe.summary.nightMinutes)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Total · ya pagado</dt>
+                    <dd className="font-mono">
+                      {formatMoney(profe.total)} · {formatMoney(profe.paid)}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <dl className="flex flex-col text-sm">
+                    <dt className="pb-1 font-semibold">Por día</dt>
+                    {profe.summary.byWeekday.map((d) => (
+                      <div key={d.weekday} className="flex justify-between border-t border-muted py-1">
+                        <dt className="capitalize">{WEEKDAY_NAMES[d.weekday]}</dt>
+                        <dd className="font-mono">
+                          {d.turns} · {hoursText(d.minutes)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <dl className="flex flex-col text-sm">
+                    <dt className="pb-1 font-semibold">Por cancha</dt>
+                    {profe.summary.byCourt.map((c) => (
+                      <div key={c.name} className="flex justify-between gap-3 border-t border-muted py-1">
+                        <dt className="truncate">{c.name}</dt>
+                        <dd className="font-mono">
+                          {hoursText(c.minutes)} · {formatMoney(c.amount)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+                <div className="print:hidden">
+                  <CopyTextButton text={settlementText(profe, membership.club.name, periodLabel, formatMoney)} />
+                </div>
+              </div>
+            )}
             {profe.turns.length === 0 ? (
               <p className="px-5 py-4 text-sm text-muted-foreground">Sin turnos esta semana.</p>
             ) : (
@@ -157,7 +241,12 @@ export default async function SettlementsPage({
                   >
                     <span className="w-24 font-mono text-sm">{dayLabel(turn.date)}</span>
                     <span className="w-14 font-mono text-sm">{turn.time}</span>
-                    <span className="min-w-0 flex-[1_1_120px] truncate">{turn.courtName}</span>
+                    <span className="min-w-0 flex-[1_1_120px] truncate">
+                      {turn.courtName}
+                      <span className="text-sm text-muted-foreground"> · {hoursText(turn.duration_minutes)}</span>
+                    </span>
+                    {turn.fixed && <Badge variant="outline">Fijo</Badge>}
+                    {turn.night && <Badge variant="outline">Noche</Badge>}
                     {turn.due === 0 ? (
                       <Badge variant="outline">Pagado</Badge>
                     ) : turn.paid > 0 ? (
@@ -171,6 +260,7 @@ export default async function SettlementsPage({
           </section>
         ))
       )}
+      </div>
     </div>
   );
 }

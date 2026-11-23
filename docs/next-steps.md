@@ -1,3 +1,5 @@
+> 📌 **Módulos a volver configurables para otros clubes:** ver [modulos-configurables.md](modulos-configurables.md) (anotado 23/11/2026).
+
 
 ## 🧪 Pruebas pendientes (las hace Mau) — anotado 12/10/2026
 

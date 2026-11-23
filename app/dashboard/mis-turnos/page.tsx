@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarX2, ChevronLeft, ChevronRight, ShieldAlert } from "lucide-react";
+import { CalendarX2, ChevronLeft, ChevronRight, HandCoins, ShieldAlert } from "lucide-react";
 import { z } from "zod";
 import { getSessionContext } from "@/lib/auth";
 import { ensureFixedReservations } from "@/lib/series";
@@ -21,6 +21,18 @@ import {
   type MyTurnsView,
 } from "@/lib/my-turns";
 import { hoursLabel } from "@/lib/reports";
+import { formatMoney } from "@/lib/pricing";
+import { DEFAULT_NIGHT_STARTS_AT } from "@/lib/pricing";
+import { normalizeTime } from "@/lib/availability";
+import {
+  WEEKDAY_NAMES,
+  addDaysKey,
+  hoursText,
+  loadProfeSettlements,
+  weekStart,
+  type SettlementTurn,
+} from "@/lib/profe-settlement";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shell/page-header";
 import { ViewTabs } from "@/components/my-turns/view-tabs";
 import { TurnCard } from "@/components/my-turns/turn-card";
@@ -80,6 +92,10 @@ export default async function MisTurnosPage({
     monday = mondayOf(isDateKey(raw.semana) ? raw.semana : today);
     from = monday;
     to = addDays(monday, 6);
+  } else if (view === "por-pagar") {
+    // La vista "Por pagar" usa su propia consulta (abajo).
+    from = today;
+    to = addDays(today, -1);
   } else if (view === "historial") {
     month = isMonthKey(raw.mes) && raw.mes <= today.slice(0, 7) ? raw.mes : today.slice(0, 7);
     const bounds = monthBounds(month);
@@ -89,7 +105,7 @@ export default async function MisTurnosPage({
   }
 
   // Los turnos fijos se generan al mirar sus fechas: hace falta para semanas que nadie abrió todavía.
-  if (view !== "historial") await ensureFixedReservations(supabase, clubId, to);
+  if (view === "hoy" || view === "semana") await ensureFixedReservations(supabase, clubId, to);
 
   const [turnsRes, courtsRes] = await Promise.all([
     from <= to
@@ -107,6 +123,28 @@ export default async function MisTurnosPage({
     supabase.from("courts").select("id, name").eq("club_id", clubId),
   ]);
   const turns = (turnsRes.data ?? []) as Reservation[];
+
+  // Lo que el profe le debe al club por sus turnos (liquidación semanal): hasta el fin de esta semana,
+  // mirando medio año para atrás.
+  const pendingTo = addDaysKey(weekStart(today), 6);
+  const pendingFrom = addDaysKey(weekStart(today), -26 * 7);
+  let pendingTurns: SettlementTurn[] = [];
+  try {
+    const { data: settingsRow } = await supabase.from("settings").select("night_starts_at").eq("club_id", clubId).maybeSingle();
+    const [mine] = await loadProfeSettlements(
+      supabase,
+      clubId,
+      [{ user_id: user.id, name: membership.full_name, color: membership.color }],
+      pendingFrom,
+      pendingTo,
+      normalizeTime(settingsRow?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT),
+      user.id
+    );
+    pendingTurns = (mine?.turns ?? []).filter((t) => t.due > 0);
+  } catch {
+    // Si falla, la página sigue mostrando los turnos.
+  }
+  const pendingTotal = Math.round(pendingTurns.reduce((sum, t) => sum + t.due, 0) * 100) / 100;
   const courtName = new Map(((courtsRes.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const nameOf = (id: string) => courtName.get(id) ?? "Cancha";
   // Se pueden editar y cancelar los turnos activos de hoy en adelante; el historial y los cancelados quedan como están.
@@ -196,6 +234,63 @@ export default async function MisTurnosPage({
         </div>
       </section>
     );
+  } else if (view === "por-pagar") {
+    const weeks = new Map<string, SettlementTurn[]>();
+    for (const t of pendingTurns) {
+      const key = weekStart(t.date);
+      weeks.set(key, [...(weeks.get(key) ?? []), t]);
+    }
+    content = (
+      <section aria-labelledby="titulo-por-pagar" className="flex flex-col gap-4">
+        <h2 id="titulo-por-pagar" className="text-lg font-bold">
+          Por pagar al club
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            Las canchas de tus turnos se liquidan por semana (lunes a domingo).
+          </span>
+        </h2>
+        {pendingTurns.length === 0 ? (
+          empty("No tenés nada pendiente: todos tus turnos están pagados.")
+        ) : (
+          [...weeks.entries()].map(([monday, list]) => {
+            const due = list.reduce((sum, t) => sum + t.due, 0);
+            const minutes = list.reduce((sum, t) => sum + t.duration_minutes, 0);
+            return (
+              <section key={monday} aria-label={`Semana del ${shortDate(monday)}`} className="overflow-hidden rounded-2xl border bg-card">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-5 py-3.5">
+                  <h3 className="flex-1 text-base font-bold">
+                    Semana del {shortDate(monday)} al {shortDate(addDaysKey(monday, 6))}
+                  </h3>
+                  <span className="text-sm text-muted-foreground">
+                    {plural(list.length, "turno", "turnos")} · {hoursText(minutes)}
+                  </span>
+                  <strong className="font-mono">{formatMoney(due)}</strong>
+                </div>
+                <ul>
+                  {list.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-muted px-5 py-2.5 text-[15px] first:border-t-0"
+                    >
+                      <span className="w-24 font-mono text-sm capitalize">
+                        {WEEKDAY_NAMES[new Date(`${t.date}T12:00:00Z`).getUTCDay()].slice(0, 3)} {shortDate(t.date)}
+                      </span>
+                      <span className="w-14 font-mono text-sm">{t.time}</span>
+                      <span className="min-w-0 flex-[1_1_120px] truncate">
+                        {t.courtName}
+                        <span className="text-sm text-muted-foreground"> · {hoursText(t.duration_minutes)}</span>
+                      </span>
+                      {t.fixed && <Badge variant="outline">Fijo</Badge>}
+                      {t.paid > 0 && <Badge variant="outline">Pagaste {formatMoney(t.paid)}</Badge>}
+                      <span className="ml-auto font-mono">{formatMoney(t.due)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })
+        )}
+      </section>
+    );
   } else {
     const groups = groupByDate(turns, true);
     const totals = summarizeTurns(turns);
@@ -255,13 +350,26 @@ export default async function MisTurnosPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Mis turnos"
-        description="Tus turnos de profe: los de hoy, la semana y el historial."
+        description="Tus turnos de profe: los de hoy, la semana, el historial y lo que tenés por pagar al club."
         actions={<ViewTabs current={view} />}
       />
       {loadError && (
         <Alert variant="destructive">
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
+      )}
+      {view !== "por-pagar" && pendingTotal > 0 && (
+        <Link
+          href="/dashboard/mis-turnos?vista=por-pagar"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-ball px-5 py-4 text-ball-foreground"
+        >
+          <HandCoins className="size-5" />
+          <span className="flex-1">
+            Tenés <strong className="font-mono">{formatMoney(pendingTotal)}</strong> por pagar al club (
+            {plural(pendingTurns.length, "turno", "turnos")}).
+          </span>
+          <span className="text-sm font-semibold underline">Ver detalle</span>
+        </Link>
       )}
       {content}
     </div>

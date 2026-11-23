@@ -3,6 +3,7 @@ import { z } from "zod";
 import { amountDue, paidByReservation, type DayPayment } from "@/lib/daily-overview";
 import { fetchAll } from "@/lib/reports-queries";
 import { VISIBLE_PAYMENT_METHODS, type Reservation } from "@/lib/reservations";
+import { isNight } from "@/lib/pricing";
 
 /**
  * Liquidación de profes: el profe le paga al club los turnos de profe que usó en un período
@@ -35,6 +36,19 @@ export type SettlementTurn = Pick<Reservation, "id" | "date" | "time" | "duratio
   courtName: string;
   paid: number;
   due: number;
+  /** Fecha de un turno fijo semanal. */
+  fixed: boolean;
+  night: boolean;
+};
+
+/** Resumen de la liquidación: horas, días, canchas y franjas usadas. */
+export type SettlementSummary = {
+  minutes: number;
+  dayMinutes: number;
+  nightMinutes: number;
+  fixedCount: number;
+  byCourt: { name: string; turns: number; minutes: number; amount: number }[];
+  byWeekday: { weekday: number; turns: number; minutes: number }[];
 };
 
 export type ProfeSettlement = {
@@ -45,9 +59,48 @@ export type ProfeSettlement = {
   total: number;
   paid: number;
   due: number;
+  summary: SettlementSummary;
 };
 
-type Row = Pick<Reservation, "id" | "date" | "time" | "duration_minutes" | "price" | "payment_status" | "status" | "profe_user_id"> & {
+const EMPTY_SUMMARY = (): SettlementSummary => ({ minutes: 0, dayMinutes: 0, nightMinutes: 0, fixedCount: 0, byCourt: [], byWeekday: [] });
+
+function summarize(turns: SettlementTurn[]): SettlementSummary {
+  const summary = EMPTY_SUMMARY();
+  const courts = new Map<string, { name: string; turns: number; minutes: number; amount: number }>();
+  const days = new Map<number, { weekday: number; turns: number; minutes: number }>();
+  for (const t of turns) {
+    summary.minutes += t.duration_minutes;
+    if (t.night) summary.nightMinutes += t.duration_minutes;
+    else summary.dayMinutes += t.duration_minutes;
+    if (t.fixed) summary.fixedCount += 1;
+    const c = courts.get(t.courtName) ?? { name: t.courtName, turns: 0, minutes: 0, amount: 0 };
+    c.turns += 1;
+    c.minutes += t.duration_minutes;
+    c.amount = Math.round((c.amount + t.price) * 100) / 100;
+    courts.set(t.courtName, c);
+    const weekday = parseKey(t.date).getUTCDay();
+    const d = days.get(weekday) ?? { weekday, turns: 0, minutes: 0 };
+    d.turns += 1;
+    d.minutes += t.duration_minutes;
+    days.set(weekday, d);
+  }
+  summary.byCourt = [...courts.values()].sort((a, b) => b.minutes - a.minutes);
+  // Lunes primero.
+  summary.byWeekday = [...days.values()].sort((a, b) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7));
+  return summary;
+}
+
+/** "1 h 30 min". */
+export function hoursText(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+export const WEEKDAY_NAMES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+type Row = Pick<Reservation, "id" | "date" | "time" | "duration_minutes" | "price" | "payment_status" | "status" | "profe_user_id" | "series_id"> & {
   courts: { name: string } | { name: string }[] | null;
 };
 
@@ -57,12 +110,15 @@ export async function loadProfeSettlements(
   clubId: string,
   profes: { user_id: string; name: string; color: string | null }[],
   from: string,
-  to: string
+  to: string,
+  nightStartsAt: string,
+  /** Solo los turnos de este profe (vista del propio profe). */
+  onlyProfeId?: string
 ): Promise<ProfeSettlement[]> {
-  const rows = await fetchAll<Row>((start, end) =>
-    supabase
+  const rows = await fetchAll<Row>((start, end) => {
+    const query = supabase
       .from("reservations")
-      .select("id, date, time, duration_minutes, price, payment_status, status, profe_user_id, courts(name)")
+      .select("id, date, time, duration_minutes, price, payment_status, status, profe_user_id, series_id, courts(name)")
       .eq("club_id", clubId)
       .eq("kind", "profe")
       .eq("status", "active")
@@ -70,9 +126,12 @@ export async function loadProfeSettlements(
       .lte("date", to)
       .order("date")
       .order("time")
-      .order("id")
-      .range(start, end) as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
-  );
+      .order("id");
+    return (onlyProfeId ? query.eq("profe_user_id", onlyProfeId) : query).range(start, end) as unknown as PromiseLike<{
+      data: Row[] | null;
+      error: { message: string } | null;
+    }>;
+  });
 
   const ids = rows.map((r) => r.id);
   const payments = ids.length
@@ -90,14 +149,14 @@ export async function loadProfeSettlements(
 
   const byProfe = new Map<string, ProfeSettlement>();
   for (const p of profes) {
-    byProfe.set(p.user_id, { ...p, turns: [], total: 0, paid: 0, due: 0 });
+    byProfe.set(p.user_id, { ...p, turns: [], total: 0, paid: 0, due: 0, summary: EMPTY_SUMMARY() });
   }
   for (const r of rows) {
     if (!r.profe_user_id) continue;
     let entry = byProfe.get(r.profe_user_id);
     if (!entry) {
       // Profe que ya no está en el equipo: sus turnos se liquidan igual.
-      entry = { user_id: r.profe_user_id, name: "Profe (fuera del equipo)", color: null, turns: [], total: 0, paid: 0, due: 0 };
+      entry = { user_id: r.profe_user_id, name: "Profe (fuera del equipo)", color: null, turns: [], total: 0, paid: 0, due: 0, summary: EMPTY_SUMMARY() };
       byProfe.set(r.profe_user_id, entry);
     }
     const court = Array.isArray(r.courts) ? r.courts[0] : r.courts;
@@ -114,6 +173,8 @@ export async function loadProfeSettlements(
       courtName: court?.name ?? "Cancha",
       paid,
       due,
+      fixed: !!r.series_id,
+      night: isNight(r.time, nightStartsAt),
     });
     entry.total += price;
     entry.paid += r.payment_status === "pagada" ? price : Math.min(price, paid);
@@ -122,7 +183,7 @@ export async function loadProfeSettlements(
 
   const round = (n: number) => Math.round(n * 100) / 100;
   return [...byProfe.values()]
-    .map((e) => ({ ...e, total: round(e.total), paid: round(e.paid), due: round(e.due) }))
+    .map((e) => ({ ...e, total: round(e.total), paid: round(e.paid), due: round(e.due), summary: summarize(e.turns) }))
     .sort((a, b) => b.due - a.due || a.name.localeCompare(b.name));
 }
 
@@ -135,3 +196,30 @@ export const settleProfeSchema = z
   })
   .refine((v) => v.from <= v.to, { message: "Período inválido", path: ["to"] });
 export type SettleProfeInput = z.infer<typeof settleProfeSchema>;
+
+/** Texto de la liquidación para mandarle al profe por WhatsApp. */
+export function settlementText(
+  profe: ProfeSettlement,
+  clubName: string,
+  periodLabel: string,
+  formatMoney: (n: number) => string
+): string {
+  const s = profe.summary;
+  const lines = [
+    `*Liquidación de canchas · ${clubName}*`,
+    `${profe.name} · ${periodLabel}`,
+    "",
+    `Turnos: ${profe.turns.length}${s.fixedCount ? ` (${s.fixedCount} fijos)` : ""}`,
+    `Horas: ${hoursText(s.minutes)}${s.nightMinutes ? ` (día ${hoursText(s.dayMinutes)} · noche ${hoursText(s.nightMinutes)})` : ""}`,
+    `Total: ${formatMoney(profe.total)}`,
+  ];
+  if (profe.paid > 0) lines.push(`Ya pagado: ${formatMoney(profe.paid)}`);
+  lines.push(`*A pagar: ${formatMoney(profe.due)}*`, "", "*Detalle*");
+  for (const t of profe.turns) {
+    const day = WEEKDAY_NAMES[parseKey(t.date).getUTCDay()].slice(0, 3);
+    lines.push(
+      `${day} ${shortDay(t.date)} ${t.time} · ${t.courtName} · ${hoursText(t.duration_minutes)}${t.fixed ? " · fijo" : ""} · ${formatMoney(t.price)}${t.due === 0 ? " (pagado)" : ""}`
+    );
+  }
+  return lines.join("\n");
+}
