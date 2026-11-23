@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowRight, CircleAlert } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
+import { ProcessingButton } from "@/components/processing-button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -45,17 +45,20 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
   const [error, setError] = useState("");
+  /** Login correcto: el botón sigue "Ingresando…" mientras carga el panel. */
+  const [entering, setEntering] = useState(false);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
-  const isSubmitting = form.formState.isSubmitting;
+  const isSubmitting = form.formState.isSubmitting || entering;
 
   const handleSubmit = async (values: LoginValues) => {
     setError("");
     const { success, error } = await login(values.email, values.password);
     if (success) {
+      setEntering(true);
       router.push("/dashboard");
     } else {
       setError(loginErrorMessage(error));
@@ -116,10 +119,10 @@ export default function LoginPage() {
             />
           </div>
 
-          <Button type="submit" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? "Ingresando…" : "Ingresar"}
-            {!isSubmitting && <ArrowRight className="text-ball" />}
-          </Button>
+          <ProcessingButton type="submit" size="lg" processing={isSubmitting} processingLabel="Ingresando…">
+            Ingresar
+            <ArrowRight className="text-ball" />
+          </ProcessingButton>
 
           <div className="flex flex-col gap-1.5 border-t pt-5 text-[15px] text-muted-foreground">
             <span>
