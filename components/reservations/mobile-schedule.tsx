@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { COURT_TYPE_LABELS, type Court } from "@/lib/courts";
 import { START_STEP_MINUTES, minutesToTime, timeToMinutes, type ClubHours } from "@/lib/availability";
 import {
@@ -53,17 +53,34 @@ function toKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-/** Ayer, hoy y los próximos 5 días (más el día elegido si queda afuera). */
+function addDaysKey(key: string, days: number): string {
+  const d = keyToDate(key);
+  d.setDate(d.getDate() + days);
+  return toKey(d);
+}
+
+/** Días entre dos fechas (b - a), sin depender del horario de verano. */
+function daysBetween(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+}
+
+/**
+ * Semana visible: 7 días que contienen al día elegido. La semana actual va de ayer a hoy + 5
+ * (como antes); las demás se corren de a 7 días desde ahí.
+ */
 function dayStrip(todayKey: string, selectedKey: string): string[] {
-  const today = keyToDate(todayKey);
-  const keys: string[] = [];
-  for (let i = -1; i <= 5; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    keys.push(toKey(d));
-  }
-  if (!keys.includes(selectedKey)) keys.push(selectedKey);
-  return keys.sort();
+  const base = addDaysKey(todayKey, -1);
+  const week = Math.floor(daysBetween(base, selectedKey) / 7);
+  const start = addDaysKey(base, week * 7);
+  return Array.from({ length: 7 }, (_, i) => addDaysKey(start, i));
+}
+
+function shortDate(key: string): string {
+  return keyToDate(key)
+    .toLocaleDateString("es-AR", { day: "numeric", month: "short" })
+    .replace(".", "");
 }
 
 /** Turnos y huecos de una cancha, desde `from` hasta el cierre. */
@@ -148,16 +165,43 @@ export function MobileSchedule({
         );
   const from = fromOpening ? open : nearNow;
   const rows = buildRows(court, reservations, from, nowMinutes, hours);
+  const strip = dayStrip(todayKey, selectedDateKey);
 
   return (
     // pb-20: que el último turno pueda subir por encima del botón flotante.
     <div className="flex flex-col gap-3 pb-20">
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onSelectDate(addDaysKey(selectedDateKey, -7))}
+          aria-label="Semana anterior"
+        >
+          <ChevronLeft />
+        </Button>
+        <span className="flex-1 text-center text-sm font-semibold">
+          {shortDate(strip[0])} – {shortDate(strip[6])}
+        </span>
+        {!strip.includes(todayKey) && (
+          <Button variant="outline" size="sm" onClick={() => onSelectDate(todayKey)}>
+            Hoy
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onSelectDate(addDaysKey(selectedDateKey, 7))}
+          aria-label="Semana siguiente"
+        >
+          <ChevronRight />
+        </Button>
+      </div>
       <div
         role="group"
         aria-label="Día"
         className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
       >
-        {dayStrip(todayKey, selectedDateKey).map((key) => {
+        {strip.map((key) => {
           const d = keyToDate(key);
           const active = key === selectedDateKey;
           return (
