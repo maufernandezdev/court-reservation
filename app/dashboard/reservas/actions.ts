@@ -9,6 +9,7 @@ import {
   matchResultSchema,
   registerPaymentSchema,
   reservationInputSchema,
+  PRICING_MODES,
   type Payment,
   MAX_PEOPLE,
   OCCUPYING_STATUSES,
@@ -32,6 +33,7 @@ import { requireRole, type SessionContext } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { subscriptionMessage } from "@/lib/subscription";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolvePricing, type ResolvedPricing } from "@/lib/special-pricing";
 
 const DOUBLE_BOOKING_MESSAGE = "Esa cancha ya está reservada en ese horario";
 
@@ -239,6 +241,8 @@ type PreparedReservation = {
   profeUserId: string | null;
   duration: number;
   price: number;
+  /** Modo de precio y sus datos (lo especial solo lo elige el admin). */
+  pricing: ResolvedPricing;
   /** Personas finales (la 1 es quien reserva; en turnos de profe, el profe). */
   people: { name: string; player_id: string | null }[];
 };
@@ -328,23 +332,65 @@ async function prepareReservation(
   await assertNoOverlap(supabase, clubId, court.id, input.date, input.time, duration, existing?.id);
 
   // El valor se fija al reservar; en una edición solo cambia si cambian cancha, tipo, duración u hora de inicio.
+  // El admin puede elegir un precio especial (sin cargo, por persona o monto fijo).
   const unchanged =
-    existing &&
+    !!existing &&
     existing.court_id === court.id &&
     existing.kind === kind &&
     existing.duration_minutes === duration &&
     normalizeTime(existing.time) === normalizeTime(input.time);
-  const price = unchanged
-    ? Number(existing.price)
-    : quotePrice(
+  const isAdmin = membership!.role === "admin";
+  const modeChanging = !!existing && isAdmin && existing.pricing_mode !== input.pricing_mode;
+  let hasPayments = false;
+  if (modeChanging) {
+    const { data: paid } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("club_id", clubId)
+      .eq("reservation_id", existing.id)
+      .eq("released", false)
+      .limit(1);
+    hasPayments = (paid ?? []).length > 0;
+  }
+  const pricing = await resolvePricing(
+    isAdmin,
+    {
+      pricing_mode: input.pricing_mode,
+      unit_price: input.unit_price,
+      expected_people: input.expected_people,
+      custom_price: input.custom_price,
+    },
+    existing
+      ? {
+          pricing_mode: existing.pricing_mode ?? "lista",
+          price: Number(existing.price),
+          unit_price: existing.unit_price === null ? null : Number(existing.unit_price),
+          expected_people: existing.expected_people,
+          has_payments: hasPayments,
+          slot_unchanged: unchanged,
+        }
+      : null,
+    async () =>
+      quotePrice(
         await fetchSportPrices(supabase, clubId, court.type),
         kind,
         duration,
         input.time,
         await fetchNightStartsAt(supabase, clubId)
-      );
+      )
+  );
 
-  return { court, kind, profeUserId, duration, price, people };
+  return { court, kind, profeUserId, duration, price: pricing.price, pricing, people };
+}
+
+/** Columnas de precio especial de un turno (el estado de cobro solo si cambia). */
+function pricingColumns(pricing: ResolvedPricing) {
+  return {
+    pricing_mode: pricing.pricing_mode,
+    unit_price: pricing.unit_price,
+    expected_people: pricing.expected_people,
+    ...(pricing.payment_status ? { payment_status: pricing.payment_status } : {}),
+  };
 }
 
 /** Reemplaza las personas de un turno. */
@@ -409,6 +455,7 @@ export async function createReservationAction(
         kind: prepared.kind,
         profe_user_id: prepared.profeUserId,
         price: prepared.price,
+        ...pricingColumns(prepared.pricing),
         created_by: user!.id,
         updated_by: user!.id,
       })
@@ -442,6 +489,7 @@ export async function createReservationAction(
         kind: prepared.kind,
         people: prepared.people.map((p) => p.name),
         duration: prepared.duration,
+        ...(prepared.pricing.pricing_mode !== "lista" ? { pricing_mode: prepared.pricing.pricing_mode } : {}),
       },
     });
 
@@ -504,6 +552,10 @@ async function createSeries(
       starts_on: data.date,
       generated_until: addDays(data.date, -1),
       created_by: user!.id,
+      pricing_mode: prepared.pricing.pricing_mode,
+      custom_price: prepared.pricing.custom_price,
+      unit_price: prepared.pricing.unit_price,
+      expected_people: prepared.pricing.expected_people,
     })
     .select("id")
     .single();
@@ -618,6 +670,7 @@ export async function updateReservationAction(
         kind: prepared.kind,
         profe_user_id: prepared.profeUserId,
         price: prepared.price,
+        ...pricingColumns(prepared.pricing),
         updated_by: user!.id,
       })
       .eq("id", id)
@@ -890,6 +943,12 @@ export async function registerPaymentAction(
     if (reservation.status === "pending_approval" || reservation.status === "rejected") {
       return { success: false, error: "El turno todavía no está confirmado por el admin: no admite cobros." };
     }
+    if (reservation.pricing_mode === "por_persona") {
+      return { success: false, error: "Este turno se cobra por persona." };
+    }
+    if (reservation.pricing_mode === "sin_cargo") {
+      return { success: false, error: "Este turno es sin cargo: no se cobra." };
+    }
 
     const court = await fetchCourt(supabase, clubId, reservation.court_id);
     if (!court) {
@@ -1100,6 +1159,73 @@ export async function applyCreditAction(
  * que el profe no puede cancelar por la ventana de penalidad) quedan activas y se
  * devuelven para gestionarlas a mano.
  */
+const seriesPricingSchema = z
+  .object({
+    seriesId: z.string().uuid(),
+    pricing_mode: z.enum(PRICING_MODES),
+    unit_price: z.number().positive("El precio tiene que ser mayor a $0").max(10_000_000).nullable(),
+    expected_people: z.number().int().min(1).max(200).nullable(),
+    custom_price: z.number().min(0, "El monto no puede ser negativo").max(10_000_000).nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.pricing_mode === "por_persona" && data.unit_price === null) {
+      ctx.addIssue({ code: "custom", path: ["unit_price"], message: "Poné el precio por persona" });
+    }
+    if (data.pricing_mode === "monto_fijo" && data.custom_price === null) {
+      ctx.addIssue({ code: "custom", path: ["custom_price"], message: "Poné el monto del turno" });
+    }
+  });
+
+/**
+ * Cambia el precio de un fijo (solo admin): queda en el fijo y se aplica a sus fechas de hoy en
+ * adelante que todavía no tienen cobros (`update_series_pricing`, migración 0033).
+ */
+export async function updateSeriesPricingAction(
+  input: z.input<typeof seriesPricingSchema>
+): Promise<ActionResult & { updated?: number }> {
+  const parsed = seriesPricingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  try {
+    const ctx: SessionContext = await requireRole("admin");
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
+    const data = parsed.data;
+
+    const { data: updated, error } = await supabase.rpc("update_series_pricing", {
+      p_series_id: data.seriesId,
+      p_mode: data.pricing_mode,
+      p_custom_price: data.pricing_mode === "monto_fijo" ? data.custom_price : null,
+      p_unit_price: data.pricing_mode === "por_persona" ? data.unit_price : null,
+      p_expected_people: data.pricing_mode === "por_persona" ? data.expected_people : null,
+    });
+    if (error) {
+      return { success: false, error: subscriptionMessage(error, "No se pudo cambiar el precio del fijo.") };
+    }
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "series",
+      entityId: data.seriesId,
+      action: "series.pricing_updated",
+      payload: {
+        pricing_mode: data.pricing_mode,
+        unit_price: data.unit_price,
+        custom_price: data.custom_price,
+        updated: updated as number,
+      },
+    });
+
+    revalidatePath("/dashboard/reservas");
+    return { success: true, updated: updated as number };
+  } catch (err) {
+    return failure(err, "No se pudo cambiar el precio del fijo.");
+  }
+}
+
 export async function endSeriesAction(
   seriesId: string,
   fromDate: string

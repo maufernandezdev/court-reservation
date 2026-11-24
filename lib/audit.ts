@@ -25,6 +25,7 @@ export type AuditAction =
   | "player.removed"
   | "series.created"
   | "series.ended"
+  | "series.pricing_updated"
   | "invitation.created"
   | "invitation.regenerated"
   | "invitation.revoked"
@@ -113,6 +114,7 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "reservation.approved",
     "product.updated",
     "payee.updated",
+    "series.pricing_updated",
   ],
   charged: ["payment.registered", "credit.applied", "profe.settled"],
   cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed"],
@@ -262,6 +264,19 @@ export function describeAuditEntry(
     case "series.created": {
       const skipped = Array.isArray(p.skipped) ? p.skipped.length : 0;
       return `creó un turno fijo${who ? ` para ${who}` : ""}${where ? ` desde el ${where}` : ""}${skipped ? ` (${skipped} ${skipped === 1 ? "fecha salteada" : "fechas salteadas"})` : ""}`;
+    }
+    case "series.pricing_updated": {
+      const mode = String(p.pricing_mode ?? "");
+      const detail =
+        mode === "sin_cargo"
+          ? "sin cargo"
+          : mode === "por_persona"
+            ? `${money(p.unit_price)} por persona`
+            : mode === "monto_fijo"
+              ? `monto fijo de ${money(p.custom_price)}`
+              : "precio de lista";
+      const n = typeof p.updated === "number" ? p.updated : 0;
+      return `cambió el precio del turno fijo a ${detail}${n ? ` (${n} ${n === 1 ? "fecha" : "fechas"})` : ""}`;
     }
     case "series.ended":
       return `dio de baja el turno fijo${who ? ` de ${who}` : ""}${typeof p.from === "string" ? ` desde el ${shortDate(p.from)}` : ""}`;

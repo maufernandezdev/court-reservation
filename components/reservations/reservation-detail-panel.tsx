@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { History, MessageCircle, Pencil, Wallet, X, Repeat, Trophy } from "lucide-react";
+import { useState } from "react";
+import { History, MessageCircle, Pencil, Wallet, X, Repeat, Trophy, Tag } from "lucide-react";
 import {
   sortedParticipants,
   RESERVATION_KIND_LABELS,
@@ -31,6 +32,7 @@ import { ApprovalBox } from "@/components/reservations/approval-box";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { useProfeColors } from "@/hooks/use-profes";
 import { ProcessingButton } from "@/components/processing-button";
+import { SeriesPricingDialog } from "@/components/reservations/series-pricing-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -127,6 +129,9 @@ export function ReservationDetailPanel({
     timeToMinutes(reservation.time) + reservation.duration_minutes
   );
   const wa = whatsappHref(reservation.phone);
+  const isAdmin = membership.role === "admin";
+  const pricingMode = reservation.pricing_mode ?? "lista";
+  const [seriesPricingOpen, setSeriesPricingOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-5">
@@ -255,15 +260,29 @@ export function ReservationDetailPanel({
 
           {seesMoney && (
           <div className="flex flex-col gap-2 rounded-xl bg-background p-3.5 text-sm">
-            <div className="flex justify-between">
-              <span>Valor del turno</span>
-              <span className="font-mono font-semibold">{formatMoney(slotPrice)}</span>
-            </div>
+            {pricingMode === "sin_cargo" ? (
+              <div className="flex justify-between">
+                <span>Valor del turno</span>
+                <span className="font-semibold">Sin cargo</span>
+              </div>
+            ) : pricingMode === "por_persona" ? (
+              <div className="flex justify-between">
+                <span>Precio por persona</span>
+                <span className="font-mono font-semibold">{formatMoney(Number(reservation.unit_price ?? 0))}</span>
+              </div>
+            ) : (
+              <div className="flex justify-between">
+                <span>Valor del turno{pricingMode === "monto_fijo" ? " (monto fijo)" : ""}</span>
+                <span className="font-mono font-semibold">{formatMoney(slotPrice)}</span>
+              </div>
+            )}
+            {pricingMode !== "sin_cargo" && (
             <div className="flex justify-between">
               <span>Cobrado</span>
               <span className="font-mono font-semibold">{formatMoney(totalPaid)}</span>
             </div>
-            {!isCancelled && (
+            )}
+            {!isCancelled && pricingMode !== "sin_cargo" && pricingMode !== "por_persona" && (
               <div className="flex justify-between border-t pt-2 text-base">
                 <strong>Falta cobrar</strong>
                 <strong className="font-mono">{formatMoney(remaining)}</strong>
@@ -278,7 +297,9 @@ export function ReservationDetailPanel({
                         ? "Seña"
                         : payment.kind === "total"
                           ? "Pago"
-                          : "Saldo a favor"}{" "}
+                          : payment.kind === "persona"
+                            ? payment.payer_name || "Persona"
+                            : "Saldo a favor"}{" "}
                       · {PAYMENT_METHOD_LABELS[payment.method]}
                       {payment.released && " · liberado"}
                     </span>
@@ -292,7 +313,7 @@ export function ReservationDetailPanel({
           </div>
           )}
 
-          {!isCancelled && canCharge && reservation.payment_status !== "pagada" && (
+          {!isCancelled && canCharge && reservation.payment_status !== "pagada" && pricingMode !== "por_persona" && pricingMode !== "sin_cargo" && (
             <div className="flex flex-col gap-2.5">
               <span className="text-sm font-semibold" id="payment-method-label">
                 Método de cobro
@@ -356,6 +377,12 @@ export function ReservationDetailPanel({
                 <Repeat aria-hidden="true" className="size-4" />
                 Turno fijo · todos los {weekdayPlural(reservation.date)} a las {reservation.time}
               </span>
+              {isAdmin && (
+                <Button variant="outline" onClick={() => setSeriesPricingOpen(true)}>
+                  <Tag />
+                  Cambiar precio del fijo
+                </Button>
+              )}
               {canManage && (
                 <Button variant="outline" onClick={() => detail.setEndSeriesOpen(true)}>
                   Dar de baja el fijo desde esta fecha
@@ -365,6 +392,15 @@ export function ReservationDetailPanel({
                 Para liberar solo esta fecha, cancelá el turno como cualquier otro.
               </p>
             </div>
+          )}
+
+          {isAdmin && reservation.series_id && (
+            <SeriesPricingDialog
+              reservation={reservation}
+              open={seriesPricingOpen}
+              onOpenChange={setSeriesPricingOpen}
+              onSaved={detail.refreshReservation}
+            />
           )}
 
           <AlertDialog open={detail.endSeriesOpen} onOpenChange={detail.setEndSeriesOpen}>

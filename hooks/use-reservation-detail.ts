@@ -11,6 +11,7 @@ import type {
   PaymentMethod,
   Reservation,
 } from "@/lib/reservations";
+import { RESERVATION_SELECT, RESERVATION_SOURCE } from "@/lib/reservations";
 import type { Membership } from "@/lib/roles";
 import { depositFor, formatMoney } from "@/lib/pricing";
 import { useSportPrices } from "@/hooks/use-sport-prices";
@@ -296,6 +297,18 @@ export function useReservationDetail({
     }
   };
 
+  /** Vuelve a leer el turno abierto (después de un cambio hecho por otra acción, como el precio del fijo). */
+  const refreshReservation = async () => {
+    if (!reservation) return;
+    const { data } = await supabase
+      .from(RESERVATION_SOURCE)
+      .select(RESERVATION_SELECT)
+      .eq("id", reservation.id)
+      .maybeSingle();
+    if (data) onSaved(data as Reservation);
+    await loadExtras();
+  };
+
   const actorName = (actorId: string | null) => {
     if (!actorId) return "Sistema";
     const member = members.find((m) => m.user_id === actorId);
@@ -315,6 +328,7 @@ export function useReservationDetail({
     // También espera los precios: de ahí sale si se ofrece cobrar solo la seña.
     isLoadingExtras: isLoadingExtras || isLoadingPrices,
     reload: loadExtras,
+    refreshReservation,
     slotPrice,
     deposit,
     depositPaid,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PRICING_MODES, type PricingMode } from "@/lib/special-pricing";
 
 export const RESERVATION_STATUSES = ["active", "cancelled", "pending_approval", "rejected"] as const;
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
@@ -79,15 +80,7 @@ export type PaymentKind = (typeof PAYMENT_KINDS)[number] | "persona";
  * por persona (cuenta abierta que se cobra de a uno o en un cobro único) o monto fijo a mano.
  * Solo el admin pone uno distinto de "lista".
  */
-export const PRICING_MODES = ["lista", "sin_cargo", "por_persona", "monto_fijo"] as const;
-export type PricingMode = (typeof PRICING_MODES)[number];
-
-export const PRICING_MODE_LABELS: Record<PricingMode, string> = {
-  lista: "De lista",
-  sin_cargo: "Sin cargo",
-  por_persona: "Por persona",
-  monto_fijo: "Monto fijo",
-};
+export { PRICING_MODES, PRICING_MODE_LABELS, type PricingMode } from "@/lib/special-pricing";
 
 /** Medios que acepta la base (transferencia y otro quedan para cobros viejos). */
 export const PAYMENT_METHODS = ["efectivo", "mercado_pago", "transferencia", "otro"] as const;
@@ -250,6 +243,11 @@ export const reservationInputSchema = z
     people: z.array(personSchema).max(MAX_PEOPLE, `Hasta ${MAX_PEOPLE} personas por turno`),
     /** Solo en el alta: el turno se repite todas las semanas (no aplica a torneos). */
     repeat_weekly: z.boolean(),
+    /** Precio especial (solo lo usa el admin; para los demás el servidor lo ignora). */
+    pricing_mode: z.enum(PRICING_MODES, { message: "Elegí cómo se cobra" }),
+    unit_price: z.number({ message: "Poné el precio por persona" }).positive("El precio tiene que ser mayor a $0").max(10_000_000, "Precio demasiado alto").nullable(),
+    expected_people: z.number().int("Poné un número entero").min(1, "Al menos 1 persona").max(200, "Hasta 200 personas").nullable(),
+    custom_price: z.number({ message: "Poné el monto del turno" }).min(0, "El monto no puede ser negativo").max(10_000_000, "Monto demasiado alto").nullable(),
   })
   .superRefine((data, ctx) => {
     const maxHours = data.kind === "torneo" ? 8 : 6;
@@ -259,6 +257,12 @@ export const reservationInputSchema = z
         path: ["duration_minutes"],
         message: `La duración va de 30 min a ${maxHours} h, en pasos de 30`,
       });
+    }
+    if (data.pricing_mode === "por_persona" && data.unit_price === null) {
+      ctx.addIssue({ code: "custom", path: ["unit_price"], message: "Poné el precio por persona" });
+    }
+    if (data.pricing_mode === "monto_fijo" && data.custom_price === null) {
+      ctx.addIssue({ code: "custom", path: ["custom_price"], message: "Poné el monto del turno" });
     }
     if (data.repeat_weekly && data.kind === "torneo") {
       ctx.addIssue({ code: "custom", path: ["repeat_weekly"], message: "Los turnos de torneo no pueden ser fijos" });

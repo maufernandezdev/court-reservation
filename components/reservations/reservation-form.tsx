@@ -43,6 +43,7 @@ import {
   updateReservationAction,
 } from "@/app/dashboard/reservas/actions";
 import { PeopleCombobox } from "@/components/reservations/people-combobox";
+import { PRICING_MODE_HINTS, PricingFields } from "@/components/reservations/pricing-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -135,6 +136,8 @@ export function ReservationForm({
   const isProfesor = membership.role === "profesor";
   // El organizador de torneos solo carga turnos de torneo y no ve montos.
   const isOrganizer = membership.role === "organizador";
+  // El precio especial (sin cargo, por persona, monto fijo) lo pone solo el admin.
+  const isAdmin = membership.role === "admin";
   const { profes } = useProfes();
   const {
     tournament_duration_minutes: tournamentDefault,
@@ -164,6 +167,10 @@ export function ReservationForm({
         people: reservation.kind === "profe" ? people.slice(1) : people,
         // Un turno que ya es fijo se muestra tildado.
         repeat_weekly: !!reservation.series_id,
+        pricing_mode: reservation.pricing_mode ?? "lista",
+        unit_price: reservation.unit_price === null || reservation.unit_price === undefined ? null : Number(reservation.unit_price),
+        expected_people: reservation.expected_people ?? null,
+        custom_price: reservation.pricing_mode === "monto_fijo" ? Number(reservation.price) : null,
       };
     }
     return {
@@ -176,6 +183,10 @@ export function ReservationForm({
       duration_minutes: isOrganizer ? tournamentDefault : DEFAULT_DURATION_MINUTES,
       people: [],
       repeat_weekly: false,
+      pricing_mode: "lista",
+      unit_price: null,
+      expected_people: null,
+      custom_price: null,
     };
   };
 
@@ -184,9 +195,9 @@ export function ReservationForm({
     defaultValues: valuesFor(),
   });
 
-  const [courtId, kind, time, duration, people, date] = useWatch({
+  const [courtId, kind, time, duration, people, date, pricingMode, unitPrice, customPrice, repeatWeekly, expectedPeople] = useWatch({
     control: form.control,
-    name: ["court_id", "kind", "time", "duration_minutes", "people", "date"],
+    name: ["court_id", "kind", "time", "duration_minutes", "people", "date", "pricing_mode", "unit_price", "custom_price", "repeat_weekly", "expected_people"],
   });
   const selectedCourt = courts.find((court) => court.id === courtId) ?? null;
   const isCancelled = reservation?.status === "cancelled";
@@ -326,7 +337,25 @@ export function ReservationForm({
     ? quotePrice(prices[selectedCourt.type], kind, effectiveDuration, time, nightStartsAt)
     : 0;
   const startsAtNight = !!time && isNight(time, nightStartsAt);
-  const deposit = selectedCourt ? depositFor(prices[selectedCourt.type], kind, slotPrice) : 0;
+  const deposit =
+    selectedCourt && pricingMode === "lista"
+      ? depositFor(prices[selectedCourt.type], kind, slotPrice)
+      : selectedCourt && pricingMode === "monto_fijo" && customPrice !== null
+        ? depositFor(prices[selectedCourt.type], kind, customPrice)
+        : 0;
+  /** Lo que se muestra como valor del turno en el resumen. */
+  const priceSummary =
+    pricingMode === "sin_cargo"
+      ? "Sin cargo"
+      : pricingMode === "por_persona"
+        ? unitPrice
+          ? `${formatMoney(unitPrice)} por persona`
+          : "Por persona"
+        : pricingMode === "monto_fijo"
+          ? customPrice !== null
+            ? formatMoney(customPrice)
+            : "Monto fijo"
+          : null;
 
   // Al cambiar el inicio, el fin vuelve a completarse solo (1 hora, o lo que entre) y, si la cancha elegida no
   // tiene lugar a ese horario, pasa a la primera que sí. En una edición se conserva la duración.
@@ -707,6 +736,39 @@ export function ReservationForm({
           />
         )}
 
+        {isAdmin && !isCancelled && (
+          <div className="space-y-3 rounded-xl border p-3.5">
+            <PricingFields
+              value={{
+                pricing_mode: pricingMode,
+                unit_price: unitPrice,
+                expected_people: expectedPeople,
+                custom_price: customPrice,
+              }}
+              onChange={(next) => {
+                const opts = { shouldValidate: form.formState.isSubmitted };
+                form.setValue("pricing_mode", next.pricing_mode, opts);
+                form.setValue("unit_price", next.unit_price, opts);
+                form.setValue("expected_people", next.expected_people, opts);
+                form.setValue("custom_price", next.custom_price, opts);
+              }}
+              errors={{
+                unit_price: form.formState.errors.unit_price?.message,
+                expected_people: form.formState.errors.expected_people?.message,
+                custom_price: form.formState.errors.custom_price?.message,
+              }}
+            />
+            <p className="text-[13px] text-pretty text-muted-foreground">
+              {PRICING_MODE_HINTS[pricingMode]}
+              {isFixed && pricingMode !== (reservation?.pricing_mode ?? "lista")
+                ? ' Cambia solo esta fecha: para todas, usá "Cambiar precio del fijo" en el detalle.'
+                : !isFixed && repeatWeekly && pricingMode !== "lista"
+                  ? " Vale para todas las fechas del fijo."
+                  : ""}
+            </p>
+          </div>
+        )}
+
         {isBlocked && selectedCourt && (
           <Alert variant="destructive" role="status">
             <AlertDescription className="flex flex-col gap-2">
@@ -736,15 +798,26 @@ export function ReservationForm({
             <span className="text-sidebar-muted">
               {RESERVATION_KIND_LABELS[kind]} · {durationLabel(effectiveDuration)}
             </span>
-            {!isOrganizer && (
-              <span className="font-mono">
-                <strong>{formatMoney(slotPrice)}</strong>
-                {startsAtNight && " (noche)"} · seña{" "}
-                <strong className="text-ball">
-                  {deposit > 0 ? formatMoney(deposit) : "no requiere"}
-                </strong>
-              </span>
-            )}
+            {!isOrganizer &&
+              (priceSummary ? (
+                <span className="font-mono">
+                  <strong>{priceSummary}</strong>
+                  {pricingMode === "monto_fijo" && (
+                    <>
+                      {" "}· seña{" "}
+                      <strong className="text-ball">{deposit > 0 ? formatMoney(deposit) : "no requiere"}</strong>
+                    </>
+                  )}
+                </span>
+              ) : (
+                <span className="font-mono">
+                  <strong>{formatMoney(slotPrice)}</strong>
+                  {startsAtNight && " (noche)"} · seña{" "}
+                  <strong className="text-ball">
+                    {deposit > 0 ? formatMoney(deposit) : "no requiere"}
+                  </strong>
+                </span>
+              ))}
           </div>
         )}
 

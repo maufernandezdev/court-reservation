@@ -111,11 +111,11 @@ Fuera de alcance: tarifas guardadas reutilizables, precio especial en el portal 
 - `priceForMode`: lista = `quotePrice`, sin cargo = 0, monto fijo = el monto, por persona = 0.
 
 **Tareas:**
-- [ ] `priceForMode` en `lib/pricing.ts` y su verificación.
-- [ ] Sección Precio en `reservation-form.tsx` (componentes de `components/ui/`, toggle como el de cancha en `mobile-schedule.tsx`), schema Zod y textos en voseo.
-- [ ] Server actions: aceptar y validar los campos nuevos, y rechazar modo especial si quien carga no es admin (además del trigger).
-- [ ] "Cambiar precio del fijo" en `reservation-detail-panel.tsx`.
-- [ ] Verificar tipos, lint y tests del proyecto.
+- [x] Reglas de precio en `lib/special-pricing.ts` (`resolvePricing`, sin dependencias) y su verificación `node scripts/verify-special-pricing.ts` (13 casos, todo OK).
+- [x] Sección Precio en `reservation-form.tsx` (componentes de `components/ui/`, toggle como el de cancha en `mobile-schedule.tsx`), schema Zod y textos en voseo.
+- [x] Server actions: aceptar y validar los campos nuevos, y rechazar modo especial si quien carga no es admin (además del trigger).
+- [x] "Cambiar precio del fijo" en `reservation-detail-panel.tsx`.
+- [x] Verificar tipos, lint y tests del proyecto. Probado en el club de pruebas: fijo por persona ($10.000 × 4, 8 fechas), cambio de precio del fijo a $12.000 y turno sin cargo (pagado, sin cobros).
 
 ### Fase 3 — Cobrar por persona, cobro único y cerrar
 
