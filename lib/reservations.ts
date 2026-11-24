@@ -69,8 +69,25 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   pagada: "Pagada",
 };
 
+/** Cobros que se registran con "Cobrar" en el detalle del turno. */
 export const PAYMENT_KINDS = ["seña", "total", "saldo"] as const;
-export type PaymentKind = (typeof PAYMENT_KINDS)[number];
+/** "persona": cobro de una persona en un turno por persona (`register_person_payments`). */
+export type PaymentKind = (typeof PAYMENT_KINDS)[number] | "persona";
+
+/**
+ * Modo de precio de un turno o fijo: de lista (lo que dice la lista de precios), sin cargo,
+ * por persona (cuenta abierta que se cobra de a uno o en un cobro único) o monto fijo a mano.
+ * Solo el admin pone uno distinto de "lista".
+ */
+export const PRICING_MODES = ["lista", "sin_cargo", "por_persona", "monto_fijo"] as const;
+export type PricingMode = (typeof PRICING_MODES)[number];
+
+export const PRICING_MODE_LABELS: Record<PricingMode, string> = {
+  lista: "De lista",
+  sin_cargo: "Sin cargo",
+  por_persona: "Por persona",
+  monto_fijo: "Monto fijo",
+};
 
 /** Medios que acepta la base (transferencia y otro quedan para cobros viejos). */
 export const PAYMENT_METHODS = ["efectivo", "mercado_pago", "transferencia", "otro"] as const;
@@ -104,6 +121,8 @@ export type Payment = {
   method: PaymentMethod;
   external_ref: string | null;
   released: boolean;
+  /** Quién pagó, en los cobros por persona (opcional). */
+  payer_name?: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -144,6 +163,16 @@ export type Reservation = {
   price: number;
   /** Serie del turno fijo semanal, si es una fecha de un fijo. */
   series_id: string | null;
+  /**
+   * Precio especial. En "por_persona", `price` es lo cobrado hasta ahora y `unit_price` el precio
+   * por persona (null para quien no ve montos); `expected_people` es la cantidad habitual y, al
+   * cerrar, la que vino. `closed_at` marca la cuenta cerrada.
+   */
+  pricing_mode: PricingMode;
+  unit_price: number | null;
+  expected_people: number | null;
+  closed_at: string | null;
+  closed_by: string | null;
   /** Torneo: lado ganador (1 = primeros jugadores, 2 = los otros) y marcador ("6-4 3-6 10-8"). */
   result_winner?: 1 | 2 | null;
   result_score?: string | null;

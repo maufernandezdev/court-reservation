@@ -35,6 +35,7 @@ const KIND_LABELS: Record<Payment["kind"], string> = {
   seña: "Seña",
   total: "Cobro",
   saldo: "Saldo a favor aplicado",
+  persona: "Cobro por persona",
 };
 
 function dayTitle(key: string, today: string): string {

@@ -72,7 +72,7 @@ export type ReportReservation = Pick<
 
 /** Cobro que entró en el período: señas y cobros (el saldo a favor aplicado no es plata nueva). */
 export type IncomePayment = {
-  kind: "seña" | "total" | "saldo";
+  kind: "seña" | "total" | "saldo" | "persona";
   amount: number;
   court_id: string | null;
 };
