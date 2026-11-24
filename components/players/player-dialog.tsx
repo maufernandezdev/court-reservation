@@ -142,7 +142,7 @@ export function PlayerDialog({
                 <FormItem>
                   <FormLabel>Correo (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="mauricio@mail.com" {...field} />
+                    <Input type="email" placeholder="jugador@mail.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
