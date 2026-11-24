@@ -95,8 +95,8 @@ Fuera de alcance: tarifas guardadas reutilizables, precio especial en el portal 
 - [x] Reescribir `ensure_series_until` partiendo de la versión de `0028_approval_rules.sql`.
 - [x] RPCs con el patrón de `settle_profe_reservations` (0032): `is_admin`, validaciones con errcode y `for update`.
 - [x] Tipos en `lib/reservations.ts` (`PricingMode`, campos nuevos en `Reservation`, `ReservationSeries` y `Payment`).
-- [ ] Aplicar la migración en `ddzxywqtnmibrctevmew` solo con OK de Mauricio y correr el SQL de tests. (Migración + tests pasaron en una transacción revertida contra la base el 2026-11-24; falta aplicarla: `supabase db push --linked`.)
-- [ ] Verificar tipos, lint y tests del proyecto.
+- [x] Aplicar la migración en `ddzxywqtnmibrctevmew` solo con OK de Mauricio y correr el SQL de tests. (Aplicada el 2026-11-24 con permiso de Mauricio; tests ok; los 136 turnos de fijos existentes coinciden con `list_price_for`.)
+- [x] Verificar tipos, lint y tests del proyecto. (tsc verde; el proyecto no tiene ESLint configurado.)
 
 ### Fase 2 — Cargar turnos y fijos con precio especial
 
