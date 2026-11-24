@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -68,14 +68,15 @@ export function SeriesPricingDialog({
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
+  // Cada vez que se abre, arranca con el precio actual del turno.
+  useEffect(() => {
+    if (open) {
       setValues(initialValues(reservation));
       setErrors({});
       setFormError("");
     }
-    onOpenChange(next);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const save = async () => {
     setFormError("");
@@ -108,7 +109,7 @@ export function SeriesPricingDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Cambiar precio del fijo</DialogTitle>

@@ -26,6 +26,8 @@ export type AuditAction =
   | "series.created"
   | "series.ended"
   | "series.pricing_updated"
+  | "reservation.account_closed"
+  | "reservation.account_reopened"
   | "invitation.created"
   | "invitation.regenerated"
   | "invitation.revoked"
@@ -115,6 +117,8 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "product.updated",
     "payee.updated",
     "series.pricing_updated",
+    "reservation.account_closed",
+    "reservation.account_reopened",
   ],
   charged: ["payment.registered", "credit.applied", "profe.settled"],
   cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed"],
@@ -220,8 +224,18 @@ export function describeAuditEntry(
       if (p.kind === "seña") {
         return `registró la seña de ${money(p.amount)}${method ? ` ${method}` : ""}${who ? ` de ${who}` : ""}${where ? ` · ${where}` : ""}`;
       }
+      if (p.kind === "persona") {
+        const payer = typeof p.payer_name === "string" && p.payer_name ? ` a ${p.payer_name}` : "";
+        return `cobró ${money(p.amount)}${method ? ` ${method}` : ""}${payer}${who ? ` (${who})` : ""}${where ? ` · ${where}` : ""}`;
+      }
       return `cobró ${money(p.amount)}${method ? ` ${method}` : ""}${who ? ` a ${who}` : ""}${where ? ` · ${where}` : ""}`;
     }
+    case "reservation.account_closed": {
+      const n = typeof p.people === "number" ? p.people : null;
+      return `cerró la cuenta${who ? ` de ${who}` : ""}${n ? ` (${n} ${n === 1 ? "persona" : "personas"})` : ""}${where ? ` · ${where}` : ""}`;
+    }
+    case "reservation.account_reopened":
+      return `reabrió la cuenta${who ? ` de ${who}` : ""}${where ? ` · ${where}` : ""}`;
     case "credit.applied":
       return `aplicó ${money(p.amount)} de saldo a favor${turno}`;
     case "court.created":

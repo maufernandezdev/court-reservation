@@ -33,6 +33,7 @@ import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { useProfeColors } from "@/hooks/use-profes";
 import { ProcessingButton } from "@/components/processing-button";
 import { SeriesPricingDialog } from "@/components/reservations/series-pricing-dialog";
+import { PersonAccount } from "@/components/reservations/person-account";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -258,17 +259,25 @@ export function ReservationDetailPanel({
               </p>
             ) : null)}
 
-          {seesMoney && (
+          {seesMoney && pricingMode === "por_persona" && (
+            <PersonAccount
+              reservation={reservation}
+              payments={payments}
+              isAdmin={isAdmin}
+              isCancelled={isCancelled}
+              onChanged={async (updated) => {
+                detail.onSaved(updated);
+                await detail.reload();
+              }}
+            />
+          )}
+
+          {seesMoney && pricingMode !== "por_persona" && (
           <div className="flex flex-col gap-2 rounded-xl bg-background p-3.5 text-sm">
             {pricingMode === "sin_cargo" ? (
               <div className="flex justify-between">
                 <span>Valor del turno</span>
                 <span className="font-semibold">Sin cargo</span>
-              </div>
-            ) : pricingMode === "por_persona" ? (
-              <div className="flex justify-between">
-                <span>Precio por persona</span>
-                <span className="font-mono font-semibold">{formatMoney(Number(reservation.unit_price ?? 0))}</span>
               </div>
             ) : (
               <div className="flex justify-between">
@@ -282,7 +291,7 @@ export function ReservationDetailPanel({
               <span className="font-mono font-semibold">{formatMoney(totalPaid)}</span>
             </div>
             )}
-            {!isCancelled && pricingMode !== "sin_cargo" && pricingMode !== "por_persona" && (
+            {!isCancelled && pricingMode !== "sin_cargo" && (
               <div className="flex justify-between border-t pt-2 text-base">
                 <strong>Falta cobrar</strong>
                 <strong className="font-mono">{formatMoney(remaining)}</strong>

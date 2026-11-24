@@ -10,6 +10,7 @@ import {
   registerPaymentSchema,
   reservationInputSchema,
   PRICING_MODES,
+  VISIBLE_PAYMENT_METHODS,
   type Payment,
   MAX_PEOPLE,
   OCCUPYING_STATUSES,
@@ -1032,6 +1033,115 @@ export async function registerPaymentAction(
     return { success: true, reservation: data as Reservation };
   } catch (err) {
     return failure(err, "No se pudo registrar el cobro.");
+  }
+}
+
+const personPaymentsSchema = z.object({
+  reservationId: z.string().uuid(),
+  lines: z
+    .array(
+      z.object({
+        amount: z.number().positive("Cada cobro tiene que ser mayor a $0").max(10_000_000, "Monto demasiado alto"),
+        method: z.enum(VISIBLE_PAYMENT_METHODS, { message: "Elegí efectivo o Mercado Pago" }),
+        payer_name: z.string().trim().max(120, "Nombre demasiado largo").nullable(),
+      })
+    )
+    .max(50, "Demasiados cobros juntos"),
+  close: z.boolean(),
+  people: z.number().int().min(1, "Al menos 1 persona").max(200, "Hasta 200 personas").nullable(),
+});
+
+/**
+ * Turno por persona (solo admin): registra uno o más cobros (de a una persona, o un cobro único
+ * repartido en varios medios) y, si se pide, cierra la cuenta (`register_person_payments`).
+ */
+export async function registerPersonPaymentsAction(
+  input: z.input<typeof personPaymentsSchema>
+): Promise<ActionResult> {
+  const parsed = personPaymentsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+  const data = parsed.data;
+  if (data.lines.length === 0 && !data.close) {
+    return { success: false, error: "Cargá al menos un cobro." };
+  }
+
+  try {
+    const ctx: SessionContext = await requireRole("admin");
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
+
+    const { error } = await supabase.rpc("register_person_payments", {
+      p_reservation_id: data.reservationId,
+      p_lines: data.lines.map((l) => ({
+        amount: round2(l.amount),
+        method: l.method,
+        payer_name: l.payer_name?.trim() || null,
+      })),
+      p_close: data.close,
+      p_people: data.people,
+    });
+    if (error) {
+      return { success: false, error: subscriptionMessage(error, error.message || "No se pudo registrar el cobro.") };
+    }
+
+    for (const line of data.lines) {
+      await writeAudit(supabase, {
+        clubId,
+        actorId: user!.id,
+        entity: "reservation",
+        entityId: data.reservationId,
+        action: "payment.registered",
+        payload: { kind: "persona", amount: round2(line.amount), method: line.method, payer_name: line.payer_name || null },
+      });
+    }
+    if (data.close) {
+      await writeAudit(supabase, {
+        clubId,
+        actorId: user!.id,
+        entity: "reservation",
+        entityId: data.reservationId,
+        action: "reservation.account_closed",
+        payload: { people: data.people },
+      });
+    }
+
+    revalidatePath("/dashboard/reservas");
+    const reservation = await fetchReservation(supabase, clubId, data.reservationId);
+    return { success: true, reservation: reservation ?? undefined };
+  } catch (err) {
+    return failure(err, "No se pudo registrar el cobro.");
+  }
+}
+
+/** Reabre la cuenta cerrada de un turno por persona (solo admin). */
+export async function reopenPersonReservationAction(reservationId: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(reservationId).success) {
+    return { success: false, error: "Datos inválidos." };
+  }
+  try {
+    const ctx: SessionContext = await requireRole("admin");
+    const { supabase, user, membership } = ctx;
+    const clubId = membership!.club_id;
+
+    const { error } = await supabase.rpc("reopen_person_reservation", { p_reservation_id: reservationId });
+    if (error) {
+      return { success: false, error: subscriptionMessage(error, error.message || "No se pudo reabrir la cuenta.") };
+    }
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "reservation",
+      entityId: reservationId,
+      action: "reservation.account_reopened",
+      payload: {},
+    });
+    revalidatePath("/dashboard/reservas");
+    const reservation = await fetchReservation(supabase, clubId, reservationId);
+    return { success: true, reservation: reservation ?? undefined };
+  } catch (err) {
+    return failure(err, "No se pudo reabrir la cuenta.");
   }
 }
 

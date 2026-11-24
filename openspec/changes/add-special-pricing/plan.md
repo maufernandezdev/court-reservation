@@ -136,10 +136,10 @@ Fuera de alcance: tarifas guardadas reutilizables, precio especial en el portal 
 - Un turno reabierto vuelve a aceptar cobros y no duplica los anteriores.
 
 **Tareas:**
-- [ ] UI de cuenta por persona en `reservation-detail-panel.tsx` (patrón de los botones de cobro actuales, líneas 295–335).
-- [ ] Diálogo "Cobro único" con líneas dinámicas (`react-hook-form` `useFieldArray` + Zod).
-- [ ] Server actions con el patrón de `registerPaymentAction` (validación, permisos y auditoría con `lib/audit.ts`).
-- [ ] Verificar tipos, lint y tests del proyecto.
+- [x] UI de cuenta por persona en `reservation-detail-panel.tsx` (patrón de los botones de cobro actuales, líneas 295–335).
+- [x] Diálogo "Cobro único" con líneas dinámicas (`react-hook-form` `useFieldArray` + Zod).
+- [x] Server actions con el patrón de `registerPaymentAction` (validación, permisos y auditoría con `lib/audit.ts`).
+- [x] Verificar tipos, lint y tests del proyecto. Probado en el club de pruebas: cobro a Ana $12.000 MP, cobro único de 5 personas repartido $30.000 efectivo + $18.000 MP con cierre (5 personas · $60.000), reabrir sin duplicar cobros; Caja suma $30.000 efectivo y $30.000 MP.
 
 ### Fase 4 — Planilla, cierre del día y reportes
 
