@@ -93,7 +93,7 @@ export function PlayerDialog({
                 <FormItem>
                   <FormLabel>Nombre y apellido</FormLabel>
                   <FormControl>
-                    <Input placeholder="Mauricio Fernández" autoFocus {...field} />
+                    <Input placeholder="Juan Pérez" autoFocus {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
