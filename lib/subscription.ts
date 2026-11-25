@@ -166,10 +166,16 @@ export function subscriptionNotice(info: SubscriptionInfo | null, isAdmin: boole
 /** Códigos que devuelve la base cuando la suscripción lo impide (solo lectura / límite de canchas del plan). */
 const SUBSCRIPTION_ERROR_CODES = new Set(["55000", "54000"]);
 
+/** Código de la base cuando un turno pisa a otro en la misma cancha (restricción `reservations_no_overlap`). */
+const OVERLAP_ERROR_CODE = "23P01";
+const OVERLAP_MESSAGE = "Esa cancha ya está reservada en ese horario";
+
 /**
  * Mensaje para mostrar ante un error de la base: si lo causó la suscripción (club vencido o límite
- * de canchas) se muestra tal cual, que ya está redactado para el usuario; si no, el texto genérico.
+ * de canchas) se muestra tal cual, que ya está redactado para el usuario; si el turno pisa a otro en
+ * la misma cancha, el aviso de cancha ocupada; si no, el texto genérico.
  */
 export function subscriptionMessage(error: { code?: string; message?: string } | null | undefined, fallback: string): string {
+  if (error?.code === OVERLAP_ERROR_CODE) return OVERLAP_MESSAGE;
   return error?.code && SUBSCRIPTION_ERROR_CODES.has(error.code) && error.message ? error.message : fallback;
 }

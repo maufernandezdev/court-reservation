@@ -464,7 +464,7 @@ export async function createReservationAction(
       .single();
 
     if (error) {
-      if (error.code === "23505") {
+      if (error.code === "23505" || error.code === "23P01") {
         return { success: false, error: DOUBLE_BOOKING_MESSAGE };
       }
       return { success: false, error: subscriptionMessage(error, "No se pudo guardar la reserva.") };
@@ -678,7 +678,7 @@ export async function updateReservationAction(
       .eq("club_id", clubId);
 
     if (error) {
-      if (error.code === "23505") {
+      if (error.code === "23505" || error.code === "23P01") {
         return { success: false, error: DOUBLE_BOOKING_MESSAGE };
       }
       return { success: false, error: "No se pudo actualizar la reserva." };
