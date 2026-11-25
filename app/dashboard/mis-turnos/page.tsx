@@ -127,10 +127,17 @@ export default async function MisTurnosPage({
   // Lo que el profe le debe al club por sus turnos (liquidación semanal): hasta el fin de esta semana,
   // mirando medio año para atrás.
   const pendingTo = addDaysKey(weekStart(today), 6);
-  const pendingFrom = addDaysKey(weekStart(today), -26 * 7);
+  const sixMonthsAgo = addDaysKey(weekStart(today), -26 * 7);
   let pendingTurns: SettlementTurn[] = [];
   try {
-    const { data: settingsRow } = await supabase.from("settings").select("night_starts_at").eq("club_id", clubId).maybeSingle();
+    const { data: settingsRow } = await supabase
+      .from("settings")
+      .select("night_starts_at, settle_from")
+      .eq("club_id", clubId)
+      .maybeSingle();
+    // Lo anterior a "Liquidar desde" lo arregla el club por su cuenta: no cuenta como deuda.
+    const settleFrom = (settingsRow?.settle_from as string | null) ?? null;
+    const pendingFrom = settleFrom && settleFrom > sixMonthsAgo ? settleFrom : sixMonthsAgo;
     const [mine] = await loadProfeSettlements(
       supabase,
       clubId,

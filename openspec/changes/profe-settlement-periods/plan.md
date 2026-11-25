@@ -1,6 +1,13 @@
 # Plan abierto — Liquidación de profes por período
 
-Estado: **abierto, en debate** (2026-11-24). Falta que Mauricio responda las preguntas de abajo antes de armar fases y tests.
+Estado: **implementado** (2026-11-25, migración `0035_profe_settlement_periods`, test `supabase/tests/0035_profe_settlement_periods.sql`). Mauricio pidió subirlo sin esperar las respuestas; se tomaron las opciones preferidas del plan:
+
+1. "Todo lo pendiente hasta tal fecha", desde "Liquidar desde" (atajos Hoy, Ayer, Domingo pasado o una fecha).
+2. Sin pagos por adelantado: no se liquida el futuro; de hoy solo cuentan los turnos terminados (UI y RPC).
+3. Un solo medio por liquidación (efectivo o MP), como antes.
+4. Deshacer incluido (solo admin), con historial en `profe_settlements`.
+
+Si alguna respuesta cambia, se ajusta sobre esto.
 
 ## Pedido
 

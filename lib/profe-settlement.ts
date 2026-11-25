@@ -113,7 +113,9 @@ export async function loadProfeSettlements(
   to: string,
   nightStartsAt: string,
   /** Solo los turnos de este profe (vista del propio profe). */
-  onlyProfeId?: string
+  onlyProfeId?: string,
+  /** Solo lo que falta liquidar: turnos sin pagar que ya terminaron (ver `isFinished`). */
+  pending?: { today: string; nowMinutes: number }
 ): Promise<ProfeSettlement[]> {
   const rows = await fetchAll<Row>((start, end) => {
     const query = supabase
@@ -127,7 +129,8 @@ export async function loadProfeSettlements(
       .order("date")
       .order("time")
       .order("id");
-    return (onlyProfeId ? query.eq("profe_user_id", onlyProfeId) : query).range(start, end) as unknown as PromiseLike<{
+    const scoped = pending ? query.neq("payment_status", "pagada") : query;
+    return (onlyProfeId ? scoped.eq("profe_user_id", onlyProfeId) : scoped).range(start, end) as unknown as PromiseLike<{
       data: Row[] | null;
       error: { message: string } | null;
     }>;
@@ -153,6 +156,7 @@ export async function loadProfeSettlements(
   }
   for (const r of rows) {
     if (!r.profe_user_id) continue;
+    if (pending && !isFinished(r.date, r.time, r.duration_minutes, pending.today, pending.nowMinutes)) continue;
     let entry = byProfe.get(r.profe_user_id);
     if (!entry) {
       // Profe que ya no está en el equipo: sus turnos se liquidan igual.
@@ -187,15 +191,51 @@ export async function loadProfeSettlements(
     .sort((a, b) => b.due - a.due || a.name.localeCompare(b.name));
 }
 
-export const settleProfeSchema = z
-  .object({
-    profeUserId: z.string().uuid("Profe inválido"),
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
-    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
-    method: z.enum(VISIBLE_PAYMENT_METHODS, { message: "Elegí efectivo o Mercado Pago" }),
-  })
-  .refine((v) => v.from <= v.to, { message: "Período inválido", path: ["to"] });
-export type SettleProfeInput = z.infer<typeof settleProfeSchema>;
+/** Minutos desde la medianoche de "HH:MM". */
+function hhmmToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/** El turno ya terminó (mismo criterio que `settle_profe_pending` en la base). */
+export function isFinished(date: string, time: string, durationMinutes: number, today: string, nowMinutes: number): boolean {
+  if (date < today) return true;
+  if (date > today) return false;
+  return hhmmToMinutes(time) + durationMinutes <= nowMinutes;
+}
+
+/** Fecha mínima para "todo lo pendiente" cuando el club no fijó "Liquidar desde". */
+export const SETTLE_FROM_FALLBACK = "2000-01-01";
+
+const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida");
+
+/** Cobrar todo lo pendiente del profe hasta una fecha (nunca futura: lo valida también la base). */
+export const settlePendingSchema = z.object({
+  profeUserId: z.string().uuid("Profe inválido"),
+  until: dateKey,
+  method: z.enum(VISIBLE_PAYMENT_METHODS, { message: "Elegí efectivo o Mercado Pago" }),
+});
+export type SettlePendingInput = z.infer<typeof settlePendingSchema>;
+
+/** "Liquidar desde" del club; vacío = sin fecha de inicio. */
+export const settleFromSchema = z.object({
+  settleFrom: z.union([dateKey, z.literal("")]),
+});
+export type SettleFromInput = z.infer<typeof settleFromSchema>;
+
+/** Liquidación registrada (historial). */
+export type ProfeSettlementRecord = {
+  id: string;
+  profe_user_id: string;
+  period_from: string | null;
+  period_to: string;
+  method: string;
+  amount: number;
+  turns_count: number;
+  created_at: string;
+  voided_at: string | null;
+};
+
 
 /** Texto de la liquidación para mandarle al profe por WhatsApp. */
 export function settlementText(

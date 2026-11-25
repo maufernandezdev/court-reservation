@@ -44,7 +44,9 @@ export type AuditAction =
   | "product.updated"
   | "payee.created"
   | "payee.updated"
-  | "profe.settled";
+  | "profe.settled"
+  | "profe.settlement_voided"
+  | "settings.settle_from_updated";
 
 type AuditInput = {
   clubId: string;
@@ -119,9 +121,10 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "series.pricing_updated",
     "reservation.account_closed",
     "reservation.account_reopened",
+    "settings.settle_from_updated",
   ],
   charged: ["payment.registered", "credit.applied", "profe.settled"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed", "profe.settlement_voided"],
 };
 
 function depositText(p: Record<string, unknown>, audience: "public" | "profe"): string {
@@ -349,9 +352,20 @@ export function describeAuditEntry(
     }
     case "profe.settled": {
       const method = METHOD_TEXT[String(p.method)] ?? "";
-      const range = typeof p.from === "string" && typeof p.to === "string" ? ` del ${shortDate(p.from)} al ${shortDate(p.to)}` : "";
+      const range =
+        typeof p.from === "string" && typeof p.to === "string"
+          ? ` del ${shortDate(p.from)} al ${shortDate(p.to)}`
+          : typeof p.to === "string"
+            ? ` hasta el ${shortDate(p.to)}`
+            : "";
       return `cobró la liquidación de ${String(p.profe || "un profe")}${range}: ${String(p.count ?? 0)} turnos por ${money(p.amount)}${method ? ` ${method}` : ""}`;
     }
+    case "profe.settlement_voided":
+      return `deshizo la liquidación de ${String(p.profe || "un profe")}: ${String(p.count ?? 0)} turnos volvieron a pendiente y se anularon ${money(p.amount)}`;
+    case "settings.settle_from_updated":
+      return typeof p.settle_from === "string"
+        ? `fijó "Liquidar desde" en el ${shortDate(p.settle_from)}`
+        : `quitó la fecha de "Liquidar desde"`;
     case "product.created":
       return `agregó el producto ${String(p.name ?? "")} a ${money(p.price)}`;
     case "product.updated":

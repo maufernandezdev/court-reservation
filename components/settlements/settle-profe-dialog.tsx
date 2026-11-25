@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { HandCoins } from "lucide-react";
-import { settleProfeAction } from "@/app/dashboard/liquidaciones/actions";
+import { settlePendingAction } from "@/app/dashboard/liquidaciones/actions";
 import { PAYMENT_METHOD_LABELS, VISIBLE_PAYMENT_METHODS } from "@/lib/reservations";
 import { formatMoney } from "@/lib/pricing";
 import { ProcessingButton } from "@/components/processing-button";
@@ -29,20 +29,19 @@ const settleFormSchema = z.object({
 });
 type SettleFormValues = z.infer<typeof settleFormSchema>;
 
-/** "Cobrar liquidación": el profe paga de una vez el saldo de sus turnos del período. */
+/** "Cobrar liquidación": el profe paga de una vez todo lo pendiente hasta una fecha. */
 export function SettleProfeDialog({
   profeUserId,
   profeName,
-  from,
-  to,
+  until,
   periodLabel,
   due,
   turns,
 }: {
   profeUserId: string;
   profeName: string;
-  from: string;
-  to: string;
+  /** Hasta qué fecha (incluida) se cobra lo pendiente. */
+  until: string;
   periodLabel: string;
   due: number;
   turns: number;
@@ -54,7 +53,7 @@ export function SettleProfeDialog({
 
   const onSubmit = async ({ method }: SettleFormValues) => {
     setError("");
-    const result = await settleProfeAction({ profeUserId, from, to, method });
+    const result = await settlePendingAction({ profeUserId, until, method });
     if (!result.success) {
       setError(result.error ?? "No se pudo registrar la liquidación.");
       return;
@@ -77,7 +76,7 @@ export function SettleProfeDialog({
         <DialogHeader>
           <DialogTitle>Cobrar liquidación de {profeName}</DialogTitle>
           <DialogDescription>
-            {periodLabel}: {turns} {turns === 1 ? "turno" : "turnos"} sin pagar. Entra a la caja de hoy y los turnos quedan pagados.
+            {periodLabel}: {turns} {turns === 1 ? "turno jugado" : "turnos jugados"} sin pagar. Entra a la caja de hoy, los turnos quedan pagados y la liquidación se puede deshacer desde el historial.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
