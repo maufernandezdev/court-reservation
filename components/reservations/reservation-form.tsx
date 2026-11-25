@@ -422,13 +422,15 @@ export function ReservationForm({
         duration: 8000,
       });
       onSaved(result.reservation);
-      if (mode !== "edit") onClose();
+      onClose();
       return;
     }
 
     if (mode === "edit" && (isFixed || !values.repeat_weekly)) {
       toast.success("Reserva actualizada");
       onSaved(result.reservation!);
+      // Al guardar una edición, el modal se cierra.
+      onClose();
     } else if (values.repeat_weekly) {
       const skipped = result.skippedDates ?? [];
       toast.success("Turno fijo creado", {
