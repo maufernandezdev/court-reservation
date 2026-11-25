@@ -4,8 +4,8 @@ import { useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DateInput } from "@/components/ui/date-input";
 
 function shiftDay(key: string, days: number): string {
   const [y, m, d] = key.split("-").map(Number);
@@ -53,14 +53,7 @@ export function CashDateNav({
       <Label htmlFor={`date-${param}`} className="sr-only">
         Fecha
       </Label>
-      <Input
-        id={`date-${param}`}
-        type="date"
-        value={date}
-        max={today}
-        onChange={(event) => go(event.target.value)}
-        className="w-auto font-mono"
-      />
+      <DateInput id={`date-${param}`} value={date} max={today} onChange={go} className="w-auto" />
       <Button
         variant="outline"
         size="icon"

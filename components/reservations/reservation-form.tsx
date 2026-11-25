@@ -66,6 +66,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { DateInput } from "@/components/ui/date-input";
 
 export type ReservationFormProps = {
   /** Se resetea cada vez que pasa a `true` o cambia la reserva. */
@@ -102,7 +103,6 @@ const HALF_ROW = "grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4";
  * Chrome deja ~24 px antes del ícono del calendario: en celular la fecha quedaba cortada
  * ("11/09/202"). Se achica ese espacio y el relleno lateral.
  */
-const DATE_INPUT = "px-3 [&::-webkit-calendar-picker-indicator]:ms-1 [&::-webkit-calendar-picker-indicator]:p-0";
 
 const PEOPLE_LABELS: Record<ReservationInput["kind"], string> = {
   standard: "Quién reserva (y quiénes juegan)",
@@ -558,7 +558,7 @@ export function ReservationForm({
               <FormItem>
                 <FormLabel>Fecha</FormLabel>
                 <FormControl>
-                  <Input type="date" disabled={isCancelled} className={DATE_INPUT} {...field} />
+                  <DateInput value={field.value} onChange={field.onChange} disabled={isCancelled} className="w-full" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -797,20 +797,22 @@ export function ReservationForm({
               (priceSummary ? (
                 <span className="font-mono">
                   <strong>{priceSummary}</strong>
-                  {pricingMode === "monto_fijo" && (
+                  {/* La seña solo se muestra cuando el club la pide: "no requiere" era ruido. */}
+                  {pricingMode === "monto_fijo" && deposit > 0 && (
                     <>
-                      {" "}· seña{" "}
-                      <strong className="text-ball">{deposit > 0 ? formatMoney(deposit) : "no requiere"}</strong>
+                      {" "}· seña <strong className="text-ball">{formatMoney(deposit)}</strong>
                     </>
                   )}
                 </span>
               ) : (
                 <span className="font-mono">
                   <strong>{formatMoney(slotPrice)}</strong>
-                  {startsAtNight && " (noche)"} · seña{" "}
-                  <strong className="text-ball">
-                    {deposit > 0 ? formatMoney(deposit) : "no requiere"}
-                  </strong>
+                  {startsAtNight && " (noche)"}
+                  {deposit > 0 && (
+                    <>
+                      {" "}· seña <strong className="text-ball">{formatMoney(deposit)}</strong>
+                    </>
+                  )}
                 </span>
               ))}
           </div>

@@ -32,8 +32,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { DateInput } from "@/components/ui/date-input";
 
 type AvailabilitySearchDialogProps = {
   open: boolean;
@@ -213,13 +213,7 @@ export function AvailabilitySearchDialog({
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => e.target.value && setDate(e.target.value)}
-              aria-label="Otra fecha"
-              className="w-auto"
-            />
+            <DateInput value={date} onChange={setDate} aria-label="Otra fecha" className="w-auto" />
           </div>
         </fieldset>
 

@@ -7,7 +7,6 @@ import { AnimatePresence, LazyMotion, domAnimation, m } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, LandPlot, Plus, Search, Repeat, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -45,6 +44,7 @@ import {
   NewReservationFab,
 } from "@/components/reservations/mobile-schedule";
 import { cn } from "@/lib/utils";
+import { DateInput } from "@/components/ui/date-input";
 
 // Se cargan aparte: los diálogos (formularios con zod, react-hook-form y cmdk) recién
 // hacen falta al abrirlos, y la grilla solo en escritorio. Así el celular no descarga ni
@@ -388,20 +388,19 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
               >
                 <ChevronLeft />
               </Button>
-              <label className="relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-[15px] font-semibold whitespace-nowrap focus-within:outline-2 focus-within:outline-line">
-                <CalendarDays className="size-4 text-muted-foreground" />
-                {dateLabel}
-                <Input
-                  type="date"
-                  value={selectedDateKey}
-                  onChange={(e) =>
-                    e.target.value && setSelectedDate(parseDateKey(e.target.value))
-                  }
-                  onClick={(e) => e.currentTarget.showPicker?.()}
-                  aria-label="Elegir fecha"
-                  className="absolute inset-0 h-full cursor-pointer opacity-0"
-                />
-              </label>
+              <DateInput
+                value={selectedDateKey}
+                onChange={(key) => setSelectedDate(parseDateKey(key))}
+              >
+                <button
+                  type="button"
+                  aria-label={`Elegir fecha: ${dateLabel}`}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-[15px] font-semibold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-line"
+                >
+                  <CalendarDays className="size-4 text-muted-foreground" />
+                  {dateLabel}
+                </button>
+              </DateInput>
               <Button
                 variant="ghost"
                 size="icon-sm"

@@ -18,10 +18,10 @@ import { useApprovalRules } from "@/hooks/use-approval-rules";
 import { useCourts } from "@/hooks/use-courts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateInput } from "@/components/ui/date-input";
 
 const START_OPTIONS = Array.from({ length: 48 }, (_, i) => minutesToTime(i * 30));
 const END_OPTIONS = [...START_OPTIONS.slice(1), "24:00"];
@@ -210,7 +210,7 @@ export function ApprovalRulesCard() {
                 <FormItem>
                   <FormLabel>Fecha</FormLabel>
                   <FormControl>
-                    <Input type="date" className="w-full font-mono sm:w-auto" {...field} />
+                    <DateInput value={field.value ?? ""} onChange={field.onChange} className="w-full sm:w-auto" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
