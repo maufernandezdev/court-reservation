@@ -37,13 +37,16 @@ export type DayClose = {
   cancelledCount: number;
   dueCount: number;
   dueAmount: number;
+  /** Turnos por persona que siguen con la cuenta abierta. */
+  openPerPersonCount: number;
 };
 
 type ClosePayment = Pick<Payment, "kind" | "amount" | "method"> & { reservation_kind: ReservationKind | null };
 type CloseReservation = Pick<
   Reservation,
   "id" | "time" | "duration_minutes" | "status" | "payment_status" | "price"
->;
+> &
+  Partial<Pick<Reservation, "pricing_mode" | "closed_at">>;
 
 export function buildDayClose(input: {
   date: string;
@@ -98,6 +101,7 @@ export function buildDayClose(input: {
     cancelledCount: input.reservations.length - active.length,
     dueCount,
     dueAmount: Math.round(dueAmount * 100) / 100,
+    openPerPersonCount: active.filter((r) => r.pricing_mode === "por_persona" && !r.closed_at).length,
   };
 }
 
@@ -120,7 +124,7 @@ export async function loadDayClose(
     supabase.from("cash_openings").select("amount").eq("club_id", clubId).eq("date", date).maybeSingle(),
     supabase
       .from("reservations")
-      .select("id, time, duration_minutes, status, payment_status, price")
+      .select("id, time, duration_minutes, status, payment_status, price, pricing_mode, closed_at")
       .eq("club_id", clubId)
       .eq("date", date),
   ]);
@@ -176,5 +180,6 @@ export function dayCloseLines(close: DayClose, formatMoney: (n: number) => strin
   lines.push(
     `Turnos jugados: ${close.playedCount}${close.cancelledCount ? ` · cancelados: ${close.cancelledCount}` : ""}${close.dueCount ? ` · falta cobrar ${formatMoney(close.dueAmount)} (${close.dueCount})` : ""}`
   );
+  if (close.openPerPersonCount) lines.push(`Turnos por persona sin cerrar: ${close.openPerPersonCount}`);
   return lines;
 }

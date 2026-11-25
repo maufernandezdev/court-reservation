@@ -348,6 +348,12 @@ function DayCloseSection({ close, label, today }: { close: DayClose; label: stri
               {close.dueCount > 0 ? ` (${close.dueCount})` : ""}
             </dd>
           </div>
+          {close.openPerPersonCount > 0 && (
+            <div className="flex justify-between border-t border-muted py-1.5">
+              <dt>Por persona sin cerrar</dt>
+              <dd className="font-mono">{close.openPerPersonCount}</dd>
+            </div>
+          )}
         </dl>
       </div>
     </section>

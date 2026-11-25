@@ -150,6 +150,8 @@ Fuera de alcance: tarifas guardadas reutilizables, precio especial en el portal 
 - `lib/day-close.ts`: `amountDue` devuelve 0 para `sin_cargo` y `por_persona`; nuevo `openPerPersonCount`. El texto de WhatsApp agrega "turnos por persona sin cerrar: N".
 - `lib/monthly-report.ts`: los cobros `persona` cuentan como ingreso del tipo de turno (no se saltean como `saldo`).
 
+**Implementado (desvío):** la planilla muestra "$12.000 c/u · cobrado $60.000" (o "Abierta" sin cobros) y, cerrada, "Cerrada · 5 personas · $60.000". No se cuenta "N pagaron" porque un cobro único en varios medios genera varias líneas y no equivale a personas. El reporte mensual ya sumaba los cobros `persona` (solo saltea `saldo`). Las funciones de planilla y cierre importan alias `@/`, así que se verificaron con `tsc` y en el club de pruebas (planilla del 1/12: "Sin cargo" y "$12.000 c/u · cobrado $60.000"), no con el script.
+
 **Tests (TDD):** casos en `scripts/verify-special-pricing.mjs` sobre las funciones puras (`paymentSummary`, `summarizeDayClose` y el agrupado del reporte mensual) con datos armados en memoria:
 - Un turno sin cargo y uno por persona abierto no suman a `dueCount`.
 - Los cobros `persona` suman a ingresos por origen.

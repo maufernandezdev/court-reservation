@@ -66,7 +66,14 @@ export function lastMethodByReservation(
  * Sin precio a la vista (organizador de torneos) solo queda el texto vacío.
  */
 export function paymentSummary(
-  reservation: Pick<Reservation, "payment_status"> & { price?: number | null; status?: Reservation["status"] },
+  reservation: Pick<Reservation, "payment_status"> & {
+    price?: number | null;
+    status?: Reservation["status"];
+    pricing_mode?: Reservation["pricing_mode"] | null;
+    unit_price?: number | null;
+    expected_people?: number | null;
+    closed_at?: string | null;
+  },
   lastMethod?: PaymentMethod | null
 ): string {
   const noPrice = reservation.price === undefined || reservation.price === null;
@@ -74,6 +81,18 @@ export function paymentSummary(
     return noPrice ? "Por confirmar" : `Por confirmar · ${formatMoney(Number(reservation.price))}`;
   }
   if (noPrice) return "";
+  if (reservation.pricing_mode === "sin_cargo") return "Sin cargo";
+  if (reservation.pricing_mode === "por_persona") {
+    const collected = Number(reservation.price);
+    if (reservation.closed_at) {
+      const people = reservation.expected_people;
+      return ["Cerrada", people ? `${people} ${people === 1 ? "persona" : "personas"}` : null, formatMoney(collected)]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    const unit = reservation.unit_price === undefined || reservation.unit_price === null ? null : Number(reservation.unit_price);
+    return [unit !== null ? `${formatMoney(unit)} c/u` : "Por persona", collected > 0 ? `cobrado ${formatMoney(collected)}` : "Abierta"].join(" · ");
+  }
   const parts = [formatMoney(Number(reservation.price)), PAYMENT_STATE_SHORT[reservation.payment_status]];
   if (lastMethod && reservation.payment_status !== "pendiente") parts.push(PAYMENT_METHOD_SHORT[lastMethod]);
   return parts.join(" · ");

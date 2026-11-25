@@ -37,6 +37,8 @@ export function paidByReservation(payments: DayPayment[]): Map<string, number> {
 /** Saldo pendiente de un turno activo (0 si está pagado o cancelado), sobre el valor fijado. */
 export function amountDue(reservation: Reservation, paid: number): number {
   if (reservation.status !== "active" || reservation.payment_status === "pagada") return 0;
+  // Sin cargo no se cobra; por persona es una cuenta abierta: su valor es lo ya cobrado.
+  if (reservation.pricing_mode === "sin_cargo" || reservation.pricing_mode === "por_persona") return 0;
   return Math.max(0, Number(reservation.price) - paid);
 }
 
