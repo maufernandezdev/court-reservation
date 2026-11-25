@@ -1,6 +1,13 @@
 import type { Court } from "@/lib/courts";
 import type { Reservation } from "@/lib/reservations";
 
+/** Duración legible: "45 min", "2 h", "1 h 30". */
+export function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m}`;
+}
+
 export function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;

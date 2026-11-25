@@ -16,7 +16,7 @@ import {
 } from "@/lib/reservations";
 import { canSeeMoney, type Membership } from "@/lib/roles";
 import { formatMoney } from "@/lib/pricing";
-import { minutesToTime, timeToMinutes } from "@/lib/availability";
+import { minutesToTime, timeToMinutes, durationLabel } from "@/lib/availability";
 import { COURT_TYPE_LABELS } from "@/lib/courts";
 import type { ReservationDetail } from "@/hooks/use-reservation-detail";
 import { describeAuditEntry } from "@/lib/audit";
@@ -234,7 +234,7 @@ export function ReservationDetailPanel({
         </div>
         <div>
           <dt className="text-muted-foreground">Duración</dt>
-          <dd className="mt-0.5 font-semibold">{reservation.duration_minutes} min</dd>
+          <dd className="mt-0.5 font-semibold">{durationLabel(reservation.duration_minutes)}</dd>
         </div>
       </dl>
 
@@ -598,7 +598,7 @@ export function CancelConfirmDialog({
           <span className="flex min-w-0 flex-col">
             <strong className="truncate text-base">{reservationTitle(reservation)}</strong>
             <span className="text-[13px] opacity-85">
-              {court?.name} · {formatDate(reservation.date)} · {reservation.duration_minutes} min ·{" "}
+              {court?.name} · {formatDate(reservation.date)} · {durationLabel(reservation.duration_minutes)} ·{" "}
               {RESERVATION_TONE_LABELS[tone]}
             </span>
           </span>

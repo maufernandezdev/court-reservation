@@ -12,6 +12,7 @@ import {
   buildAvailabilityMessage,
   findFreeSlots,
   minutesToTime,
+  durationLabel,
 } from "@/lib/availability";
 import type { Reservation } from "@/lib/reservations";
 import { formatMoney, isNight, quotePrice } from "@/lib/pricing";
@@ -47,12 +48,6 @@ const MESSAGE_LIMIT = 8;
 const FROM_OPTIONS = ["18:00", "19:00", "20:00", "21:00"];
 /** Duraciones que se buscan con más frecuencia (en minutos). */
 const DURATION_OPTIONS = [30, 60, 90, 120];
-
-function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m}`;
-}
 
 function addDaysKey(base: Date, days: number): string {
   const d = new Date(base);

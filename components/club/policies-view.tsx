@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useMembership } from "@/hooks/use-membership";
 import { useCourts } from "@/hooks/use-courts";
 import { depositFor, formatMoney, hourlyPrice, quotePriceFor } from "@/lib/pricing";
-import { DEFAULT_DURATION_MINUTES } from "@/lib/availability";
+import { DEFAULT_DURATION_MINUTES, durationLabel } from "@/lib/availability";
 import { useSportPrices } from "@/hooks/use-sport-prices";
 import { cancellationOutcome } from "@/lib/cancellation";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -43,11 +43,6 @@ const HOUR_OPTIONS = [0.5, 1, 2, 6, 12, 24, 48];
 const PENALTY_OPTIONS = [0, 25, 50, 100];
 const TOURNAMENT_OPTIONS = [60, 90, 120, 150, 180];
 
-function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m}`;
-}
 const REFERENCE_PRICE = 20000;
 
 /**

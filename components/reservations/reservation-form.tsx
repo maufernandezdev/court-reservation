@@ -26,6 +26,7 @@ import {
   rangesOverlap,
   startTimes,
   timeToMinutes,
+  durationLabel,
 } from "@/lib/availability";
 import { digitsOnly } from "@/lib/players";
 import { depositFor, formatMoney, isNight, quotePrice } from "@/lib/pricing";
@@ -102,12 +103,6 @@ const HALF_ROW = "grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4";
  * ("11/09/202"). Se achica ese espacio y el relleno lateral.
  */
 const DATE_INPUT = "px-3 [&::-webkit-calendar-picker-indicator]:ms-1 [&::-webkit-calendar-picker-indicator]:p-0";
-
-function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m}`;
-}
 
 const PEOPLE_LABELS: Record<ReservationInput["kind"], string> = {
   standard: "Quién reserva (y quiénes juegan)",
