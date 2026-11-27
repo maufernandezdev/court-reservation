@@ -16,6 +16,7 @@ import {
   paymentSummary,
   reservationLook,
   reservationTitle,
+  tournamentLines,
 } from "@/lib/reservation-tone";
 import { RESERVATION_KIND_LABELS, type PaymentMethod, type Reservation } from "@/lib/reservations";
 import { ReservationMarks } from "@/components/reservations/reservation-marks";
@@ -199,6 +200,7 @@ export function ScheduleGrid({
                   const tone = toneFor(r);
                   const look = reservationLook(r, r.profe_user_id ? profeColors.get(r.profe_user_id) : null);
                   const title = reservationTitle(r);
+                  const players = r.kind === "torneo" ? tournamentLines(r) : null;
                   const endTime = minutesToTime(item.start + r.duration_minutes);
                   const selected = r.id === selectedId;
                   // Valor, estado y medio; si no hay precio a la vista, el estado como antes.
@@ -225,10 +227,22 @@ export function ScheduleGrid({
                         gridRow: `${rowOf(item.start)} / span ${Math.max(1, Math.round(r.duration_minutes / 30))}`,
                       }}
                     >
-                      <span className="flex w-full items-center gap-1.5">
-                        <span className="min-w-0 flex-1 truncate text-sm leading-tight font-semibold">
-                          {title}
-                        </span>
+                      <span className="flex w-full items-start gap-1.5">
+                        {players ? (
+                          // Torneo: un jugador por línea, para que no se corten los nombres.
+                          <span className="flex min-w-0 flex-1 flex-col text-sm leading-tight font-semibold">
+                            {players.map((line, i) => (
+                              <span key={i} className="truncate">
+                                {line.vs && <span className="font-normal opacity-75">vs </span>}
+                                {line.name}
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="min-w-0 flex-1 truncate text-sm leading-tight font-semibold">
+                            {title}
+                          </span>
+                        )}
                         <ReservationMarks reservation={r} />
                       </span>
                       {!(short && money) && (

@@ -31,6 +31,7 @@ import {
 import { digitsOnly } from "@/lib/players";
 import { depositFor, formatMoney, isNight, quotePrice } from "@/lib/pricing";
 import { useSportPrices } from "@/hooks/use-sport-prices";
+import { useSpecialDay } from "@/hooks/use-special-day";
 import { useApprovalRules } from "@/hooks/use-approval-rules";
 import { requiresApproval, whatsappLink } from "@/lib/approval";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -162,6 +163,7 @@ export function ReservationForm({
         people: reservation.kind === "profe" ? people.slice(1) : people,
         // Un turno que ya es fijo se muestra tildado.
         repeat_weekly: !!reservation.series_id,
+        series_scope: "following",
         pricing_mode: reservation.pricing_mode ?? "lista",
         unit_price: reservation.unit_price === null || reservation.unit_price === undefined ? null : Number(reservation.unit_price),
         expected_people: reservation.expected_people ?? null,
@@ -195,6 +197,7 @@ export function ReservationForm({
     name: ["court_id", "kind", "time", "duration_minutes", "people", "date", "pricing_mode", "unit_price", "custom_price", "repeat_weekly", "expected_people"],
   });
   const selectedCourt = courts.find((court) => court.id === courtId) ?? null;
+  const { specialDay } = useSpecialDay(date ?? "");
   const isCancelled = reservation?.status === "cancelled";
   /** Turno de un fijo semanal: la opción de repetir va tildada y no se cambia desde acá. */
   const isFixed = mode === "edit" && !!reservation?.series_id;
@@ -328,8 +331,12 @@ export function ReservationForm({
     !unchangedSlot &&
     requiresApproval(approvalRules, selectedCourt.id, date, time, effectiveDuration);
   // El precio de día o de noche se elige por la hora de inicio del turno.
+  // Día especial (feriado) con tarifa propia: vale para todo el día y todas las listas.
+  const specialRate = specialDay?.hourly_price ?? null;
   const slotPrice = selectedCourt
-    ? quotePrice(prices[selectedCourt.type], kind, effectiveDuration, time, nightStartsAt)
+    ? specialRate !== null
+      ? Math.round(((specialRate * effectiveDuration) / 60) * 100) / 100
+      : quotePrice(prices[selectedCourt.type], kind, effectiveDuration, time, nightStartsAt)
     : 0;
   const startsAtNight = !!time && isNight(time, nightStartsAt);
   const deposit =
@@ -426,7 +433,16 @@ export function ReservationForm({
       return;
     }
 
-    if (mode === "edit" && (isFixed || !values.repeat_weekly)) {
+    if (mode === "edit" && isFixed && result.seriesUpdated) {
+      const { updated, kept } = result.seriesUpdated;
+      toast.success("Fijo actualizado", {
+        description:
+          `También cambiaron ${updated} fecha(s) siguientes.` +
+          (kept ? ` ${kept} con cobros quedaron como estaban.` : ""),
+      });
+      onSaved(result.reservation!);
+      onClose();
+    } else if (mode === "edit" && (isFixed || !values.repeat_weekly)) {
       toast.success("Reserva actualizada");
       onSaved(result.reservation!);
       // Al guardar una edición, el modal se cierra.
@@ -720,13 +736,36 @@ export function ReservationForm({
                     className="mt-0.5"
                   />
                 </FormControl>
-                <div className="flex flex-col gap-0.5">
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <FormLabel className="text-[15px] font-semibold">Repetir todas las semanas</FormLabel>
                   <p className="text-[13px] text-pretty text-muted-foreground">
                     {isFixed
-                      ? `Este turno ya es fijo: se repite todos los ${date ? weekdayName(date) : "días"}. Para darlo de baja, usá "Dar de baja el fijo" en el detalle del turno. Los cambios de acá valen solo para esta fecha.`
+                      ? `Este turno ya es fijo: se repite todos los ${date ? weekdayName(date) : "días"}. Para darlo de baja, usá "Dar de baja el fijo" en el detalle del turno.`
                       : `Turno fijo: se reserva todos los ${date ? weekdayName(date) : "días"}${time ? ` a las ${time}` : ""} hasta darlo de baja. Cada fecha se cobra aparte.`}
                   </p>
+                  {isFixed && (
+                    <Controller
+                      control={form.control}
+                      name="series_scope"
+                      render={({ field: scope }) => (
+                        <label className="mt-2 flex items-start gap-2 text-[13px]">
+                          <Checkbox
+                            checked={scope.value === "one"}
+                            onCheckedChange={(checked) => scope.onChange(checked === true ? "one" : "following")}
+                            className="mt-0.5"
+                          />
+                          <span className="flex flex-col gap-0.5">
+                            <span className="font-medium">Cambiar solo esta fecha</span>
+                            <span className="text-pretty text-muted-foreground">
+                              {scope.value === "one"
+                                ? "Las otras fechas del fijo quedan como están."
+                                : "Los cambios de cancha, horario, duración y personas se aplican también a las fechas siguientes (las que ya tienen cobros quedan como están)."}
+                            </span>
+                          </span>
+                        </label>
+                      )}
+                    />
+                  )}
                 </div>
               </FormItem>
             )}
@@ -809,7 +848,7 @@ export function ReservationForm({
               ) : (
                 <span className="font-mono">
                   <strong>{formatMoney(slotPrice)}</strong>
-                  {startsAtNight && " (noche)"}
+                  {specialRate !== null ? ` (${specialDay?.label.toLowerCase()})` : startsAtNight && " (noche)"}
                   {deposit > 0 && (
                     <>
                       {" "}· seña <strong className="text-ball">{formatMoney(deposit)}</strong>

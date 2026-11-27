@@ -127,6 +127,19 @@ export function reservationTitle(
   return `${people[0] ?? reservation.customer_name}${extra}`;
 }
 
+/**
+ * Jugadores de un partido de torneo, uno por línea; `vs` marca el primero del segundo lado.
+ * Con menos de 2 personas, una sola línea con quien reserva.
+ */
+export function tournamentLines(
+  reservation: Pick<Reservation, "participants" | "customer_name">
+): { name: string; vs: boolean }[] {
+  const people = sortedParticipants(reservation).map((p) => p.name);
+  if (people.length < 2) return [{ name: people[0] ?? reservation.customer_name, vs: false }];
+  const firstOfSecondSide = people.length >= 3 ? 2 : 1;
+  return people.map((name, i) => ({ name, vs: i === firstOfSecondSide }));
+}
+
 /** Los dos lados de un partido de torneo (singles: uno por lado; dobles: dos y dos). */
 export function matchSides(reservation: Pick<Reservation, "participants" | "customer_name">): [string, string] {
   const people = sortedParticipants(reservation).map((p) => p.name);

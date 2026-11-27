@@ -9,6 +9,7 @@ import {
   toneFor,
   reservationLook,
   reservationTitle,
+  tournamentLines,
   paymentSummary,
 } from "@/lib/reservation-tone";
 import { RESERVATION_KIND_LABELS, type PaymentMethod, type Reservation } from "@/lib/reservations";
@@ -334,8 +335,20 @@ export function MobileSchedule({
               >
                 <span className="w-13 font-mono text-[15px] font-semibold">{r.time}</span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="flex items-center gap-1.5">
-                    <strong className="min-w-0 truncate text-[15px]">{reservationTitle(r)}</strong>
+                  <span className="flex items-start gap-1.5">
+                    {r.kind === "torneo" && (r.participants?.length ?? 0) >= 2 ? (
+                      // Torneo: un jugador por línea, para que no se corten los nombres.
+                      <strong className="flex min-w-0 flex-col text-[15px] leading-tight">
+                        {tournamentLines(r).map((line, i) => (
+                          <span key={i} className="truncate">
+                            {line.vs && <span className="font-normal opacity-75">vs </span>}
+                            {line.name}
+                          </span>
+                        ))}
+                      </strong>
+                    ) : (
+                      <strong className="min-w-0 truncate text-[15px]">{reservationTitle(r)}</strong>
+                    )}
                     <ReservationMarks reservation={r} />
                   </span>
                   <span className="text-[13px] opacity-85">

@@ -243,6 +243,8 @@ export const reservationInputSchema = z
     people: z.array(personSchema).max(MAX_PEOPLE, `Hasta ${MAX_PEOPLE} personas por turno`),
     /** Solo en el alta: el turno se repite todas las semanas (no aplica a torneos). */
     repeat_weekly: z.boolean(),
+    /** Al editar una fecha de un fijo: cambiar solo esa fecha o también las siguientes (y el fijo). */
+    series_scope: z.enum(["one", "following"]).optional(),
     /** Precio especial (solo lo usa el admin; para los demás el servidor lo ignora). */
     pricing_mode: z.enum(PRICING_MODES, { message: "Elegí cómo se cobra" }),
     unit_price: z.number({ message: "Poné el precio por persona" }).positive("El precio tiene que ser mayor a $0").max(10_000_000, "Precio demasiado alto").nullable(),

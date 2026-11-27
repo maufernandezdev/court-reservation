@@ -46,7 +46,10 @@ export type AuditAction =
   | "payee.updated"
   | "profe.settled"
   | "profe.settlement_voided"
-  | "settings.settle_from_updated";
+  | "settings.settle_from_updated"
+  | "special_day.applied"
+  | "special_day.removed"
+  | "series.updated_from";
 
 type AuditInput = {
   clubId: string;
@@ -122,6 +125,9 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "reservation.account_closed",
     "reservation.account_reopened",
     "settings.settle_from_updated",
+    "special_day.applied",
+    "special_day.removed",
+    "series.updated_from",
   ],
   charged: ["payment.registered", "credit.applied", "profe.settled"],
   cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed", "profe.settlement_voided"],
@@ -378,6 +384,21 @@ export function describeAuditEntry(
       return p.active === false
         ? `sacó a ${String(p.name ?? "")} de la lista de pagos`
         : `actualizó a ${String(p.name ?? "")} en la lista de pagos`;
+    case "special_day.applied": {
+      const n = typeof p.cancelled === "number" ? p.cancelled : 0;
+      const extras = [
+        p.closed ? "club cerrado" : "",
+        p.hourly_price ? `tarifa ${money(p.hourly_price)} por hora` : "",
+        n ? `${n} ${n === 1 ? "turno cancelado" : "turnos cancelados"}` : "",
+      ].filter(Boolean);
+      return `marcó ${String(p.label ?? "feriado").toLowerCase()} el ${typeof p.date === "string" ? shortDate(p.date) : "día"}${extras.length ? ` (${extras.join(", ")})` : ""}`;
+    }
+    case "special_day.removed":
+      return `quitó el día especial del ${typeof p.date === "string" ? shortDate(p.date) : "día"}`;
+    case "series.updated_from": {
+      const n = typeof p.updated === "number" ? p.updated : 0;
+      return `cambió el turno fijo desde el ${typeof p.from === "string" ? shortDate(p.from) : "día"} (${n} ${n === 1 ? "fecha siguiente" : "fechas siguientes"})`;
+    }
     case "cash.opening_set":
       return `fijó el cambio inicial de la caja${typeof p.date === "string" ? ` del ${shortDate(p.date)}` : ""} en ${money(p.amount)}`;
     case "settings.updated":

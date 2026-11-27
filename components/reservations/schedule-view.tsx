@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { AnimatePresence, LazyMotion, domAnimation, m } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, ChevronLeft, ChevronRight, LandPlot, Plus, Search, Repeat, Trophy } from "lucide-react";
+import { CalendarDays, CalendarOff, ChevronLeft, ChevronRight, LandPlot, Plus, Search, Repeat, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -45,12 +45,18 @@ import {
 } from "@/components/reservations/mobile-schedule";
 import { cn } from "@/lib/utils";
 import { DateInput } from "@/components/ui/date-input";
+import { useSpecialDay } from "@/hooks/use-special-day";
+import { SpecialDayBanner } from "@/components/reservations/special-day-dialog";
 
 // Se cargan aparte: los diálogos (formularios con zod, react-hook-form y cmdk) recién
 // hacen falta al abrirlos, y la grilla solo en escritorio. Así el celular no descarga ni
 // ejecuta ese código al abrir la planilla.
 const ReservationDialog = dynamic(
   () => import("@/components/reservations/reservation-dialog").then((m) => m.ReservationDialog),
+  { ssr: false }
+);
+const SpecialDayDialog = dynamic(
+  () => import("@/components/reservations/special-day-dialog").then((m) => m.SpecialDayDialog),
   { ssr: false }
 );
 const AvailabilitySearchDialog = dynamic(
@@ -238,6 +244,7 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const [specialDayOpen, setSpecialDayOpen] = useState(false);
 
   const selectedDateKey = useMemo(() => dateKey(selectedDate), [selectedDate]);
   const isToday = selectedDateKey === todayKey;
@@ -250,8 +257,9 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
     }
   }, [searchParams, router, pathname]);
 
-  const { reservations, isLoading: isLoadingReservations, upsertLocal } =
+  const { reservations, isLoading: isLoadingReservations, upsertLocal, refetch: refetchReservations } =
     useReservations(selectedDateKey, initialReservations);
+  const { specialDay, refetch: refetchSpecialDay } = useSpecialDay(selectedDateKey);
 
   // ¿Algún deporte del club pide seña (al público o a profes)?
   const { rows: priceRows } = useSportPrices();
@@ -362,6 +370,8 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
   });
   const dateLabel = rawDateLabel.charAt(0).toUpperCase() + rawDateLabel.slice(1);
   const availableTypes = [...new Set(courts.map((c) => c.type))];
+  // Feriados: solo el admin, de hoy en adelante.
+  const canMarkSpecialDay = membership?.role === "admin" && selectedDateKey >= todayKey;
 
   return (
     <div className="flex flex-col gap-4">
@@ -369,6 +379,17 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
         title="Planilla"
         actions={
           <>
+            {canMarkSpecialDay && !specialDay && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setSpecialDayOpen(true)}
+                aria-label="Marcar feriado"
+              >
+                <CalendarOff />
+              </Button>
+            )}
             <Button
               variant="outline"
               size="icon"
@@ -424,6 +445,12 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
               onChange={setCourtTypeFilter}
               available={availableTypes}
             />
+            {canMarkSpecialDay && !specialDay && (
+              <Button variant="outline" onClick={() => setSpecialDayOpen(true)}>
+                <CalendarOff />
+                Feriado
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setSearchOpen(true)}>
               <Search />
               ¿Hay cancha?
@@ -436,6 +463,14 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
           </>
         }
       />
+
+      {specialDay && (
+        <SpecialDayBanner
+          specialDay={specialDay}
+          canEdit={canMarkSpecialDay}
+          onEdit={() => setSpecialDayOpen(true)}
+        />
+      )}
 
       {visibleCourts.length === 0 ? (
         <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
@@ -549,6 +584,22 @@ function ScheduleContent({ initialReservations }: { initialReservations: Initial
           onSaved={handleReservationSaved}
           onCancelled={handleCancelled}
           showDetail={false}
+        />
+      )}
+
+      {canMarkSpecialDay && (
+        <SpecialDayDialog
+          open={specialDayOpen}
+          onOpenChange={setSpecialDayOpen}
+          date={selectedDateKey}
+          dateLabel={dateLabel}
+          specialDay={specialDay}
+          reservations={activeReservations}
+          onApplied={() => {
+            refetchSpecialDay();
+            refetchReservations();
+            refetchPayments();
+          }}
         />
       )}
 

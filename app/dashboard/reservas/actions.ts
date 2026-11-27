@@ -51,6 +51,8 @@ type ActionResult = {
   reservation?: Reservation;
   /** Turno fijo: fechas que se saltearon porque la cancha ya estaba ocupada. */
   skippedDates?: string[];
+  /** Edición de un fijo desde una fecha: fechas siguientes cambiadas y las que quedaron por tener cobros. */
+  seriesUpdated?: { updated: number; kept: number };
 };
 
 /** Semanas que se reservan al crear un turno fijo (las siguientes se generan al consultar). */
@@ -248,6 +250,68 @@ type PreparedReservation = {
   people: { name: string; player_id: string | null }[];
 };
 
+/** Nombre comparable: sin mayúsculas, tildes ni espacios de más. */
+function normalizeName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Da de alta como jugadores a las personas sin `player_id` (desde `skip`, para no tocar al profe)
+ * y las vincula. Si ya hay un jugador con el mismo nombre, usa ese. Si el alta falla (permisos),
+ * la persona queda sin vincular como antes.
+ */
+async function linkNewPlayers(
+  ctx: SessionContext,
+  people: { name: string; player_id: string | null }[],
+  skip: number,
+  phone: string
+): Promise<{ name: string; player_id: string | null }[]> {
+  const pending = people.some((p, i) => i >= skip && !p.player_id && p.name);
+  if (!pending) return people;
+
+  const { supabase, user, membership } = ctx;
+  const clubId = membership!.club_id;
+  const { data: existing } = await supabase
+    .from("players")
+    .select("id, full_name")
+    .eq("club_id", clubId)
+    .is("deleted_at", null);
+  const byName = new Map((existing ?? []).map((p) => [normalizeName(p.full_name), p.id as string]));
+
+  const linked = [];
+  for (const [i, person] of people.entries()) {
+    if (i < skip || person.player_id || !person.name) {
+      linked.push(person);
+      continue;
+    }
+    const key = normalizeName(person.name);
+    let id = byName.get(key) ?? null;
+    if (!id) {
+      const { data: created, error: createError } = await supabase
+        .from("players")
+        .insert({
+          club_id: clubId,
+          full_name: person.name,
+          // El teléfono del turno es de quien reserva (la primera persona).
+          phone: i === skip && phone ? phone : "",
+          created_by: user!.id,
+        })
+        .select("id")
+        .single();
+      if (createError) console.error("No se pudo dar de alta al jugador:", createError.message);
+      id = (created?.id as string | undefined) ?? null;
+      if (id) byName.set(key, id);
+    }
+    linked.push({ ...person, player_id: id });
+  }
+  return linked;
+}
+
 /**
  * Valida y completa un turno (alta o edición): tipo según el rol, profe del club,
  * jugadores del club, duración (de la cancha o, en torneos, la elegida), franja dentro
@@ -291,6 +355,10 @@ async function prepareReservation(
   } else if (kind === "torneo" && people.length < 2) {
     throw new Error("Un torneo necesita al menos 2 jugadores.");
   }
+
+  // Las personas escritas a mano quedan dadas de alta como jugadores del club (o se vinculan a uno
+  // que ya tenga el mismo nombre). El profe, en sus turnos, no es jugador.
+  people = await linkNewPlayers(ctx, people, kind === "profe" ? 1 : 0, input.phone.trim());
 
   const playerIds = [...new Set(people.map((p) => p.player_id).filter((id): id is string => !!id))];
   if (playerIds.length > 0) {
@@ -709,10 +777,38 @@ export async function updateReservationAction(
       return await createSeries(ctx, data, prepared, id);
     }
 
+    // Fecha de un fijo sin "Cambiar solo esta fecha": si cambió cancha, horario, duración, tipo, profe o
+    // personas, el cambio pasa al fijo y a sus fechas futuras. Si solo cambió el cobro o el teléfono, no.
+    const names = (list: { name: string }[] | undefined) => (list ?? []).map((p) => p.name.trim()).join("|");
+    const shapeChanged =
+      existing.court_id !== prepared.court.id ||
+      existing.time !== data.time ||
+      existing.duration_minutes !== prepared.duration ||
+      existing.kind !== prepared.kind ||
+      (existing.profe_user_id ?? null) !== (prepared.profeUserId ?? null) ||
+      names([...(existing.participants ?? [])].sort((a, b) => a.position - b.position)) !== names(prepared.people);
+    let seriesUpdated: { updated: number; kept: number } | undefined;
+    if (data.series_scope !== "one" && existing.series_id && shapeChanged) {
+      const { data: rows, error: seriesError } = await supabase.rpc("update_series_from", {
+        p_reservation_id: id,
+      });
+      if (seriesError) {
+        const shown = ["P0001", "42501"].includes(seriesError.code ?? "");
+        return {
+          success: false,
+          error: `Esta fecha se guardó, pero ${
+            shown ? seriesError.message : "no se pudieron cambiar las fechas siguientes."
+          }`,
+        };
+      }
+      const row = (rows as { updated_count: number; kept_count: number }[] | null)?.[0];
+      seriesUpdated = { updated: row?.updated_count ?? 0, kept: row?.kept_count ?? 0 };
+    }
+
     revalidatePath("/dashboard/reservas");
 
     const reservation = await fetchReservation(supabase, clubId, id);
-    return forClient(ctx, { success: true, reservation: reservation ?? undefined });
+    return forClient(ctx, { success: true, reservation: reservation ?? undefined, seriesUpdated });
   } catch (err) {
     return failure(err, "No se pudo actualizar la reserva.");
   }
