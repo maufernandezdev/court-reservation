@@ -132,7 +132,7 @@ export function ReservationNoteSection({
                     rows={3}
                     maxLength={NOTE_MAX_LENGTH}
                     aria-label="Nota del turno"
-                    placeholder="Ej.: trae su propia red, avisar a Diego si llega tarde"
+                    placeholder="Ej.: torneo Master de París A1"
                     className="resize-none border-[#d9c24f] bg-white/60 text-[#3d3200] placeholder:text-[#3d3200]/50"
                   />
                 </FormControl>
