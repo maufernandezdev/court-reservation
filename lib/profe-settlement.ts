@@ -217,11 +217,17 @@ export const settlePendingSchema = z.object({
 });
 export type SettlePendingInput = z.infer<typeof settlePendingSchema>;
 
-/** "Liquidar desde" del club; vacío = sin fecha de inicio. */
-export const settleFromSchema = z.object({
-  settleFrom: z.union([dateKey, z.literal("")]),
+/**
+ * Cobro a cuenta del profe: el total que debe (`amount` vacío) u otro monto menor, que se descuenta de su
+ * cuenta imputándolo a los turnos más viejos primero (lo valida también la base).
+ */
+export const settleAmountSchema = z.object({
+  profeUserId: z.string().uuid("Profe inválido"),
+  amount: z.number().positive("El monto tiene que ser mayor a cero").nullable(),
+  method: z.enum(VISIBLE_PAYMENT_METHODS, { message: "Elegí efectivo o Mercado Pago" }),
 });
-export type SettleFromInput = z.infer<typeof settleFromSchema>;
+export type SettleAmountInput = z.infer<typeof settleAmountSchema>;
+
 
 /** Liquidación registrada (historial). */
 export type ProfeSettlementRecord = {

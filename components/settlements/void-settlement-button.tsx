@@ -44,10 +44,10 @@ export function VoidSettlementButton({
     const result = await voidSettlementAction(settlementId);
     setPending(false);
     if (!result.success) {
-      setError(result.error ?? "No se pudo deshacer la liquidación.");
+      setError(result.error ?? "No se pudo deshacer el cobro.");
       return;
     }
-    toast.success("Liquidación deshecha", {
+    toast.success("Cobro deshecho", {
       description: `${profeName} · ${result.count ?? 0} ${result.count === 1 ? "turno volvió" : "turnos volvieron"} a pendiente.`,
     });
     setOpen(false);
@@ -63,10 +63,9 @@ export function VoidSettlementButton({
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>¿Deshacer la liquidación de {profeName}?</AlertDialogTitle>
+          <AlertDialogTitle>¿Deshacer el cobro a {profeName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Se borra el cobro de {formatMoney(amount)} y {turns === 1 ? "el turno vuelve" : `los ${turns} turnos vuelven`} a
-            pendiente. La caja del {paidOn} cambia: si ya la cerraste, revisá el cierre de ese día.
+            Se borra el cobro de {formatMoney(amount)} y vuelve a la cuenta del profe ({turns === 1 ? "1 turno" : `${turns} turnos`}). La caja del {paidOn} cambia: si ya la cerraste, revisá el cierre de ese día.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && (
@@ -77,7 +76,7 @@ export function VoidSettlementButton({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
           <ProcessingButton variant="destructive" processing={pending} processingLabel="Deshaciendo…" onClick={onConfirm}>
-            Deshacer liquidación
+            Deshacer cobro
           </ProcessingButton>
         </AlertDialogFooter>
       </AlertDialogContent>

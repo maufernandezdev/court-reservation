@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, ShieldAlert } from "lucide-react";
 import { z } from "zod";
 import { getSessionContext } from "@/lib/auth";
 import { queryProfes } from "@/lib/club-data";
-import { CLUB_TZ, clubTodayKey } from "@/lib/club-time";
+import { CLUB_TZ, clubNowMinutes, clubTodayKey } from "@/lib/club-time";
 import { formatMoney } from "@/lib/pricing";
 import {
   SETTLE_FROM_FALLBACK,
@@ -26,8 +26,6 @@ import { PrintButton } from "@/components/reports/print-button";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { PageHeader } from "@/components/shell/page-header";
 import { SettleProfeDialog } from "@/components/settlements/settle-profe-dialog";
-import { SettleFromDialog } from "@/components/settlements/settle-from-dialog";
-import { SettleUntilPicker } from "@/components/settlements/settle-until-picker";
 import { VoidSettlementButton } from "@/components/settlements/void-settlement-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -44,15 +42,6 @@ function dayLabel(key: string): string {
   return `${WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${shortDay(key)}`;
 }
 
-/** Minutos transcurridos del día en el club (mismo criterio que `now_minutes_ar` en la base). */
-function clubNowMinutes(now: Date = new Date()): number {
-  const [h, m] = now
-    .toLocaleTimeString("en-GB", { timeZone: CLUB_TZ, hour: "2-digit", minute: "2-digit", hour12: false })
-    .split(":")
-    .map(Number);
-  return (h % 24) * 60 + m;
-}
-
 /** "25/11 14:30" en hora del club. */
 function dateTimeLabel(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", {
@@ -61,6 +50,7 @@ function dateTimeLabel(iso: string): string {
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
   });
 }
 
@@ -70,9 +60,9 @@ function paidOnLabel(iso: string): string {
 
 /**
  * Liquidación de profes. Dos vistas que conviven:
- * - Liquidar: todo lo que cada profe tiene pendiente (turnos ya jugados) desde "Liquidar desde" hasta
- *   una fecha. Cada profe paga cuando le queda cómodo (por día, por semana…). Las liquidaciones quedan
- *   en un historial y se pueden deshacer.
+ * - Cuentas: la cuenta de cada profe con el club. Lo que debe se acumula día a día con los turnos que ya
+ *   jugó (desde "Liquidar desde"); al cobrar se elige el total u otro monto, que se descuenta de su cuenta.
+ *   Los cobros quedan en un historial y se pueden deshacer.
  * - Semana: la vista de lunes a domingo para mirar lo usado y lo pagado.
  */
 export default async function SettlementsPage({
@@ -116,7 +106,7 @@ export default async function SettlementsPage({
     <div className="flex items-center gap-1 rounded-lg bg-muted p-1 print:hidden" role="navigation" aria-label="Vista">
       <Button asChild size="sm" variant={view === "liquidar" ? "default" : "ghost"}>
         <Link href="/dashboard/liquidaciones" aria-current={view === "liquidar" ? "page" : undefined}>
-          Liquidar
+          Cuentas
         </Link>
       </Button>
       <Button asChild size="sm" variant={view === "semana" ? "default" : "ghost"}>
@@ -140,19 +130,11 @@ export default async function SettlementsPage({
     );
   }
 
-  // ---- Liquidar: todo lo pendiente hasta una fecha ----
-  const parsedUntil = dateKeySchema.catch(today).parse(typeof raw.hasta === "string" ? raw.hasta : today);
-  let until = parsedUntil > today ? today : parsedUntil;
-  if (settleFrom && until < settleFrom) until = settleFrom > today ? today : settleFrom;
+  // ---- Cuentas: lo que cada profe debe hoy (turnos ya jugados sin pagar) ----
+  const until = today;
   const fromKey = settleFrom ?? SETTLE_FROM_FALLBACK;
   const startsInFuture = !!settleFrom && settleFrom > today;
-  const periodLabel = `${settleFrom ? `Del ${shortDay(settleFrom)}` : "Todo lo pendiente"} hasta el ${shortDay(until)}`;
-  const untilHref = (key: string) => (key === today ? "/dashboard/liquidaciones" : `/dashboard/liquidaciones?hasta=${key}`);
-  const shortcuts = [
-    { key: today, label: "Hoy" },
-    { key: addDaysKey(today, -1), label: "Ayer" },
-    { key: addDaysKey(weekStart(today), -1), label: "Domingo pasado" },
-  ].filter((s) => !settleFrom || s.key >= settleFrom);
+  const periodLabel = settleFrom ? `Desde el ${shortDay(settleFrom)} hasta hoy` : "Todo lo jugado sin pagar";
 
   let pending: ProfeSettlement[] = [];
   let history: ProfeSettlementRecord[] = [];
@@ -187,7 +169,7 @@ export default async function SettlementsPage({
       <PageHeader
         title="Liquidación de profes"
         eyebrow={periodLabel}
-        description="Lo que cada profe tiene pendiente por los turnos que ya jugó. Cada uno paga cuando le queda cómodo."
+        description="La cuenta de cada profe con el club: el saldo se acumula día a día con los turnos que juega. Al cobrar, elegí el total u otro monto."
         actions={tabs}
       />
 
@@ -197,17 +179,6 @@ export default async function SettlementsPage({
         </Alert>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <SettleFromDialog settleFrom={settleFrom} />
-        <span className="ml-auto text-sm text-muted-foreground">Hasta</span>
-        {shortcuts.map((s) => (
-          <Button key={s.label} asChild size="sm" variant={s.key === until ? "default" : "outline"}>
-            <Link href={untilHref(s.key)}>{s.label}</Link>
-          </Button>
-        ))}
-        <SettleUntilPicker value={until} min={settleFrom ?? undefined} max={today} />
-      </div>
-
       {startsInFuture && (
         <Alert>
           <AlertDescription>
@@ -215,22 +186,15 @@ export default async function SettlementsPage({
           </AlertDescription>
         </Alert>
       )}
-      {!settleFrom && (
-        <Alert>
-          <AlertDescription>
-            Sin “Liquidar desde”, acá aparece todo lo que los profes tienen sin pagar, de cualquier fecha.
-          </AlertDescription>
-        </Alert>
-      )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3.5">
         <section className="flex flex-col gap-1 rounded-2xl bg-ball p-5 text-ball-foreground">
-          <h2 className="text-sm font-medium">Falta cobrar</h2>
+          <h2 className="text-sm font-medium">Saldo de los profes</h2>
           <strong className="font-mono text-3xl font-bold">{formatMoney(totalDue)}</strong>
           <span className="text-sm">{periodLabel}</span>
         </section>
         <section className="flex flex-col gap-1 rounded-2xl border bg-card p-5">
-          <h2 className="text-sm text-muted-foreground">Profes con turnos pendientes</h2>
+          <h2 className="text-sm text-muted-foreground">Profes con saldo</h2>
           <strong className="font-mono text-2xl font-bold">{pending.length}</strong>
         </section>
       </div>
@@ -247,7 +211,7 @@ export default async function SettlementsPage({
           <p className="rounded-2xl border bg-card p-8 text-center text-muted-foreground">
             {profes.length === 0
               ? "No hay profes en el equipo. Sumalos en Equipo para liquidar sus turnos."
-              : "Ningún profe tiene turnos jugados sin pagar en este período."}
+              : "Ningún profe tiene saldo: todas las cuentas están en cero."}
           </p>
         ) : (
           pending.map((profe) => (
@@ -258,15 +222,16 @@ export default async function SettlementsPage({
               periodLabel={periodLabel}
               emptyText=""
               action={
-                profe.due > 0 || profe.turns.length > 0 ? (
-                  <SettleProfeDialog
-                    profeUserId={profe.user_id}
-                    profeName={profe.name}
-                    until={until}
-                    periodLabel={periodLabel}
-                    due={profe.due}
-                    turns={profe.turns.length}
-                  />
+                profe.due > 0 ? (
+                  <span className="flex items-center gap-3">
+                    <span className="font-mono font-bold">Saldo {formatMoney(profe.due)}</span>
+                    <SettleProfeDialog
+                      profeUserId={profe.user_id}
+                      profeName={profe.name}
+                      due={profe.due}
+                      turns={profe.turns.length}
+                    />
+                  </span>
                 ) : null
               }
             />
@@ -276,11 +241,11 @@ export default async function SettlementsPage({
 
       <section aria-labelledby="settlement-history" className="flex flex-col gap-3 print:hidden">
         <h2 id="settlement-history" className="text-lg font-bold">
-          Historial de liquidaciones
+          Historial de cobros
         </h2>
         {history.length === 0 ? (
           <p className="rounded-2xl border bg-card p-6 text-center text-sm text-muted-foreground">
-            Todavía no hay liquidaciones registradas. Las cobradas antes de este cambio están en Actividad y no se pueden
+            Todavía no hay cobros registrados. Las cobradas antes de este cambio están en Actividad y no se pueden
             deshacer desde acá.
           </p>
         ) : (
@@ -295,10 +260,9 @@ export default async function SettlementsPage({
                     h.voided_at && "text-muted-foreground"
                   )}
                 >
-                  <span className="w-24 font-mono text-sm">{dateTimeLabel(h.created_at)}</span>
+                  <span className="w-28 font-mono text-sm">{dateTimeLabel(h.created_at)}</span>
                   <span className="min-w-0 flex-[1_1_160px] truncate font-medium">{name}</span>
                   <span className="text-sm text-muted-foreground">
-                    {h.period_from ? `${shortDay(h.period_from)} al ${shortDay(h.period_to)}` : `hasta el ${shortDay(h.period_to)}`} ·{" "}
                     {h.turns_count} {h.turns_count === 1 ? "turno" : "turnos"} ·{" "}
                     {PAYMENT_METHOD_LABELS[h.method as PaymentMethod] ?? h.method}
                   </span>
@@ -324,7 +288,7 @@ export default async function SettlementsPage({
   );
 }
 
-/** Vista semanal (lunes a domingo) para mirar lo usado y lo pagado. Para cobrar se usa Liquidar. */
+/** Vista semanal (lunes a domingo) para mirar lo usado y lo pagado. Para cobrar se usa Cuentas. */
 async function WeekView({
   raw,
   today,
@@ -364,7 +328,7 @@ async function WeekView({
       <PageHeader
         title="Liquidación de profes"
         eyebrow={periodLabel}
-        description="Lo que cada profe usó en la semana y cuánto ya pagó. Para cobrar, usá Liquidar."
+        description="Lo que cada profe usó en la semana y cuánto ya pagó. Para cobrar, usá Cuentas."
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
             {tabs}

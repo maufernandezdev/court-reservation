@@ -6,19 +6,20 @@ import { requireRole } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { subscriptionMessage } from "@/lib/subscription";
 import {
-  settleFromSchema,
+  settleAmountSchema,
   settlePendingSchema,
-  type SettleFromInput,
+  type SettleAmountInput,
   type SettlePendingInput,
 } from "@/lib/profe-settlement";
 
-type Result = { success: boolean; error?: string; count?: number; amount?: number };
+type Result = { success: boolean; error?: string; count?: number; amount?: number; remaining?: number };
 
 function revalidateMoney() {
   revalidatePath("/dashboard/liquidaciones");
   revalidatePath("/dashboard/caja");
   revalidatePath("/dashboard/reservas");
   revalidatePath("/dashboard/reportes");
+  revalidatePath("/dashboard/mis-turnos");
 }
 
 function dbMessage(error: { code?: string; message: string }, fallback: string): string {
@@ -91,6 +92,57 @@ export async function settlePendingAction(input: SettlePendingInput): Promise<Re
   }
 }
 
+/**
+ * Cobro a cuenta del profe: el total que debe o un monto menor. Se imputa a los turnos jugados más viejos
+ * primero (el último puede quedar con un pago parcial) y entra a la caja de hoy. Solo el admin.
+ */
+export async function settleAmountAction(input: SettleAmountInput): Promise<Result> {
+  const parsed = settleAmountSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+
+  try {
+    const { supabase, user, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+    const { profeUserId, amount, method } = parsed.data;
+
+    const { data, error } = await supabase.rpc("settle_profe_amount", {
+      p_club_id: clubId,
+      p_profe_user_id: profeUserId,
+      p_amount: amount,
+      p_method: method,
+    });
+    if (error) return { success: false, error: dbMessage(error, "No se pudo registrar el cobro.") };
+
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | { settlement_id: string; settled_count: number; settled_amount: number; remaining: number }
+      | null;
+    const count = Number(row?.settled_count ?? 0);
+    const settled = Number(row?.settled_amount ?? 0);
+    const remaining = Number(row?.remaining ?? 0);
+
+    await writeAudit(supabase, {
+      clubId,
+      actorId: user!.id,
+      entity: "profe_settlement",
+      entityId: row?.settlement_id ?? profeUserId,
+      action: "profe.settled",
+      payload: {
+        profe: await profeName(supabase, clubId, profeUserId),
+        method,
+        count,
+        amount: settled,
+        partial: amount !== null,
+        remaining,
+      },
+    });
+
+    revalidateMoney();
+    return { success: true, count, amount: settled, remaining };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el cobro." };
+  }
+}
+
 /** Deshace una liquidación: borra sus cobros y los turnos vuelven a pendiente. Solo el admin. */
 export async function voidSettlementAction(settlementId: string): Promise<Result> {
   const parsedId = z.string().uuid("Liquidación inválida.").safeParse(settlementId);
@@ -128,37 +180,5 @@ export async function voidSettlementAction(settlementId: string): Promise<Result
     return { success: true, count, amount };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "No se pudo deshacer la liquidación." };
-  }
-}
-
-/** Fija (o quita) la fecha desde la que se liquidan los turnos de los profes. Solo el admin. */
-export async function setSettleFromAction(input: SettleFromInput): Promise<{ success: boolean; error?: string }> {
-  const parsed = settleFromSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Fecha inválida." };
-
-  try {
-    const { supabase, user, membership } = await requireRole("admin");
-    const clubId = membership!.club_id;
-    const settleFrom = parsed.data.settleFrom || null;
-
-    const { error } = await supabase
-      .from("settings")
-      .upsert({ club_id: clubId, settle_from: settleFrom }, { onConflict: "club_id" });
-    if (error) return { success: false, error: subscriptionMessage(error, "No se pudo guardar la fecha.") };
-
-    await writeAudit(supabase, {
-      clubId,
-      actorId: user!.id,
-      entity: "settings",
-      entityId: clubId,
-      action: "settings.settle_from_updated",
-      payload: { settle_from: settleFrom },
-    });
-
-    revalidatePath("/dashboard/liquidaciones");
-    revalidatePath("/dashboard/mis-turnos");
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo guardar la fecha." };
   }
 }

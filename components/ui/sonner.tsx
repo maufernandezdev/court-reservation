@@ -33,7 +33,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
-      toastOptions={{ style: { boxShadow: "0 8px 24px rgb(16 20 24 / 0.18)" } }}
+      toastOptions={{
+        style: { boxShadow: "0 8px 24px rgb(16 20 24 / 0.18)" },
+        // Sin ThemeProvider, Sonner toma el tema del sistema: en un sistema oscuro pinta la descripción casi
+        // blanca sobre el fondo claro del toast. Se fija al color de texto secundario de la app.
+        classNames: { description: "!text-muted-foreground" },
+      }}
       {...props}
     />
   )

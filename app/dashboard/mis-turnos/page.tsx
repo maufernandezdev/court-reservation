@@ -24,7 +24,10 @@ import { hoursLabel } from "@/lib/reports";
 import { formatMoney } from "@/lib/pricing";
 import { DEFAULT_NIGHT_STARTS_AT } from "@/lib/pricing";
 import { normalizeTime } from "@/lib/availability";
+import { CLUB_TZ, clubNowMinutes } from "@/lib/club-time";
+import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/reservations";
 import {
+  SETTLE_FROM_FALLBACK,
   WEEKDAY_NAMES,
   addDaysKey,
   hoursText,
@@ -42,7 +45,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Mis turnos" };
 
-const CLUB_TZ = "America/Argentina/Buenos_Aires";
+type AccountPayment = { id: string; created_at: string; method: string; amount: number; turns_count: number };
 
 function todayKey(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: CLUB_TZ });
@@ -92,8 +95,8 @@ export default async function MisTurnosPage({
     monday = mondayOf(isDateKey(raw.semana) ? raw.semana : today);
     from = monday;
     to = addDays(monday, 6);
-  } else if (view === "por-pagar") {
-    // La vista "Por pagar" usa su propia consulta (abajo).
+  } else if (view === "cuenta") {
+    // La vista "Mi cuenta" usa su propia consulta (abajo).
     from = today;
     to = addDays(today, -1);
   } else if (view === "historial") {
@@ -124,11 +127,10 @@ export default async function MisTurnosPage({
   ]);
   const turns = (turnsRes.data ?? []) as Reservation[];
 
-  // Lo que el profe le debe al club por sus turnos (liquidación semanal): hasta el fin de esta semana,
-  // mirando medio año para atrás.
-  const pendingTo = addDaysKey(weekStart(today), 6);
-  const sixMonthsAgo = addDaysKey(weekStart(today), -26 * 7);
+  // Cuenta del profe con el club: lo que debe se acumula con los turnos que ya jugó (desde "Liquidar
+  // desde", mismo criterio que la liquidación del admin) y se descuenta con cada pago.
   let pendingTurns: SettlementTurn[] = [];
+  let accountPayments: AccountPayment[] = [];
   try {
     const { data: settingsRow } = await supabase
       .from("settings")
@@ -137,17 +139,30 @@ export default async function MisTurnosPage({
       .maybeSingle();
     // Lo anterior a "Liquidar desde" lo arregla el club por su cuenta: no cuenta como deuda.
     const settleFrom = (settingsRow?.settle_from as string | null) ?? null;
-    const pendingFrom = settleFrom && settleFrom > sixMonthsAgo ? settleFrom : sixMonthsAgo;
-    const [mine] = await loadProfeSettlements(
-      supabase,
-      clubId,
-      [{ user_id: user.id, name: membership.full_name, color: membership.color }],
-      pendingFrom,
-      pendingTo,
-      normalizeTime(settingsRow?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT),
-      user.id
-    );
+    const [[mine], paymentsRes] = await Promise.all([
+      loadProfeSettlements(
+        supabase,
+        clubId,
+        [{ user_id: user.id, name: membership.full_name, color: membership.color }],
+        settleFrom ?? SETTLE_FROM_FALLBACK,
+        today,
+        normalizeTime(settingsRow?.night_starts_at ?? DEFAULT_NIGHT_STARTS_AT),
+        user.id,
+        { today, nowMinutes: clubNowMinutes() }
+      ),
+      view === "cuenta"
+        ? supabase
+            .from("profe_settlements")
+            .select("id, created_at, method, amount, turns_count")
+            .eq("club_id", clubId)
+            .eq("profe_user_id", user.id)
+            .is("voided_at", null)
+            .order("created_at", { ascending: false })
+            .limit(30)
+        : Promise.resolve({ data: [] }),
+    ]);
     pendingTurns = (mine?.turns ?? []).filter((t) => t.due > 0);
+    accountPayments = ((paymentsRes.data ?? []) as AccountPayment[]).map((p) => ({ ...p, amount: Number(p.amount) }));
   } catch {
     // Si falla, la página sigue mostrando los turnos.
   }
@@ -241,62 +256,103 @@ export default async function MisTurnosPage({
         </div>
       </section>
     );
-  } else if (view === "por-pagar") {
+  } else if (view === "cuenta") {
     const weeks = new Map<string, SettlementTurn[]>();
     for (const t of pendingTurns) {
       const key = weekStart(t.date);
       weeks.set(key, [...(weeks.get(key) ?? []), t]);
     }
+    const paidLabel = (iso: string) =>
+      new Date(iso).toLocaleString("es-AR", { timeZone: CLUB_TZ, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
     content = (
-      <section aria-labelledby="titulo-por-pagar" className="flex flex-col gap-4">
-        <h2 id="titulo-por-pagar" className="text-lg font-bold">
-          Por pagar al club
-          <span className="ml-2 text-sm font-normal text-muted-foreground">
-            Las canchas de tus turnos se liquidan por semana (lunes a domingo).
+      <div className="flex flex-col gap-6">
+        <section
+          aria-label="Saldo"
+          className={cn(
+            "flex flex-col gap-1 rounded-2xl p-5",
+            pendingTotal > 0 ? "bg-ball text-ball-foreground" : "border bg-card"
+          )}
+        >
+          <h2 className="text-sm font-medium">{pendingTotal > 0 ? "Saldo de tu cuenta" : "Tu cuenta con el club"}</h2>
+          <strong className="font-mono text-3xl font-bold">{formatMoney(pendingTotal)}</strong>
+          <span className="text-sm">
+            {pendingTotal > 0
+              ? `Corresponde a ${plural(pendingTurns.length, "turno jugado", "turnos jugados")}. Se actualiza cada día con tus turnos.`
+              : "Estás al día."}
           </span>
-        </h2>
-        {pendingTurns.length === 0 ? (
-          empty("No tenés nada pendiente: todos tus turnos están pagados.")
-        ) : (
-          [...weeks.entries()].map(([monday, list]) => {
-            const due = list.reduce((sum, t) => sum + t.due, 0);
-            const minutes = list.reduce((sum, t) => sum + t.duration_minutes, 0);
-            return (
-              <section key={monday} aria-label={`Semana del ${shortDate(monday)}`} className="overflow-hidden rounded-2xl border bg-card">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-5 py-3.5">
-                  <h3 className="flex-1 text-base font-bold">
-                    Semana del {shortDate(monday)} al {shortDate(addDaysKey(monday, 6))}
-                  </h3>
-                  <span className="text-sm text-muted-foreground">
-                    {plural(list.length, "turno", "turnos")} · {hoursText(minutes)}
+        </section>
+
+        <section aria-labelledby="titulo-pendientes" className="flex flex-col gap-3">
+          <h2 id="titulo-pendientes" className="text-lg font-bold">
+            Turnos pendientes
+          </h2>
+          {pendingTurns.length === 0 ? (
+            empty("No tenés turnos pendientes.")
+          ) : (
+            [...weeks.entries()].map(([monday, list]) => {
+              const due = list.reduce((sum, t) => sum + t.due, 0);
+              const minutes = list.reduce((sum, t) => sum + t.duration_minutes, 0);
+              return (
+                <section key={monday} aria-label={`Semana del ${shortDate(monday)}`} className="overflow-hidden rounded-2xl border bg-card">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-5 py-3.5">
+                    <h3 className="flex-1 text-base font-bold">
+                      Semana del {shortDate(monday)} al {shortDate(addDaysKey(monday, 6))}
+                    </h3>
+                    <span className="text-sm text-muted-foreground">
+                      {plural(list.length, "turno", "turnos")} · {hoursText(minutes)}
+                    </span>
+                    <strong className="font-mono">{formatMoney(due)}</strong>
+                  </div>
+                  <ul>
+                    {list.map((t) => (
+                      <li
+                        key={t.id}
+                        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-muted px-5 py-2.5 text-[15px] first:border-t-0"
+                      >
+                        <span className="w-24 font-mono text-sm capitalize">
+                          {WEEKDAY_NAMES[new Date(`${t.date}T12:00:00Z`).getUTCDay()].slice(0, 3)} {shortDate(t.date)}
+                        </span>
+                        <span className="w-14 font-mono text-sm">{t.time}</span>
+                        <span className="min-w-0 flex-[1_1_120px] truncate">
+                          {t.courtName}
+                          <span className="text-sm text-muted-foreground"> · {hoursText(t.duration_minutes)}</span>
+                        </span>
+                        {t.fixed && <Badge variant="outline">Fijo</Badge>}
+                        {t.paid > 0 && <Badge variant="outline">Pagaste {formatMoney(t.paid)}</Badge>}
+                        <span className="ml-auto font-mono">{formatMoney(t.due)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })
+          )}
+        </section>
+
+        <section aria-labelledby="titulo-pagos" className="flex flex-col gap-3">
+          <h2 id="titulo-pagos" className="text-lg font-bold">
+            Tus pagos
+          </h2>
+          {accountPayments.length === 0 ? (
+            empty("Todavía no hay pagos registrados.")
+          ) : (
+            <ul className="overflow-hidden rounded-2xl border bg-card">
+              {accountPayments.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-muted px-5 py-3 text-[15px] first:border-t-0"
+                >
+                  <span className="w-28 font-mono text-sm">{paidLabel(p.created_at)}</span>
+                  <span className="flex-1 text-sm text-muted-foreground">
+                    {PAYMENT_METHOD_LABELS[p.method as PaymentMethod] ?? p.method} · {plural(p.turns_count, "turno", "turnos")}
                   </span>
-                  <strong className="font-mono">{formatMoney(due)}</strong>
-                </div>
-                <ul>
-                  {list.map((t) => (
-                    <li
-                      key={t.id}
-                      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-muted px-5 py-2.5 text-[15px] first:border-t-0"
-                    >
-                      <span className="w-24 font-mono text-sm capitalize">
-                        {WEEKDAY_NAMES[new Date(`${t.date}T12:00:00Z`).getUTCDay()].slice(0, 3)} {shortDate(t.date)}
-                      </span>
-                      <span className="w-14 font-mono text-sm">{t.time}</span>
-                      <span className="min-w-0 flex-[1_1_120px] truncate">
-                        {t.courtName}
-                        <span className="text-sm text-muted-foreground"> · {hoursText(t.duration_minutes)}</span>
-                      </span>
-                      {t.fixed && <Badge variant="outline">Fijo</Badge>}
-                      {t.paid > 0 && <Badge variant="outline">Pagaste {formatMoney(t.paid)}</Badge>}
-                      <span className="ml-auto font-mono">{formatMoney(t.due)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })
-        )}
-      </section>
+                  <span className="font-mono">{formatMoney(p.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     );
   } else {
     const groups = groupByDate(turns, true);
@@ -357,7 +413,7 @@ export default async function MisTurnosPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Mis turnos"
-        description="Tus turnos de profe: los de hoy, la semana, el historial y lo que tenés por pagar al club."
+        description="Tus turnos de profe: los de hoy, la semana, el historial y tu cuenta con el club."
         actions={<ViewTabs current={view} />}
       />
       {loadError && (
@@ -365,17 +421,17 @@ export default async function MisTurnosPage({
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       )}
-      {view !== "por-pagar" && pendingTotal > 0 && (
+      {view !== "cuenta" && pendingTotal > 0 && (
         <Link
-          href="/dashboard/mis-turnos?vista=por-pagar"
+          href="/dashboard/mis-turnos?vista=cuenta"
           className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-ball px-5 py-4 text-ball-foreground"
         >
           <HandCoins className="size-5" />
           <span className="flex-1">
-            Tenés <strong className="font-mono">{formatMoney(pendingTotal)}</strong> por pagar al club (
-            {plural(pendingTurns.length, "turno", "turnos")}).
+            Saldo de tu cuenta: <strong className="font-mono">{formatMoney(pendingTotal)}</strong> (
+            {plural(pendingTurns.length, "turno jugado", "turnos jugados")}).
           </span>
-          <span className="text-sm font-semibold underline">Ver detalle</span>
+          <span className="text-sm font-semibold underline">Ver mi cuenta</span>
         </Link>
       )}
       {content}

@@ -6,14 +6,14 @@ import type { Reservation } from "@/lib/reservations";
  * (días calendario del club, sin zona horaria) y de agrupado.
  */
 
-export const MY_TURNS_VIEWS = ["hoy", "semana", "historial", "por-pagar"] as const;
+export const MY_TURNS_VIEWS = ["hoy", "semana", "historial", "cuenta"] as const;
 export type MyTurnsView = (typeof MY_TURNS_VIEWS)[number];
 
 export const MY_TURNS_VIEW_LABELS: Record<MyTurnsView, string> = {
   hoy: "Hoy",
   semana: "Semana",
   historial: "Historial",
-  "por-pagar": "Por pagar",
+  cuenta: "Mi cuenta",
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
