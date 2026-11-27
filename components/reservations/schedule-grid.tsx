@@ -20,6 +20,7 @@ import {
 } from "@/lib/reservation-tone";
 import { RESERVATION_KIND_LABELS, type PaymentMethod, type Reservation } from "@/lib/reservations";
 import { ReservationMarks } from "@/components/reservations/reservation-marks";
+import { NoteCorner, WithNoteTooltip } from "@/components/reservations/reservation-note";
 import { useProfeColors } from "@/hooks/use-profes";
 import { cn } from "@/lib/utils";
 
@@ -209,14 +210,14 @@ export function ScheduleGrid({
                     .join(" · ");
                   const short = r.duration_minutes < 60;
                   return (
+                    <WithNoteTooltip key={r.id} note={r.admin_note}>
                     <button
-                      key={r.id}
                       type="button"
                       onClick={() => onSelect(r)}
                       aria-pressed={selected}
-                      aria-label={`${r.kind === "standard" ? "" : `${RESERVATION_KIND_LABELS[r.kind]}: `}${title}, ${r.time} a ${endTime}${r.series_id ? ", fijo" : ""}, ${money || RESERVATION_TONE_LABELS[tone]}`}
+                      aria-label={`${r.kind === "standard" ? "" : `${RESERVATION_KIND_LABELS[r.kind]}: `}${title}, ${r.time} a ${endTime}${r.series_id ? ", fijo" : ""}, ${money || RESERVATION_TONE_LABELS[tone]}${r.admin_note ? `. Nota: ${r.admin_note}` : ""}`}
                       className={cn(
-                        "z-10 m-0.5 flex min-w-0 flex-col items-start overflow-hidden rounded-lg px-2.5 py-1 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
+                        "relative z-10 m-0.5 flex min-w-0 flex-col items-start overflow-hidden rounded-lg px-2.5 py-1 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
                         look.className,
                         selected &&
                           "shadow-[0_6px_16px_rgb(16_20_24/0.18)] outline-3 outline-offset-2 outline-line"
@@ -256,7 +257,9 @@ export function ScheduleGrid({
                           {money}
                         </span>
                       )}
+                      {r.admin_note && <NoteCorner />}
                     </button>
+                    </WithNoteTooltip>
                   );
                 })}
             </div>

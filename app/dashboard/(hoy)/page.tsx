@@ -9,6 +9,7 @@ import { RESERVATION_SELECT, RESERVATION_SOURCE, type Reservation } from "@/lib/
 import { reservationTitle } from "@/lib/reservation-tone";
 import { loadDayClose } from "@/lib/day-close";
 import { CashSummaryCard } from "@/components/today/cash-summary-card";
+import { SeriesAutoEndedNotice, type SeriesAutoEnded } from "@/components/today/series-auto-ended";
 
 export const metadata = { title: "Hoy" };
 
@@ -38,13 +39,36 @@ export default async function TodayPage() {
   requestsQuery = isAdmin
     ? requestsQuery.eq("status", "pending_approval")
     : requestsQuery.eq("created_by", membership.user_id).in("status", ["pending_approval", "rejected"]);
-  const [payments, { data: requestRows }, { data: members }, close] = await Promise.all([
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
+  const [payments, { data: requestRows }, { data: members }, close, { data: autoEndedRows }] = await Promise.all([
     queryDayPayments(supabase, clubId, ids),
     requestsQuery,
     supabase.from("memberships").select("user_id, full_name, email").eq("club_id", clubId),
     // Caja de hoy: solo el admin, con el mismo cálculo que Caja y el cierre del día de Reportes.
     isAdmin ? loadDayClose(supabase, clubId, today, null).catch(() => null) : Promise.resolve(null),
+    // Fijos que se dieron de baja solos por cancelaciones seguidas (Políticas): aviso para el admin.
+    isAdmin
+      ? supabase
+          .from("audit_log")
+          .select("id, payload, created_at")
+          .eq("club_id", clubId)
+          .eq("action", "series.auto_ended")
+          .gte("created_at", weekAgo)
+          .order("created_at", { ascending: false })
+          .limit(20)
+      : Promise.resolve({ data: [] }),
   ]);
+  const autoEnded: SeriesAutoEnded[] = ((autoEndedRows ?? []) as { id: number | string; payload: Record<string, unknown>; created_at: string }[]).map(
+    (row) => ({
+      id: String(row.id),
+      customerName: typeof row.payload?.customer_name === "string" ? row.payload.customer_name : "Turno fijo",
+      cancellations: Number(row.payload?.cancellations ?? 0),
+      until: typeof row.payload?.until === "string" ? row.payload.until : null,
+      cancelled: Number(row.payload?.cancelled ?? 0),
+      kept: Array.isArray(row.payload?.kept) ? (row.payload.kept as unknown[]).map(String) : [],
+      at: row.created_at,
+    })
+  );
   const courtName = new Map((seed.courts ?? []).map((c) => [c.id, c.name]));
   const memberName = new Map(
     ((members ?? []) as { user_id: string; full_name: string; email: string }[]).map((m) => [
@@ -71,12 +95,15 @@ export default async function TodayPage() {
         courtsError={courtsError}
         cashSummary={close ? <CashSummaryCard cash={close.cash} /> : null}
         approvals={
+          <>
+          <SeriesAutoEndedNotice items={autoEnded} />
           <ApprovalRequests
             requests={requests}
             isAdmin={isAdmin}
             clubName={membership.club.name}
             clubWhatsapp={seed.settings?.whatsapp || null}
           />
+          </>
         }
       />
     </ClubDataProvider>

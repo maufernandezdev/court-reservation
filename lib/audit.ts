@@ -49,7 +49,10 @@ export type AuditAction =
   | "settings.settle_from_updated"
   | "special_day.applied"
   | "special_day.removed"
-  | "series.updated_from";
+  | "series.updated_from"
+  | "series.auto_ended"
+  | "reservation.note_set"
+  | "reservation.note_removed";
 
 type AuditInput = {
   clubId: string;
@@ -128,9 +131,11 @@ export const AUDIT_ACTIONS_BY_KIND: Record<AuditKind, AuditAction[]> = {
     "special_day.applied",
     "special_day.removed",
     "series.updated_from",
+    "reservation.note_set",
+    "reservation.note_removed",
   ],
   charged: ["payment.registered", "credit.applied", "profe.settled"],
-  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed", "profe.settlement_voided"],
+  cancelled: ["reservation.cancelled", "court.deactivated", "member.removed", "invitation.revoked", "player.removed", "series.ended", "series.auto_ended", "cash.movement_voided", "reservation.rejected", "approval_rule.removed", "profe.settlement_voided"],
 };
 
 function depositText(p: Record<string, unknown>, audience: "public" | "profe"): string {
@@ -303,6 +308,15 @@ export function describeAuditEntry(
     }
     case "series.ended":
       return `dio de baja el turno fijo${who ? ` de ${who}` : ""}${typeof p.from === "string" ? ` desde el ${shortDate(p.from)}` : ""}`;
+    case "series.auto_ended": {
+      const kept = Array.isArray(p.kept) ? p.kept.length : 0;
+      const n = typeof p.cancelled === "number" ? p.cancelled : 0;
+      return `dio de baja automáticamente el turno fijo${who ? ` de ${who}` : ""} por ${String(p.cancellations ?? "")} cancelaciones seguidas${typeof p.until === "string" ? ` (último turno ${shortDate(p.until)})` : ""}${n ? `; ${n} ${n === 1 ? "fecha liberada" : "fechas liberadas"}` : ""}${kept ? `; ${kept} con cobros quedan activas` : ""}`;
+    }
+    case "reservation.note_set":
+      return `dejó una nota en el turno${turno}: “${String(p.note ?? "")}”`;
+    case "reservation.note_removed":
+      return `borró la nota del turno${turno}`;
     case "player.created":
       return `dio de alta al jugador ${String(p.full_name ?? "")}`.trim();
     case "player.updated":
@@ -402,7 +416,7 @@ export function describeAuditEntry(
     case "cash.opening_set":
       return `fijó el cambio inicial de la caja${typeof p.date === "string" ? ` del ${shortDate(p.date)}` : ""} en ${money(p.amount)}`;
     case "settings.updated":
-      return `cambió las políticas: ${typeof p.cancel_window_hours === "number" ? formatCancelWindow(p.cancel_window_hours) : "?"} de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%${p.tournament_duration_minutes ? `, torneos de ${String(p.tournament_duration_minutes)} min` : ""}`;
+      return `cambió las políticas: ${typeof p.cancel_window_hours === "number" ? formatCancelWindow(p.cancel_window_hours) : "?"} de anticipación, penalidad del ${String(p.late_penalty_percent ?? "?")}%${p.tournament_duration_minutes ? `, torneos de ${String(p.tournament_duration_minutes)} min` : ""}${typeof p.series_cancel_limit === "number" ? `, fijos de baja tras ${String(p.series_cancel_limit)} cancelaciones seguidas` : ""}`;
     default:
       return `hizo "${entry.action}"`;
   }

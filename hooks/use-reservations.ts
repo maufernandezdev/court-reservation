@@ -52,9 +52,13 @@ export function useReservations(date: string, initial?: InitialReservations) {
   }, [date, load]);
 
   const upsertLocal = useCallback(
-    (reservation: Reservation) => {
-      setLoaded((prev) =>
-        prev.date !== date
+    (incoming: Reservation) => {
+      setLoaded((prev) => {
+        // Las acciones devuelven el turno de la tabla, sin la nota del admin: se conserva la que había.
+        const previous = prev.reservations.find((r) => r.id === incoming.id);
+        const reservation =
+          incoming.admin_note === undefined && previous ? { ...incoming, admin_note: previous.admin_note } : incoming;
+        return prev.date !== date
           ? prev
           : {
               ...prev,
@@ -64,8 +68,8 @@ export function useReservations(date: string, initial?: InitialReservations) {
                       a.time.localeCompare(b.time)
                     )
                   : prev.reservations.filter((r) => r.id !== reservation.id),
-            }
-      );
+            };
+      });
     },
     [date]
   );

@@ -17,6 +17,7 @@ import type { ApprovalRule } from "@/lib/approval";
 export const DEFAULT_CLUB_SETTINGS = {
   cancel_window_hours: 24,
   late_penalty_percent: 50,
+  series_cancel_limit: null as number | null,
   tournament_duration_minutes: 90,
   night_starts_at: DEFAULT_NIGHT_STARTS_AT,
   open_time: DEFAULT_CLUB_HOURS.open_time,
@@ -52,7 +53,7 @@ export async function queryClubSettings(
   const { data } = await supabase
     .from("settings")
     .select(
-      "cancel_window_hours, late_penalty_percent, tournament_duration_minutes, night_starts_at, open_time, close_time, whatsapp, instagram"
+      "cancel_window_hours, late_penalty_percent, series_cancel_limit, tournament_duration_minutes, night_starts_at, open_time, close_time, whatsapp, instagram"
     )
     .eq("club_id", clubId)
     .maybeSingle();

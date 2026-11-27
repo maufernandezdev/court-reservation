@@ -14,6 +14,7 @@ import {
 } from "@/lib/reservation-tone";
 import { RESERVATION_KIND_LABELS, type PaymentMethod, type Reservation } from "@/lib/reservations";
 import { ReservationMarks } from "@/components/reservations/reservation-marks";
+import { NoteCorner, WithNoteTooltip } from "@/components/reservations/reservation-note";
 import { useProfeColors } from "@/hooks/use-profes";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -324,11 +325,13 @@ export function MobileSchedule({
           const end = minutesToTime(timeToMinutes(r.time) + r.duration_minutes);
           return (
             <li key={r.id}>
+              <WithNoteTooltip note={r.admin_note}>
               <button
                 type="button"
                 onClick={() => onSelect(r)}
+                aria-description={r.admin_note ? `Nota: ${r.admin_note}` : undefined}
                 className={cn(
-                  "flex min-h-[60px] w-full items-center gap-3 rounded-xl py-2 pr-3 pl-3.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
+                  "relative flex min-h-[60px] w-full items-center gap-3 rounded-xl py-2 pr-3 pl-3.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line",
                   look.className
                 )}
                 style={look.style}
@@ -359,7 +362,9 @@ export function MobileSchedule({
                   </span>
                 </span>
                 <ChevronRight className="size-[18px] shrink-0 opacity-70" />
+                {r.admin_note && <NoteCorner className="size-3.5 rounded-br-xl" />}
               </button>
+              </WithNoteTooltip>
             </li>
           );
         })}

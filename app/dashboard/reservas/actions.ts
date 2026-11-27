@@ -16,6 +16,8 @@ import {
   OCCUPYING_STATUSES,
   RESERVATION_SELECT,
   canManageReservation,
+  canCancelNow,
+  reservationNoteSchema,
   type Reservation,
   type ReservationInput,
 } from "@/lib/reservations";
@@ -53,7 +55,36 @@ type ActionResult = {
   skippedDates?: string[];
   /** Edición de un fijo desde una fecha: fechas siguientes cambiadas y las que quedaron por tener cobros. */
   seriesUpdated?: { updated: number; kept: number };
+  /** El fijo se dio de baja solo por cancelaciones seguidas (Políticas): último turno que quedó. */
+  seriesAutoEnded?: { until: string };
 };
+
+/** Fin del fijo de un turno (para detectar la baja automática por cancelaciones seguidas). */
+async function seriesEndsOn(
+  supabase: SupabaseClient,
+  clubId: string,
+  seriesId: string | null
+): Promise<string | null | undefined> {
+  if (!seriesId) return undefined;
+  const { data } = await supabase
+    .from("reservation_series")
+    .select("ends_on")
+    .eq("id", seriesId)
+    .eq("club_id", clubId)
+    .maybeSingle();
+  return (data?.ends_on as string | null) ?? null;
+}
+
+async function autoEndedSince(
+  supabase: SupabaseClient,
+  clubId: string,
+  seriesId: string | null,
+  before: string | null | undefined
+): Promise<{ until: string } | undefined> {
+  if (before === undefined) return undefined;
+  const after = await seriesEndsOn(supabase, clubId, seriesId);
+  return after && after !== before ? { until: after } : undefined;
+}
 
 /** Semanas que se reservan al crear un turno fijo (las siguientes se generan al consultar). */
 const SERIES_INITIAL_WEEKS = 8;
@@ -83,7 +114,7 @@ async function forRole(ctx: SessionContext): Promise<SessionContext> {
 /** Lo que vuelve al navegador: sin montos para el organizador de torneos. */
 function forClient(ctx: SessionContext, result: ActionResult): ActionResult {
   if (ctx.membership?.role !== "organizador" || !result.reservation) return result;
-  return { ...result, reservation: { ...result.reservation, price: null as unknown as number } };
+  return { ...result, reservation: { ...result.reservation, price: null as unknown as number, admin_note: null } };
 }
 
 function failure(error: unknown, fallback: string): ActionResult {
@@ -838,6 +869,11 @@ export async function cancelReservationAction(
     // Lo hace una función de la base que aplica la misma política (retención, saldo y deuda) con los
     // permisos justos y solo sobre un turno de profe de quien llama.
     if (membership!.role === "profesor") {
+      const own = await fetchReservation(supabase, clubId, id);
+      if (own && !canCancelNow(membership!.role, own)) {
+        return { success: false, error: "El turno ya empezó: solo el administrador puede cancelarlo." };
+      }
+      const endsBefore = await seriesEndsOn(supabase, clubId, own?.series_id ?? null);
       const { error: rpcError } = await supabase.rpc("cancel_own_profe_reservation", {
         p_reservation_id: id,
         p_reason: parsed.data.reason.trim(),
@@ -853,7 +889,8 @@ export async function cancelReservationAction(
       revalidatePath("/dashboard/reservas");
       revalidatePath("/dashboard/mis-turnos");
       const updated = await fetchReservation(supabase, clubId, id);
-      return { success: true, reservation: updated ?? undefined };
+      const seriesAutoEnded = await autoEndedSince(supabase, clubId, own?.series_id ?? null, endsBefore);
+      return { success: true, reservation: updated ?? undefined, seriesAutoEnded };
     }
 
     const reservation = await fetchReservation(supabase, clubId, id);
@@ -866,6 +903,10 @@ export async function cancelReservationAction(
         error: reservation.status === "rejected" ? "El turno fue rechazado: no ocupa el lugar." : "La reserva ya estaba cancelada.",
       };
     }
+    if (!canCancelNow(membership!.role, reservation)) {
+      return { success: false, error: "El turno ya empezó: solo el administrador puede cancelarlo." };
+    }
+    const endsBefore = await seriesEndsOn(supabase, clubId, reservation.series_id);
 
     // Valor fijado al reservar.
     const slotPrice = Number(reservation.price);
@@ -996,7 +1037,8 @@ export async function cancelReservationAction(
 
     revalidatePath("/dashboard/reservas");
 
-    return forClient(ctx, { success: true, reservation: data as Reservation });
+    const seriesAutoEnded = await autoEndedSince(supabase, clubId, reservation.series_id, endsBefore);
+    return forClient(ctx, { success: true, reservation: data as Reservation, seriesAutoEnded });
   } catch (err) {
     return failure(err, "No se pudo cancelar la reserva.");
   }
@@ -1669,5 +1711,36 @@ export async function rejectReservationAction(id: string, reason: string): Promi
     return { success: true, reservation: data as Reservation };
   } catch (err) {
     return failure(err, "No se pudo rechazar el turno.");
+  }
+}
+
+/** Nota del admin en un turno (hasta 140 caracteres; vacía la borra). La ven admin y operador. */
+export async function setReservationNoteAction(id: string, note: string): Promise<ActionResult> {
+  const parsedId = z.string().uuid().safeParse(id);
+  const parsed = reservationNoteSchema.safeParse(note);
+  if (!parsedId.success || !parsed.success) {
+    return { success: false, error: parsed.success ? "Datos inválidos." : parsed.error.issues[0]?.message };
+  }
+
+  try {
+    const { supabase, membership } = await requireRole("admin");
+    const clubId = membership!.club_id;
+    const { error } = await supabase.rpc("set_reservation_note", {
+      p_reservation_id: parsedId.data,
+      p_body: parsed.data,
+    });
+    if (error) {
+      const shown = ["P0001", "P0002", "42501"].includes(error.code ?? "");
+      return { success: false, error: shown ? error.message : subscriptionMessage(error, "No se pudo guardar la nota.") };
+    }
+    revalidatePath("/dashboard/reservas");
+    revalidatePath("/dashboard");
+    const reservation = await fetchReservation(supabase, clubId, parsedId.data);
+    return {
+      success: true,
+      reservation: reservation ? { ...reservation, admin_note: parsed.data || null } : undefined,
+    };
+  } catch (err) {
+    return failure(err, "No se pudo guardar la nota.");
   }
 }

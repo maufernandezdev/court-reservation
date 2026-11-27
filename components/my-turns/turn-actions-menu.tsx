@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreVertical, Pencil, X } from "lucide-react";
-import type { Reservation } from "@/lib/reservations";
+import { hasStarted, type Reservation } from "@/lib/reservations";
 import { useCourts } from "@/hooks/use-courts";
 import { useMembership } from "@/hooks/use-membership";
 import { useReservations } from "@/hooks/use-reservations";
@@ -100,10 +100,13 @@ export function TurnActionsMenu({ turn }: { turn: Reservation }) {
             <Pencil />
             Editar
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={() => setAction("cancel")}>
-            <X />
-            Cancelar turno
-          </DropdownMenuItem>
+          {/* Pasada la hora de inicio solo el admin cancela (Mis turnos es de profes y organizadores). */}
+          {!hasStarted(turn) && (
+            <DropdownMenuItem variant="destructive" onSelect={() => setAction("cancel")}>
+              <X />
+              Cancelar turno
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {action === "edit" && <EditTurnDialog turn={turn} onClose={close} />}

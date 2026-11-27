@@ -179,6 +179,9 @@ export function useReservationDetail({
       3_600_000
     : Infinity;
   const wouldBeLate = hoursUntilStart < cancelWindowHours;
+  // Pasada la hora de inicio solo el admin cancela (la base lo aplica igual).
+  const started = hoursUntilStart <= 0;
+  const canCancel = membership.role === "admin" || !started;
 
   // El profe cancela siempre; fuera de término tiene que aceptar la penalidad antes de confirmar.
   const requiresPenaltyAcceptance = membership.role === "profesor" && wouldBeLate && !isCancelled;
@@ -279,7 +282,7 @@ export function useReservationDetail({
   const cancel = async () => {
     if (!reservation) return;
     setIsCancelling(true);
-    const { success, error, reservation: updated } = await cancelReservationAction(
+    const { success, error, reservation: updated, seriesAutoEnded } = await cancelReservationAction(
       reservation.id,
       cancelReason,
       requiresPenaltyAcceptance && acceptPenalty
@@ -289,7 +292,18 @@ export function useReservationDetail({
     setAcceptPenalty(false);
 
     if (success) {
-      toast.success("Reserva cancelada");
+      if (seriesAutoEnded) {
+        toast.success("Reserva cancelada y turno fijo dado de baja", {
+          description: `Llegó al límite de cancelaciones seguidas de Políticas: el fijo terminó el ${seriesAutoEnded.until
+            .split("-")
+            .reverse()
+            .slice(0, 2)
+            .join("/")} y se liberaron las fechas siguientes sin cobros.`,
+          duration: 12000,
+        });
+      } else {
+        toast.success("Reserva cancelada");
+      }
       onCancelled(updated!);
       onClosed?.();
     } else {
@@ -339,6 +353,8 @@ export function useReservationDetail({
     latePenaltyPercent,
     hoursUntilStart,
     wouldBeLate,
+    started,
+    canCancel,
     isProfesor: membership.role === "profesor",
     requiresPenaltyAcceptance,
     acceptPenalty,

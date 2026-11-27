@@ -34,6 +34,7 @@ import { useProfeColors } from "@/hooks/use-profes";
 import { ProcessingButton } from "@/components/processing-button";
 import { SeriesPricingDialog } from "@/components/reservations/series-pricing-dialog";
 import { PersonAccount } from "@/components/reservations/person-account";
+import { ReservationNoteSection } from "@/components/reservations/reservation-note";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -211,6 +212,18 @@ export function ReservationDetailPanel({
             <span className="text-muted-foreground">{reservation.phone}</span>
           )}
         </div>
+      )}
+
+      {(isAdmin || membership.role === "operador") && !isCancelled && (
+        <ReservationNoteSection
+          reservationId={reservation.id}
+          note={reservation.admin_note}
+          canEdit={isAdmin}
+          onSaved={detail.refreshReservation}
+        />
+      )}
+      {isCancelled && reservation.admin_note && (isAdmin || membership.role === "operador") && (
+        <ReservationNoteSection reservationId={reservation.id} note={reservation.admin_note} canEdit={false} onSaved={() => {}} />
       )}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -446,11 +459,12 @@ export function ReservationDetailPanel({
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-2 gap-2">
                 {onEdit && (
-                  <Button variant="outline" onClick={onEdit}>
+                  <Button variant="outline" className={cn(!detail.canCancel && "col-span-2")} onClick={onEdit}>
                     <Pencil />
                     Editar
                   </Button>
                 )}
+                {detail.canCancel && (
                 <Button
                   variant="outline"
                   className={cn(
@@ -461,9 +475,14 @@ export function ReservationDetailPanel({
                 >
                   Cancelar turno
                 </Button>
+                )}
               </div>
               <p className="text-[13px] leading-snug text-pretty text-muted-foreground">
-                {wouldBeLate
+                {!detail.canCancel
+                  ? "El turno ya empezó: solo el administrador puede cancelarlo."
+                  : detail.started
+                    ? "El turno ya empezó: como administrador todavía podés cancelarlo."
+                    : wouldBeLate
                   ? requiresPenaltyAcceptance
                     ? `Faltan menos de ${formatCancelWindow(cancelWindowHours)}: si cancelás ahora es fuera de término y se te cobra una penalidad de ${formatMoney(cancelOutcome.penalty)} (${latePenaltyPercent}% del turno).`
                     : `Faltan menos de ${formatCancelWindow(cancelWindowHours)}: si se cancela ahora es fuera de término (penalidad del ${latePenaltyPercent}% del turno).`

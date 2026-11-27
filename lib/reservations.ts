@@ -45,6 +45,27 @@ export function canManageReservation(
   );
 }
 
+/** Largo máximo de la nota del admin en un turno. */
+export const NOTE_MAX_LENGTH = 140;
+
+export const reservationNoteSchema = z
+  .string()
+  .trim()
+  .max(NOTE_MAX_LENGTH, `La nota puede tener hasta ${NOTE_MAX_LENGTH} caracteres`);
+
+/** ¿Ya pasó la hora de inicio del turno? (hora del club, Argentina UTC-3). */
+export function hasStarted(reservation: { date: string; time: string }, now = Date.now()): boolean {
+  return new Date(`${reservation.date}T${reservation.time}:00-03:00`).getTime() <= now;
+}
+
+/**
+ * Pasada la hora de inicio, solo el admin cancela o borra el turno (la base lo aplica con
+ * `guard_started_reservation`, migración 0040).
+ */
+export function canCancelNow(role: string, reservation: { date: string; time: string }, now = Date.now()): boolean {
+  return role === "admin" || !hasStarted(reservation, now);
+}
+
 /** Carga el resultado de un partido de torneo: admin, operador u organizador. */
 export function canSetResult(role: string): boolean {
   return role === "admin" || role === "operador" || role === "organizador";
@@ -176,6 +197,8 @@ export type Reservation = {
   rejected_at?: string | null;
   /** Personas del turno (si la consulta las trae embebidas), ordenadas por posición. */
   participants?: ReservationParticipant[];
+  /** Nota del admin (la ven admin y operador; para los demás llega en null). */
+  admin_note?: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -303,6 +326,8 @@ export type ClubSettings = {
   club_id: string;
   cancel_window_hours: number;
   late_penalty_percent: number;
+  /** Cancelaciones seguidas de un fijo que lo dan de baja (null = no aplica). */
+  series_cancel_limit: number | null;
   /** Duración con la que arranca un turno de torneo (editable en cada turno). */
   tournament_duration_minutes: number;
   /** Hora desde la que rige el precio de noche ("HH:MM:SS" como lo devuelve PostgREST). */
@@ -335,6 +360,12 @@ export const clubSettingsSchema = z.object({
     .number({ message: "Ingresá un porcentaje válido" })
     .min(0, "El porcentaje no puede ser negativo")
     .max(100, "El porcentaje no puede superar 100"),
+  series_cancel_limit: z
+    .number({ message: "Ingresá un número válido" })
+    .int("Va en números enteros")
+    .min(2, "Tienen que ser al menos 2 cancelaciones seguidas")
+    .max(20, "Como mucho 20 cancelaciones seguidas")
+    .nullable(),
   tournament_duration_minutes: z.coerce
     .number({ message: "Elegí la duración de los torneos" })
     .int()

@@ -42,6 +42,7 @@ import {
   reservationTitle,
 } from "@/lib/reservation-tone";
 import { ReservationMarks } from "@/components/reservations/reservation-marks";
+import { NoteIcon } from "@/components/reservations/reservation-note";
 import { useProfeColors } from "@/hooks/use-profes";
 import { FALLBACK_PROFE_COLOR } from "@/lib/profe-colors";
 import { cn } from "@/lib/utils";
@@ -449,6 +450,7 @@ export function TodayView({
                                   )}
                                   {reservationTitle(r)}
                                   <ReservationMarks reservation={r} />
+                                  <NoteIcon note={r.admin_note} />
                                 </span>
                                 <span className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground sm:hidden">
                                   {court?.name}

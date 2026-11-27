@@ -36,8 +36,11 @@ import { useClubSettings } from "@/hooks/use-club-settings";
 type SettingsFormValues = {
   cancel_window_hours: number;
   late_penalty_percent: number;
+  series_cancel_limit: number | null;
   tournament_duration_minutes: number;
 };
+
+const SERIES_LIMIT_OPTIONS = [2, 3, 4, 5];
 
 const HOUR_OPTIONS = [0.5, 1, 2, 6, 12, 24, 48];
 const PENALTY_OPTIONS = [0, 25, 50, 100];
@@ -64,6 +67,7 @@ export function PoliciesView() {
     defaultValues: {
       cancel_window_hours: settings.cancel_window_hours,
       late_penalty_percent: settings.late_penalty_percent,
+      series_cancel_limit: settings.series_cancel_limit ?? null,
       tournament_duration_minutes: settings.tournament_duration_minutes,
     },
   });
@@ -294,6 +298,7 @@ export function PoliciesView() {
                 <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
                   Los profesores no pueden cancelar dentro de esta ventana ni turnos
                   que ya tienen cobros: se lo piden a un operador o administrador.
+                  Pasada la hora de inicio, el turno solo lo cancela el administrador.
                 </p>
               </section>
 
@@ -328,6 +333,70 @@ export function PoliciesView() {
                 </section>
               )}
             </div>
+
+            <section
+              aria-labelledby="fijos"
+              className="flex flex-col gap-4 rounded-2xl border bg-card p-6"
+            >
+              <div className="flex flex-col gap-1">
+                <h2 id="fijos" className="text-lg font-bold">
+                  Turnos fijos
+                </h2>
+                <p className="text-[15px] text-pretty text-muted-foreground">
+                  Si un fijo se cancela esta cantidad de veces seguidas, se da de baja solo: se liberan
+                  las fechas siguientes que no tengan cobros y queda el aviso en Hoy y en Actividad. Los
+                  días cerrados (feriados) no cuentan.
+                </p>
+              </div>
+              <FormField
+                control={form.control}
+                name="series_cancel_limit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Cancelaciones seguidas para dar de baja un fijo</FormLabel>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ToggleGroup
+                        type="single"
+                        variant="chip"
+                        spacing={2}
+                        value={field.value === null ? "off" : SERIES_LIMIT_OPTIONS.includes(field.value) ? String(field.value) : ""}
+                        onValueChange={(v) => v && field.onChange(v === "off" ? null : Number(v))}
+                        aria-label="Cancelaciones seguidas para dar de baja un fijo"
+                        className="flex-wrap"
+                      >
+                        <ToggleGroupItem value="off" size="lg">
+                          No dar de baja
+                        </ToggleGroupItem>
+                        {SERIES_LIMIT_OPTIONS.map((n) => (
+                          <ToggleGroupItem key={n} value={String(n)} size="lg">
+                            {n} seguidas
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                      <div className="relative w-28">
+                        <FormControl>
+                          <Input
+                            type="number"
+                            inputMode="numeric"
+                            min="2"
+                            max="20"
+                            step="1"
+                            aria-label="Otra cantidad de cancelaciones seguidas"
+                            className="font-mono"
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          />
+                        </FormControl>
+                      </div>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </section>
 
             <section
               aria-labelledby="torneos"

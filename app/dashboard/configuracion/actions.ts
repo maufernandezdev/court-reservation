@@ -20,7 +20,7 @@ import { deleteObject, isR2Configured, putObject } from "@/lib/r2";
 export async function saveSettingsAction(
   input: Pick<
     ClubSettings,
-    "cancel_window_hours" | "late_penalty_percent" | "tournament_duration_minutes"
+    "cancel_window_hours" | "late_penalty_percent" | "series_cancel_limit" | "tournament_duration_minutes"
   >
 ): Promise<{ success: boolean; error?: string }> {
   const parsed = clubSettingsSchema.safeParse(input);
@@ -40,6 +40,7 @@ export async function saveSettingsAction(
       club_id: clubId,
       cancel_window_hours: parsed.data.cancel_window_hours,
       late_penalty_percent: parsed.data.late_penalty_percent,
+      series_cancel_limit: parsed.data.series_cancel_limit,
       tournament_duration_minutes: parsed.data.tournament_duration_minutes,
       updated_at: new Date().toISOString(),
     });
